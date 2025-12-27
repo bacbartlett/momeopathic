@@ -13,9 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useChat } from '@/context/chat-context';
 import { ThreadItem } from './thread-item';
-import { ChatColors } from '@/constants/theme';
+import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
-const DRAWER_WIDTH = 300;
+const DRAWER_WIDTH = 320;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ThreadDrawerProps {
@@ -34,9 +34,10 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
       // Show immediately, then animate in
       setIsVisible(true);
       Animated.parallel([
-        Animated.timing(translateX, {
+        Animated.spring(translateX, {
           toValue: 0,
-          duration: 250,
+          tension: 65,
+          friction: 11,
           useNativeDriver: true,
         }),
         Animated.timing(overlayOpacity, {
@@ -83,16 +84,32 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
       </TouchableWithoutFeedback>
       <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
         <SafeAreaView style={styles.safeArea}>
+          {/* Header with branding */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Conversations</Text>
+            <View style={styles.headerBranding}>
+              <View style={styles.logoContainer}>
+                <Ionicons name="leaf" size={24} color={Colors.primary} />
+              </View>
+              <View>
+                <Text style={styles.brandTitle}>Homeopathy Guide</Text>
+                <Text style={styles.brandSubtitle}>Natural family wellness</Text>
+              </View>
+            </View>
             <TouchableOpacity
               style={styles.newChatButton}
               onPress={handleNewChat}
               activeOpacity={0.7}
             >
-              <Ionicons name="add" size={22} color={ChatColors.text} />
+              <Ionicons name="add" size={22} color={Colors.primary} />
             </TouchableOpacity>
           </View>
+
+          {/* Section title */}
+          <View style={styles.sectionHeader}>
+            <Ionicons name="chatbubbles-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.sectionTitle}>Your Conversations</Text>
+          </View>
+
           <ScrollView
             style={styles.threadList}
             showsVerticalScrollIndicator={false}
@@ -100,10 +117,12 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
           >
             {state.threads.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="chatbubbles-outline" size={48} color={ChatColors.textMuted} />
+                <View style={styles.emptyIconContainer}>
+                  <Ionicons name="chatbubbles-outline" size={40} color={Colors.primaryLight} />
+                </View>
                 <Text style={styles.emptyTitle}>No conversations yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  Start a new chat to begin
+                  Tap the + button to start exploring homeopathic remedies for your family
                 </Text>
               </View>
             ) : (
@@ -118,6 +137,14 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
               ))
             )}
           </ScrollView>
+
+          {/* Footer with helpful info */}
+          <View style={styles.footer}>
+            <View style={styles.footerContent}>
+              <Ionicons name="heart-outline" size={14} color={Colors.accent} />
+              <Text style={styles.footerText}>Made with care for families</Text>
+            </View>
+          </View>
         </SafeAreaView>
       </Animated.View>
     </View>
@@ -131,7 +158,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(61, 57, 53, 0.4)',
   },
   drawer: {
     position: 'absolute',
@@ -139,9 +166,10 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: DRAWER_WIDTH,
-    backgroundColor: ChatColors.drawerBackground,
+    backgroundColor: Colors.bgSurface,
     borderRightWidth: 1,
-    borderRightColor: ChatColors.border,
+    borderRightColor: Colors.border,
+    ...Shadows.lg,
   },
   safeArea: {
     flex: 1,
@@ -150,48 +178,113 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: ChatColors.border,
+    borderBottomColor: Colors.borderLight,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: ChatColors.text,
+  headerBranding: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
-  newChatButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: ChatColors.drawerItemBackground,
+  logoContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryAlpha20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  brandTitle: {
+    fontFamily: Fonts?.heading ?? 'System',
+    fontSize: Typography.lg,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  brandSubtitle: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  newChatButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryAlpha10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primaryAlpha20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+  sectionTitle: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '500',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   threadList: {
     flex: 1,
   },
   threadListContent: {
-    paddingVertical: 8,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 80,
-    paddingHorizontal: 32,
+    paddingTop: 60,
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryAlpha10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontFamily: Fonts?.heading ?? 'System',
+    fontSize: Typography.lg,
     fontWeight: '600',
-    color: ChatColors.text,
-    marginTop: 16,
-    marginBottom: 8,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: ChatColors.textMuted,
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textSecondary,
     textAlign: 'center',
+    lineHeight: Typography.sm * Typography.relaxed,
+  },
+  footer: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  footerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  footerText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
   },
 });
-

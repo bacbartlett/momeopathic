@@ -1,10 +1,10 @@
 import { Composer } from '@/components/chat/composer';
-import { MessageList } from '@/components/chat/message-list';
+import { MessageList, MessageListHandle } from '@/components/chat/message-list';
 import { ThreadDrawer } from '@/components/chat/thread-drawer';
-import { ChatColors } from '@/constants/theme';
+import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,6 +19,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function ChatScreen() {
   const { state, activeThread, isLoading, createThread, sendMessage } = useChat();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const messageListRef = useRef<MessageListHandle>(null);
+
+  const handleComposerFocus = useCallback(() => {
+    messageListRef.current?.scrollToBottom();
+  }, []);
 
   // Create initial thread if none exists
   useEffect(() => {
@@ -30,38 +35,50 @@ export default function ChatScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={ChatColors.accent} />
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Getting things ready...</Text>
       </View>
     );
   }
 
   const content = (
     <>
+      {/* Header with gradient accent */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => setIsDrawerOpen(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="menu" size={24} color={ChatColors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeThread?.title ?? 'New Chat'}
-        </Text>
-        <TouchableOpacity
-          style={styles.newChatButton}
-          onPress={createThread}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="create-outline" size={24} color={ChatColors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setIsDrawerOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="menu" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          
+          <View style={styles.headerTitleContainer}>
+            <View style={styles.logoContainer}>
+              <Ionicons name="leaf" size={20} color={Colors.primary} />
+            </View>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {activeThread?.title ?? 'New Conversation'}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.newChatButton}
+            onPress={createThread}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+        
       </View>
 
       <View style={styles.messagesContainer}>
-        <MessageList messages={activeThread?.messages ?? []} />
+        <MessageList ref={messageListRef} messages={activeThread?.messages ?? []} />
       </View>
 
-      <Composer onSend={sendMessage} disabled={!activeThread} />
+      <Composer onSend={sendMessage} disabled={!activeThread} onFocus={handleComposerFocus} />
     </>
   );
 
@@ -70,7 +87,7 @@ export default function ChatScreen() {
       {Platform.OS === 'ios' || Platform.OS === 'android' ? (
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
-          behavior='padding'
+          behavior="padding"
         >
           {content}
         </KeyboardAvoidingView>
@@ -96,38 +113,73 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: ChatColors.background,
+    gap: Spacing.md,
+  },
+  loadingText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
+    color: Colors.textSecondary,
   },
   header: {
+    backgroundColor: ChatColors.headerBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: ChatColors.border,
+    ...Shadows.sm,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: ChatColors.border,
-    backgroundColor: ChatColors.headerBackground,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.md,
   },
   menuButton: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryAlpha10,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  logoContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryAlpha20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
-    flex: 1,
-    fontSize: 17,
+    fontFamily: Fonts?.heading ?? 'System',
+    fontSize: Typography.lg,
     fontWeight: '600',
-    color: ChatColors.text,
-    textAlign: 'center',
-    marginHorizontal: 8,
+    color: Colors.textPrimary,
+    maxWidth: 180,
   },
   newChatButton: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.md,
+  },
+  trustBanner: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
+  trustBannerText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
   messagesContainer: {
     flex: 1,

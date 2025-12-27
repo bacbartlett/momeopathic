@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Thread } from '@/types/chat';
-import { ChatColors } from '@/constants/theme';
+import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
 interface ThreadItemProps {
   thread: Thread;
@@ -19,12 +19,13 @@ export function ThreadItem({ thread, isActive, onPress, onDelete }: ThreadItemPr
       activeOpacity={0.7}
     >
       <View style={styles.content}>
-        <Ionicons
-          name="chatbubble-outline"
-          size={18}
-          color={isActive ? ChatColors.accent : ChatColors.textMuted}
-          style={styles.icon}
-        />
+        <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
+          <Ionicons
+            name={isActive ? 'chatbubble' : 'chatbubble-outline'}
+            size={16}
+            color={isActive ? Colors.primary : Colors.textMuted}
+          />
+        </View>
         <View style={styles.textContainer}>
           <Text style={[styles.title, isActive && styles.titleActive]} numberOfLines={1}>
             {thread.title}
@@ -40,7 +41,7 @@ export function ThreadItem({ thread, isActive, onPress, onDelete }: ThreadItemPr
         }}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="trash-outline" size={16} color={ChatColors.textMuted} />
+        <Ionicons name="trash-outline" size={16} color={Colors.textMuted} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -67,44 +68,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginHorizontal: 12,
-    marginVertical: 2,
-    borderRadius: 12,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    marginHorizontal: Spacing.xs,
+    marginVertical: Spacing.xs,
+    borderRadius: Radius.lg,
     backgroundColor: 'transparent',
   },
   containerActive: {
-    backgroundColor: ChatColors.drawerItemBackground,
+    backgroundColor: Colors.primaryAlpha10,
+    borderWidth: 1,
+    borderColor: Colors.primaryAlpha20,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 8,
+    marginRight: Spacing.sm,
+    gap: Spacing.md,
   },
-  icon: {
-    marginRight: 12,
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconContainerActive: {
+    backgroundColor: Colors.primaryAlpha20,
   },
   textContainer: {
     flex: 1,
   },
   title: {
-    fontSize: 15,
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
     fontWeight: '500',
-    color: ChatColors.text,
+    color: Colors.textPrimary,
     marginBottom: 2,
   },
   titleActive: {
-    color: ChatColors.text,
+    color: Colors.primaryDark,
+    fontWeight: '600',
   },
   date: {
-    fontSize: 12,
-    color: ChatColors.textMuted,
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
   },
   deleteButton: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
     opacity: 0.6,
   },
 });
-

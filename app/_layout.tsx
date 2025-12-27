@@ -1,36 +1,64 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import {
+  useFonts,
+  Quicksand_400Regular,
+  Quicksand_500Medium,
+  Quicksand_600SemiBold,
+  Quicksand_700Bold,
+} from '@expo-google-fonts/quicksand';
+import {
+  Lato_400Regular,
+  Lato_700Bold,
+} from '@expo-google-fonts/lato';
+import { ConvexProvider } from 'convex/react';
+
 import { ChatProvider } from '@/context/chat-context';
+import { NavigationTheme } from '@/constants/theme';
+import { convex } from '@/lib/convex';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-// Custom dark theme matching our chat colors
-const customDarkTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: '#0D0D0F',
-    card: '#141416',
-    border: '#27272A',
-    text: '#EAEAEC',
-    primary: '#2563EB',
-  },
-};
+// Prevent the splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    'Quicksand-Regular': Quicksand_400Regular,
+    'Quicksand-Medium': Quicksand_500Medium,
+    'Quicksand-SemiBold': Quicksand_600SemiBold,
+    'Quicksand-Bold': Quicksand_700Bold,
+    'Lato-Regular': Lato_400Regular,
+    'Lato-Bold': Lato_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
-    <ThemeProvider value={customDarkTheme}>
-      <ChatProvider>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar style="light" />
-      </ChatProvider>
-    </ThemeProvider>
+    <ConvexProvider client={convex}>
+      <ThemeProvider value={NavigationTheme}>
+        <ChatProvider>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+          <StatusBar style="dark" />
+        </ChatProvider>
+      </ThemeProvider>
+    </ConvexProvider>
   );
 }

@@ -7,14 +7,15 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ChatColors } from '@/constants/theme';
+import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
 interface ComposerProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  onFocus?: () => void;
 }
 
-export function Composer({ onSend, disabled = false }: ComposerProps) {
+export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
   const [text, setText] = useState('');
   const inputRef = useRef<TextInput>(null);
   const textRef = useRef(text);
@@ -62,10 +63,11 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
         <TextInput
           ref={inputRef}
           style={styles.input}
-          placeholder="Type a message..."
-          placeholderTextColor={ChatColors.placeholder}
+          placeholder="Ask about homeopathic remedies..."
+          placeholderTextColor={Colors.textMuted}
           value={text}
           onChangeText={setText}
+          onFocus={onFocus}
           multiline
           maxLength={4000}
           editable={!disabled}
@@ -82,49 +84,83 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
           <Ionicons
             name="arrow-up"
             size={20}
-            color={canSend ? ChatColors.sendButtonIcon : ChatColors.sendButtonIconDisabled}
+            color={canSend ? Colors.textInverse : Colors.textMuted}
           />
         </TouchableOpacity>
+      </View>
+      
+      {/* Disclaimer text */}
+      <View style={styles.disclaimerContainer}>
+        <Ionicons name="information-circle-outline" size={12} color={Colors.textMuted} />
+        <Text style={styles.disclaimerText}>
+          For educational purposes only. Always consult a healthcare provider.
+        </Text>
       </View>
     </View>
   );
 }
 
+// Manual Text component since we're in a module
+function Text({ style, children }: { style?: object; children: React.ReactNode }) {
+  const RNText = require('react-native').Text;
+  return <RNText style={style}>{children}</RNText>;
+}
+
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: ChatColors.border,
+    borderTopColor: Colors.border,
     backgroundColor: ChatColors.composerBackground,
+    ...Shadows.sm,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     backgroundColor: ChatColors.inputBackground,
-    borderRadius: 24,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
-    minHeight: 48,
+    borderRadius: Radius['2xl'],
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingLeft: Spacing.md,
+    paddingRight: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    minHeight: 52,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: ChatColors.text,
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
+    color: Colors.textPrimary,
     maxHeight: 120,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
+    lineHeight: Typography.base * Typography.normal,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: ChatColors.sendButtonDisabled,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: Spacing.sm,
   },
   sendButtonActive: {
-    backgroundColor: ChatColors.sendButton,
+    backgroundColor: Colors.primary,
+    ...Shadows.glow,
+  },
+  disclaimerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
+  },
+  disclaimerText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
   },
 });

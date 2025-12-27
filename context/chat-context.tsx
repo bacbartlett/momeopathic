@@ -1,114 +1,54 @@
+import { useAction, useMutation, useQuery } from 'convex/react';
 import React, {
   createContext,
-  useContext,
-  useReducer,
-  useEffect,
-  useCallback,
   ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
 } from 'react';
-import { ChatState, Thread, Message } from '@/types/chat';
-import { loadChatState, saveChatState } from '@/hooks/use-chat-storage';
+import { api } from '../convex/_generated/api.js';
 
-// Generate unique IDs
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+// UIMessage shape from the actual Convex agent response
+// Using 'key' instead of '_id' as per the actual type
+interface AgentUIMessage {
+  key: string;
+  role: "user" | "assistant" | "system";
+  text: string;
+  status?: "pending" | "streaming" | "complete" | "failed" | "success";
+  _creationTime: number;
+  order: number;
+  stepOrder: number;
 }
 
-// Generate a title from the first message
-function generateTitle(content: string): string {
-  const maxLength = 30;
-  if (content.length <= maxLength) return content;
-  return content.substring(0, maxLength).trim() + '...';
+interface ConvexThread {
+  _id: string;
+  _creationTime: number;
+  title?: string;
+  summary?: string;
+  userId?: string;
 }
 
-// Actions
-type ChatAction =
-  | { type: 'LOAD_STATE'; payload: ChatState }
-  | { type: 'CREATE_THREAD' }
-  | { type: 'SELECT_THREAD'; payload: string }
-  | { type: 'DELETE_THREAD'; payload: string }
-  | { type: 'ADD_MESSAGE'; payload: { threadId: string; message: Message } }
-  | { type: 'UPDATE_THREAD_TITLE'; payload: { threadId: string; title: string } };
+// UI-friendly types
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  status?: 'pending' | 'streaming' | 'complete' | 'failed';
+}
 
-const initialState: ChatState = {
-  threads: [],
-  activeThreadId: null,
-};
+export interface Thread {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
+}
 
-function chatReducer(state: ChatState, action: ChatAction): ChatState {
-  switch (action.type) {
-    case 'LOAD_STATE':
-      return action.payload;
-
-    case 'CREATE_THREAD': {
-      const newThread: Thread = {
-        id: generateId(),
-        title: 'New Chat',
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      return {
-        ...state,
-        threads: [newThread, ...state.threads],
-        activeThreadId: newThread.id,
-      };
-    }
-
-    case 'SELECT_THREAD':
-      return {
-        ...state,
-        activeThreadId: action.payload,
-      };
-
-    case 'DELETE_THREAD': {
-      const filteredThreads = state.threads.filter((t) => t.id !== action.payload);
-      const newActiveId =
-        state.activeThreadId === action.payload
-          ? filteredThreads[0]?.id ?? null
-          : state.activeThreadId;
-      return {
-        ...state,
-        threads: filteredThreads,
-        activeThreadId: newActiveId,
-      };
-    }
-
-    case 'ADD_MESSAGE': {
-      const { threadId, message } = action.payload;
-      return {
-        ...state,
-        threads: state.threads.map((thread) => {
-          if (thread.id !== threadId) return thread;
-          const updatedMessages = [...thread.messages, message];
-          // Update title if this is the first user message
-          const shouldUpdateTitle =
-            thread.title === 'New Chat' &&
-            message.role === 'user' &&
-            thread.messages.filter((m) => m.role === 'user').length === 0;
-          return {
-            ...thread,
-            messages: updatedMessages,
-            title: shouldUpdateTitle ? generateTitle(message.content) : thread.title,
-            updatedAt: Date.now(),
-          };
-        }),
-      };
-    }
-
-    case 'UPDATE_THREAD_TITLE':
-      return {
-        ...state,
-        threads: state.threads.map((thread) =>
-          thread.id === action.payload.threadId
-            ? { ...thread, title: action.payload.title, updatedAt: Date.now() }
-            : thread
-        ),
-      };
-
-    default:
-      return state;
-  }
+export interface ChatState {
+  threads: Thread[];
+  activeThreadId: string | null;
 }
 
 // Context types
@@ -116,83 +56,145 @@ interface ChatContextType {
   state: ChatState;
   activeThread: Thread | null;
   isLoading: boolean;
-  createThread: () => void;
+  isSending: boolean;
+  createThread: () => Promise<void>;
   selectThread: (threadId: string) => void;
-  deleteThread: (threadId: string) => void;
-  sendMessage: (content: string) => void;
+  deleteThread: (threadId: string) => Promise<void>;
+  sendMessage: (content: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
 
+// Default user ID for now (can be replaced with auth later)
+const DEFAULT_USER_ID = "default-user";
+
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(chatReducer, initialState);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
-  // Load state on mount
-  useEffect(() => {
-    async function init() {
-      const savedState = await loadChatState();
-      if (savedState) {
-        dispatch({ type: 'LOAD_STATE', payload: savedState });
-      }
-      setIsLoading(false);
-    }
-    init();
-  }, []);
-
-  // Save state on changes
-  useEffect(() => {
-    if (!isLoading) {
-      saveChatState(state);
-    }
-  }, [state, isLoading]);
-
-  const activeThread = state.threads.find((t) => t.id === state.activeThreadId) ?? null;
-
-  const createThread = useCallback(() => {
-    dispatch({ type: 'CREATE_THREAD' });
-  }, []);
-
-  const selectThread = useCallback((threadId: string) => {
-    dispatch({ type: 'SELECT_THREAD', payload: threadId });
-  }, []);
-
-  const deleteThread = useCallback((threadId: string) => {
-    dispatch({ type: 'DELETE_THREAD', payload: threadId });
-  }, []);
-
-  const sendMessage = useCallback(
-    (content: string) => {
-      if (!state.activeThreadId) return;
-
-      const userMessage: Message = {
-        id: generateId(),
-        role: 'user',
-        content,
-        timestamp: Date.now(),
-      };
-
-      dispatch({
-        type: 'ADD_MESSAGE',
-        payload: { threadId: state.activeThreadId, message: userMessage },
-      });
-
-      // Simulate assistant response (placeholder for actual API integration)
-      setTimeout(() => {
-        const assistantMessage: Message = {
-          id: generateId(),
-          role: 'assistant',
-          content: getMockResponse(content),
-          timestamp: Date.now(),
-        };
-        dispatch({
-          type: 'ADD_MESSAGE',
-          payload: { threadId: state.activeThreadId!, message: assistantMessage },
-        });
-      }, 800);
-    },
-    [state.activeThreadId]
+  // Fetch threads from Convex
+  const threadsResult = useQuery(api.threads.list, { userId: DEFAULT_USER_ID });
+  
+  // Fetch messages for active thread
+  const messagesResult = useQuery(
+    api.messages.list,
+    activeThreadId ? { threadId: activeThreadId } : "skip"
   );
+
+  // Mutations and actions
+  const createThreadMutation = useMutation(api.threads.create);
+  const deleteThreadAction = useAction(api.threads.remove);
+  const sendMessageAction = useAction(api.messages.send);
+
+  // Transform Convex threads to UI threads
+  const threads = useMemo((): Thread[] => {
+    if (!threadsResult?.page) return [];
+    
+    return threadsResult.page.map((thread: ConvexThread) => ({
+      id: thread._id,
+      title: thread.title || 'New Chat',
+      messages: [], // Messages are loaded separately for the active thread
+      createdAt: thread._creationTime,
+      updatedAt: thread._creationTime,
+    }));
+  }, [threadsResult]);
+
+  // Transform messages for active thread
+  const activeThreadMessages = useMemo((): Message[] => {
+    if (!messagesResult?.page) return [];
+    
+    return (messagesResult.page as AgentUIMessage[])
+      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg) => ({
+        id: msg.key,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.text || '',
+        timestamp: msg._creationTime,
+        status: msg.status === 'success' ? 'complete' : msg.status,
+      }));
+  }, [messagesResult]);
+
+  // Build complete active thread with messages
+  const activeThread = useMemo((): Thread | null => {
+    if (!activeThreadId) return null;
+    
+    const thread = threads.find(t => t.id === activeThreadId);
+    if (!thread) return null;
+    
+    return {
+      ...thread,
+      messages: activeThreadMessages,
+    };
+  }, [activeThreadId, threads, activeThreadMessages]);
+
+  // Build state object
+  const state = useMemo((): ChatState => ({
+    threads: threads.map(t => 
+      t.id === activeThreadId 
+        ? { ...t, messages: activeThreadMessages }
+        : t
+    ),
+    activeThreadId,
+  }), [threads, activeThreadId, activeThreadMessages]);
+
+  // Loading state
+  const isLoading = threadsResult === undefined;
+
+  // Auto-select first thread if none selected
+  React.useEffect(() => {
+    if (!isLoading && threads.length > 0 && !activeThreadId) {
+      setActiveThreadId(threads[0].id);
+    }
+  }, [isLoading, threads, activeThreadId]);
+
+  // Create new thread
+  const createThread = useCallback(async () => {
+    try {
+      const result = await createThreadMutation({
+        userId: DEFAULT_USER_ID,
+        title: 'New Chat',
+      });
+      setActiveThreadId(result.threadId);
+    } catch (error) {
+      console.error('Failed to create thread:', error);
+    }
+  }, [createThreadMutation]);
+
+  // Select thread
+  const selectThread = useCallback((threadId: string) => {
+    setActiveThreadId(threadId);
+  }, []);
+
+  // Delete thread
+  const deleteThread = useCallback(async (threadId: string) => {
+    try {
+      await deleteThreadAction({ threadId });
+      if (activeThreadId === threadId) {
+        const remainingThreads = threads.filter(t => t.id !== threadId);
+        setActiveThreadId(remainingThreads[0]?.id ?? null);
+      }
+    } catch (error) {
+      console.error('Failed to delete thread:', error);
+    }
+  }, [deleteThreadAction, activeThreadId, threads]);
+
+  // Send message
+  const sendMessage = useCallback(async (content: string) => {
+    if (!activeThreadId || isSending) return;
+
+    setIsSending(true);
+    try {
+      await sendMessageAction({
+        threadId: activeThreadId,
+        content,
+        userId: DEFAULT_USER_ID,
+      });
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    } finally {
+      setIsSending(false);
+    }
+  }, [activeThreadId, isSending, sendMessageAction]);
 
   return (
     <ChatContext.Provider
@@ -200,6 +202,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         state,
         activeThread,
         isLoading,
+        isSending,
         createThread,
         selectThread,
         deleteThread,
@@ -218,16 +221,3 @@ export function useChat() {
   }
   return context;
 }
-
-// Mock responses for UI testing
-function getMockResponse(userMessage: string): string {
-  const responses = [
-    "I understand you're asking about that. Let me help you explore this topic further.",
-    "That's an interesting question! Here's what I think...",
-    "Great point! I'd be happy to discuss this with you.",
-    "Thanks for sharing that. Could you tell me more about what you're looking for?",
-    "I'm here to help! Based on what you've said, here are some thoughts...",
-  ];
-  return responses[Math.floor(Math.random() * responses.length)];
-}
-
