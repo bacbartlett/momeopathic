@@ -7,12 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
   const { state, activeThread, isLoading, createThread, sendMessage } = useChat();
@@ -33,8 +35,8 @@ export default function ChatScreen() {
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
+  const content = (
+    <>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.menuButton}
@@ -60,6 +62,21 @@ export default function ChatScreen() {
       </View>
 
       <Composer onSend={sendMessage} disabled={!activeThread} />
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingView}
+          behavior="padding"
+        >
+          {content}
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={styles.keyboardAvoidingView}>{content}</View>
+      )}
 
       <ThreadDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
     </SafeAreaView>
@@ -70,6 +87,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: ChatColors.background,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

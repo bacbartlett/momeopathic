@@ -4,7 +4,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,41 +57,36 @@ export function Composer({ onSend, disabled = false }: ComposerProps) {
   const canSend = text.trim().length > 0 && !disabled;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <View style={styles.container}>
-        <View style={styles.inputContainer}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor={ChatColors.placeholder}
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={4000}
-            editable={!disabled}
-            blurOnSubmit={false}
+    <View style={styles.container}>
+      <View style={styles.inputContainer}>
+        <TextInput
+          ref={inputRef}
+          style={styles.input}
+          placeholder="Type a message..."
+          placeholderTextColor={ChatColors.placeholder}
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={4000}
+          editable={!disabled}
+          blurOnSubmit={false}
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, canSend && styles.sendButtonActive]}
+          onPress={handleSend}
+          disabled={!canSend}
+          activeOpacity={0.7}
+          accessibilityLabel="Send message"
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="arrow-up"
+            size={20}
+            color={canSend ? ChatColors.sendButtonIcon : ChatColors.sendButtonIconDisabled}
           />
-          <TouchableOpacity
-            style={[styles.sendButton, canSend && styles.sendButtonActive]}
-            onPress={handleSend}
-            disabled={!canSend}
-            activeOpacity={0.7}
-            accessibilityLabel="Send message"
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name="arrow-up"
-              size={20}
-              color={canSend ? ChatColors.sendButtonIcon : ChatColors.sendButtonIconDisabled}
-            />
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

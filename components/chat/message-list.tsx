@@ -39,6 +39,7 @@ export function MessageList({ messages }: MessageListProps) {
       renderItem={({ item }) => <MessageBubble message={item} />}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
       onContentSizeChange={() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }}

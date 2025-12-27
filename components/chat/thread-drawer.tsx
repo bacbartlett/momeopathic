@@ -8,8 +8,8 @@ import {
   Animated,
   Dimensions,
   TouchableWithoutFeedback,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useChat } from '@/context/chat-context';
 import { ThreadItem } from './thread-item';
@@ -27,9 +27,12 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
   const { state, activeThread, createThread, selectThread, deleteThread } = useChat();
   const translateX = React.useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = React.useRef(new Animated.Value(0)).current;
+  const [isVisible, setIsVisible] = React.useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
+      // Show immediately, then animate in
+      setIsVisible(true);
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: 0,
@@ -43,6 +46,7 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
         }),
       ]).start();
     } else {
+      // Animate out, then hide
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: -DRAWER_WIDTH,
@@ -54,7 +58,9 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
           duration: 200,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        setIsVisible(false);
+      });
     }
   }, [isOpen, translateX, overlayOpacity]);
 
@@ -68,10 +74,10 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
     onClose();
   };
 
-  if (!isOpen) return null;
+  if (!isVisible && !isOpen) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents={isOpen ? 'auto' : 'none'}>
       <TouchableWithoutFeedback onPress={onClose}>
         <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]} />
       </TouchableWithoutFeedback>
