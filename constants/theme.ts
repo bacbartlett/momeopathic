@@ -27,6 +27,45 @@ export const Colors = {
   },
 };
 
+// Chat-specific colors - Dark theme focused
+export const ChatColors = {
+  // Backgrounds
+  background: '#0D0D0F',
+  headerBackground: '#141416',
+  composerBackground: '#141416',
+  inputBackground: '#1E1E22',
+  drawerBackground: '#0D0D0F',
+  drawerItemBackground: '#1A1A1E',
+  drawerItemHover: '#242428',
+
+  // Text
+  text: '#EAEAEC',
+  textMuted: '#8E8E93',
+  textSecondary: '#A1A1A6',
+  placeholder: '#5C5C61',
+
+  // Message bubbles
+  userBubble: '#2563EB',
+  userText: '#FFFFFF',
+  assistantBubble: '#27272A',
+  assistantText: '#EAEAEC',
+
+  // Interactive elements
+  sendButton: '#2563EB',
+  sendButtonDisabled: '#27272A',
+  sendButtonIcon: '#FFFFFF',
+  sendButtonIconDisabled: '#5C5C61',
+
+  // Accents
+  accent: '#2563EB',
+  accentHover: '#1D4ED8',
+  danger: '#EF4444',
+
+  // Borders
+  border: '#27272A',
+  borderLight: '#1E1E22',
+};
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
