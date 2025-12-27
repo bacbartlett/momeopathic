@@ -67,10 +67,10 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {Platform.OS === 'ios' ? (
+      {Platform.OS === 'ios' || Platform.OS === 'android' ? (
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
-          behavior="padding"
+          behavior='padding'
         >
           {content}
         </KeyboardAvoidingView>
