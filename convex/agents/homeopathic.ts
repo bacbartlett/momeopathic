@@ -1,6 +1,8 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { Agent } from "@convex-dev/agent";
-import { components } from "../_generated/api";
+import { Agent, createTool } from "@convex-dev/agent";
+import z from "zod";
+import { api, components } from "../_generated/api";
+import { SearchRAGTextResult } from "../rag";
 
 const baseMasterPrompt = `You are an expert homeopathic practitioner conducting a case-taking interview. Your goal is to gather symptoms systematically and identify the most appropriate remedy from the materia medica.
 Core Principles
@@ -77,6 +79,8 @@ This remedy is known for [brief overview in plain language].
 
 Would you like to know more about it? You can ask me questions or read the full Materia Medica entry here.
 Link the "the full Materia Medica entry here" with a url generated using the getLearnMoreLink tool for the recommended remedy. Format: You can ask me questions or read [the full Materia Medica entry here](<URL>).
+*Critical*
+NEVER include a URL in your response until you have received it from the link creation tool. Do not predict, guess, or fabricate URLs under any circumstances. Call the tool first, then compose your message using the actual returned URL.
 
 Important Guidelines
 Style
@@ -149,21 +153,33 @@ const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
+const searchMateriaMedica = createTool({
+  description: `Search a Materia Medica`,
+  args: z.object({
+    query: z.string(),
+  }),
+  handler: async (ctx, args): Promise<SearchRAGTextResult> => {
+    return await ctx.runAction(api.rag.searchRAGText, {namespace: 'universal', searchFor: args.query})
+  }
+})
+
+const getLearnMoreLink = createTool({
+  description: 'Generate Link to Learn More',
+  args: z.object({
+    nameOfRemedy: z.string()
+  }),
+  handler: async (__, args): Promise<string> => {
+    const urlName = args.nameOfRemedy.toLowerCase().replace(/ /g, '-');
+    return `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`
+  }
+})
+
+const tools = {searchMateriaMedica, getLearnMoreLink};
+
 export const homeopathicAgent = new Agent(components.agent, {
   name: "Homeopathic Assistant",
-  languageModel: openrouter.chat("openai/gpt-4o-mini"),
-  instructions: `You are a knowledgeable and compassionate homeopathic health assistant. 
-Your role is to:
-- Provide information about homeopathic remedies and their traditional uses
-- Help users understand holistic approaches to wellness
-- Offer general guidance on natural health practices
-- Always remind users to consult with qualified healthcare professionals for medical decisions
-
-Important guidelines:
-- Be warm, supportive, and empathetic in your responses
-- Explain concepts clearly without using overly technical jargon
-- Never diagnose conditions or prescribe treatments
-- Encourage users to work with licensed practitioners
-- Acknowledge the limits of AI assistance in health matters`,
-  maxSteps: 5,
+  languageModel: openrouter.chat("anthropic/claude-haiku-4.5"),
+  instructions: baseMasterPrompt,
+  maxSteps: 20,
+  tools
 });

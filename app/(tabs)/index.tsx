@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -22,7 +23,29 @@ export default function ChatScreen() {
   const messageListRef = useRef<MessageListHandle>(null);
 
   const handleComposerFocus = useCallback(() => {
-    messageListRef.current?.scrollToBottom();
+    // On Android, scroll immediately (current working behavior)
+    // On iOS, let the keyboardDidShow listener handle the scroll after animation completes
+    if (Platform.OS === 'android') {
+      messageListRef.current?.scrollToBottom();
+    }
+  }, []);
+
+  // Listen for keyboard events on iOS to scroll after keyboard animation completes
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      // Small delay to ensure layout is settled after keyboard animation
+      setTimeout(() => {
+        messageListRef.current?.scrollToBottom();
+      }, 100);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+    };
   }, []);
 
   // Create initial thread if none exists

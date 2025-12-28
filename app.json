@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "homeopathicNative",
-    "slug": "homeopathicNative",
+    "slug": "homeopathicnative",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -47,6 +47,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "38af4f01-9905-411e-bcc0-a4a4c0b53c1e"
+      }
+    },
+    "owner": "homeopathicnative"
   }
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { Message } from '@/types/chat';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,9 +25,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       
       <View style={styles.bubbleWrapper}>
         <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-          <Text style={[styles.text, isUser ? styles.userText : styles.assistantText]}>
+          <Markdown
+            style={isUser ? markdownStyles.user : markdownStyles.assistant}
+          >
             {message.content}
-          </Text>
+          </Markdown>
         </View>
         <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.assistantTimestamp]}>
           {formatTime(message.timestamp)}
@@ -90,17 +93,6 @@ const styles = StyleSheet.create({
     backgroundColor: ChatColors.assistantBubble,
     borderBottomLeftRadius: Radius.sm,
   },
-  text: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.base,
-    lineHeight: Typography.base * Typography.relaxed,
-  },
-  userText: {
-    color: Colors.textInverse,
-  },
-  assistantText: {
-    color: Colors.textPrimary,
-  },
   timestamp: {
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
@@ -116,3 +108,203 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 });
+
+// Markdown styles that match the theme
+const markdownStyles = {
+  user: {
+    body: {
+      fontFamily: Fonts?.body ?? 'System',
+      fontSize: Typography.base,
+      lineHeight: Typography.base * Typography.relaxed,
+      color: Colors.textInverse,
+      margin: 0,
+      padding: 0,
+    },
+    paragraph: {
+      marginTop: 0,
+      marginBottom: Spacing.sm,
+      color: Colors.textInverse,
+    },
+    heading1: {
+      fontFamily: Fonts?.heading ?? 'System',
+      fontSize: Typography.xl,
+      fontWeight: Typography.semibold,
+      color: Colors.textInverse,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.sm,
+    },
+    heading2: {
+      fontFamily: Fonts?.heading ?? 'System',
+      fontSize: Typography.lg,
+      fontWeight: Typography.semibold,
+      color: Colors.textInverse,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.sm,
+    },
+    heading3: {
+      fontFamily: Fonts?.heading ?? 'System',
+      fontSize: Typography.base,
+      fontWeight: Typography.semibold,
+      color: Colors.textInverse,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    strong: {
+      fontWeight: Typography.bold,
+      color: Colors.textInverse,
+    },
+    em: {
+      fontStyle: 'italic',
+      color: Colors.textInverse,
+    },
+    link: {
+      color: Colors.textInverse,
+      textDecorationLine: 'underline',
+      opacity: 0.9,
+    },
+    listItem: {
+      color: Colors.textInverse,
+      marginBottom: Spacing.xs,
+    },
+    bullet_list: {
+      marginTop: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    ordered_list: {
+      marginTop: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    code_inline: {
+      fontFamily: Fonts?.mono ?? 'monospace',
+      fontSize: Typography.sm,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      color: Colors.textInverse,
+      paddingHorizontal: Spacing.xs,
+      paddingVertical: 2,
+      borderRadius: Radius.sm,
+    },
+    fence: {
+      fontFamily: Fonts?.mono ?? 'monospace',
+      fontSize: Typography.sm,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      color: Colors.textInverse,
+      padding: Spacing.md,
+      borderRadius: Radius.md,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    blockquote: {
+      borderLeftWidth: 3,
+      borderLeftColor: 'rgba(255, 255, 255, 0.5)',
+      paddingLeft: Spacing.md,
+      marginLeft: 0,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.sm,
+      color: Colors.textInverse,
+      opacity: 0.9,
+    },
+    hr: {
+      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+      height: 1,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.md,
+    },
+  },
+  assistant: {
+    body: {
+      fontFamily: Fonts?.body ?? 'System',
+      fontSize: Typography.base,
+      lineHeight: Typography.base * Typography.relaxed,
+      color: Colors.textPrimary,
+      margin: 0,
+      padding: 0,
+    },
+    paragraph: {
+      marginTop: 0,
+      marginBottom: Spacing.sm,
+      color: Colors.textPrimary,
+    },
+    heading1: {
+      fontFamily: Fonts?.heading ?? 'System',
+      fontSize: Typography.xl,
+      fontWeight: Typography.semibold,
+      color: Colors.textPrimary,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.sm,
+    },
+    heading2: {
+      fontFamily: Fonts?.heading ?? 'System',
+      fontSize: Typography.lg,
+      fontWeight: Typography.semibold,
+      color: Colors.textPrimary,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.sm,
+    },
+    heading3: {
+      fontFamily: Fonts?.heading ?? 'System',
+      fontSize: Typography.base,
+      fontWeight: Typography.semibold,
+      color: Colors.textPrimary,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    strong: {
+      fontWeight: Typography.bold,
+      color: Colors.textPrimary,
+    },
+    em: {
+      fontStyle: 'italic',
+      color: Colors.textPrimary,
+    },
+    link: {
+      color: Colors.primary,
+      textDecorationLine: 'underline',
+    },
+    listItem: {
+      color: Colors.textPrimary,
+      marginBottom: Spacing.xs,
+    },
+    bullet_list: {
+      marginTop: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    ordered_list: {
+      marginTop: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    code_inline: {
+      fontFamily: Fonts?.mono ?? 'monospace',
+      fontSize: Typography.sm,
+      backgroundColor: Colors.bgSecondary,
+      color: Colors.textPrimary,
+      paddingHorizontal: Spacing.xs,
+      paddingVertical: 2,
+      borderRadius: Radius.sm,
+    },
+    fence: {
+      fontFamily: Fonts?.mono ?? 'monospace',
+      fontSize: Typography.sm,
+      backgroundColor: Colors.bgSecondary,
+      color: Colors.textPrimary,
+      padding: Spacing.md,
+      borderRadius: Radius.md,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    blockquote: {
+      borderLeftWidth: 3,
+      borderLeftColor: Colors.primary,
+      paddingLeft: Spacing.md,
+      marginLeft: 0,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.sm,
+      color: Colors.textSecondary,
+    },
+    hr: {
+      backgroundColor: Colors.border,
+      height: 1,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.md,
+    },
+  },
+};
