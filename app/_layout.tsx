@@ -1,25 +1,27 @@
 import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
-import {
-  useFonts,
-  Quicksand_400Regular,
-  Quicksand_500Medium,
-  Quicksand_600SemiBold,
-  Quicksand_700Bold,
-} from '@expo-google-fonts/quicksand';
+import { ClerkLoaded, ClerkProvider } from '@clerk/clerk-expo';
 import {
   Lato_400Regular,
   Lato_700Bold,
 } from '@expo-google-fonts/lato';
+import {
+  Quicksand_400Regular,
+  Quicksand_500Medium,
+  Quicksand_600SemiBold,
+  Quicksand_700Bold,
+  useFonts,
+} from '@expo-google-fonts/quicksand';
 import { ConvexProvider } from 'convex/react';
 
-import { ChatProvider } from '@/context/chat-context';
 import { NavigationTheme } from '@/constants/theme';
+import { ChatProvider } from '@/context/chat-context';
+import { tokenCache } from '@/lib/clerk-token-cache';
 import { convex } from '@/lib/convex';
 
 export const unstable_settings = {
@@ -49,16 +51,29 @@ export default function RootLayout() {
     return null;
   }
 
+  const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  if (!clerkPublishableKey) {
+    throw new Error(
+      'Missing Clerk Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env file.'
+    );
+  }
+
   return (
-    <ConvexProvider client={convex}>
-      <ThemeProvider value={NavigationTheme}>
-        <ChatProvider>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </Stack>
-          <StatusBar style="dark" />
-        </ChatProvider>
-      </ThemeProvider>
-    </ConvexProvider>
+    <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <ConvexProvider client={convex}>
+          <ThemeProvider value={NavigationTheme}>
+            <ChatProvider>
+              <Stack>
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              </Stack>
+              <StatusBar style="dark" />
+            </ChatProvider>
+          </ThemeProvider>
+        </ConvexProvider>
+      </ClerkLoaded>
+    </ClerkProvider>
   );
 }
