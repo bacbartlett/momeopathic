@@ -88,7 +88,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   // Mutations and actions
-  const createThreadMutation = useMutation(api.threads.create);
+  const createThreadAction = useAction(api.threads.create);
   const deleteThreadAction = useAction(api.threads.remove);
   const sendMessageAction = useAction(api.messages.send);
 
@@ -167,14 +167,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const result = await createThreadMutation({
+      const result = await createThreadAction({
         title: 'New Chat',
       });
       setActiveThreadId(result.threadId);
     } catch (error) {
       console.error('Failed to create thread:', error);
     }
-  }, [isAuthenticated, createThreadMutation]);
+  }, [isAuthenticated, createThreadAction]);
 
   // Select thread
   const selectThread = useCallback((threadId: string) => {

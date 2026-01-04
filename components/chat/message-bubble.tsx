@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Platform, Animated } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Message } from '@/types/chat';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -11,6 +11,8 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const isLoading = !isUser && (message.status === 'pending' || message.status === 'streaming');
+  const hasContent = message.content && message.content.trim().length > 0;
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
@@ -25,16 +27,131 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       
       <View style={styles.bubbleWrapper}>
         <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-          <Markdown
-            style={isUser ? markdownStyles.user : markdownStyles.assistant}
-          >
-            {message.content}
-          </Markdown>
+          {isLoading && !hasContent ? (
+            <TypingIndicator />
+          ) : (
+            <>
+              {hasContent && (
+                <Markdown
+                  style={isUser ? markdownStyles.user : markdownStyles.assistant}
+                >
+                  {message.content}
+                </Markdown>
+              )}
+              {isLoading && hasContent && (
+                <View style={styles.loadingIndicatorContainer}>
+                  <TypingIndicator />
+                </View>
+              )}
+            </>
+          )}
         </View>
-        <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.assistantTimestamp]}>
-          {formatTime(message.timestamp)}
-        </Text>
+        {!isLoading && (
+          <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.assistantTimestamp]}>
+            {formatTime(message.timestamp)}
+          </Text>
+        )}
       </View>
+    </View>
+  );
+}
+
+function TypingIndicator() {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const createAnimation = (dot: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+
+    const animations = [
+      createAnimation(dot1, 0),
+      createAnimation(dot2, 150),
+      createAnimation(dot3, 300),
+    ];
+
+    animations.forEach(anim => anim.start());
+
+    return () => {
+      animations.forEach(anim => anim.stop());
+    };
+  }, [dot1, dot2, dot3]);
+
+  const translateY1 = dot1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -8],
+  });
+
+  const translateY2 = dot2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -8],
+  });
+
+  const translateY3 = dot3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -8],
+  });
+
+  const opacity1 = dot1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
+  });
+
+  const opacity2 = dot2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
+  });
+
+  const opacity3 = dot3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
+  });
+
+  return (
+    <View style={styles.typingContainer}>
+      <Animated.View
+        style={[
+          styles.typingDot,
+          {
+            transform: [{ translateY: translateY1 }],
+            opacity: opacity1,
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.typingDot,
+          {
+            transform: [{ translateY: translateY2 }],
+            opacity: opacity2,
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.typingDot,
+          {
+            transform: [{ translateY: translateY3 }],
+            opacity: opacity3,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -106,6 +223,24 @@ const styles = StyleSheet.create({
   assistantTimestamp: {
     textAlign: 'left',
     color: Colors.textMuted,
+  },
+  loadingIndicatorContainer: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  typingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.textSecondary,
   },
 });
 

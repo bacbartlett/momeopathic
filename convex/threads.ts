@@ -1,10 +1,10 @@
-import { v } from "convex/values";
-import { mutation, query, action, MutationCtx, QueryCtx } from "./_generated/server";
-import { createThread } from "@convex-dev/agent";
-import { components } from "./_generated/api";
+import { saveMessage } from "@convex-dev/agent";
 import { paginationOptsValidator } from "convex/server";
-import { homeopathicAgent } from "./agents/homeopathic";
+import { v } from "convex/values";
+import { components, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
+import { action, ActionCtx, internalQuery, mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
+import { homeopathicAgent } from "./agents/homeopathic";
 
 /**
  * Helper function to get the current authenticated user from a mutation context.
@@ -22,6 +22,44 @@ async function getCurrentUserFromMutation(ctx: MutationCtx): Promise<Doc<"users"
       q.eq("tokenIdentifier", identity.tokenIdentifier)
     )
     .unique();
+
+  if (!user) {
+    throw new Error("User not found in database. Please sign in again.");
+  }
+
+  return user;
+}
+
+/**
+ * Internal query to get user by token identifier.
+ * Used by actions that need to look up the current user (actions can't access db directly).
+ */
+export const getUserByToken = internalQuery({
+  args: { tokenIdentifier: v.string() },
+  handler: async (ctx, args): Promise<Doc<"users"> | null> => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) =>
+        q.eq("tokenIdentifier", args.tokenIdentifier)
+      )
+      .unique();
+  },
+});
+
+/**
+ * Helper function to get the current authenticated user from an action context.
+ * Throws an error if the user is not authenticated or doesn't exist in the database.
+ */
+async function getCurrentUserFromAction(ctx: ActionCtx): Promise<Doc<"users">> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Unauthenticated: Must be logged in to access threads");
+  }
+
+  // Actions can't access db directly, must use runQuery
+  const user = await ctx.runQuery(internal.threads.getUserByToken, {
+    tokenIdentifier: identity.tokenIdentifier,
+  });
 
   if (!user) {
     throw new Error("User not found in database. Please sign in again.");
@@ -55,19 +93,30 @@ async function getCurrentUserFromQuery(ctx: QueryCtx): Promise<Doc<"users">> {
 }
 
 // Create a new thread for the authenticated user
-export const create = mutation({
+// Converted to action to allow adding initial greeting message
+export const create = action({
   args: {
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUserFromMutation(ctx);
+    const user = await getCurrentUserFromAction(ctx);
 
-    // Use the user's database ID as the userId for the thread
-    // This associates the thread with our user in the database
-    const threadId = await createThread(ctx, components.agent, {
+    // Create thread using the agent's createThread method which returns both threadId and thread object
+    const { threadId } = await homeopathicAgent.createThread(ctx, {
       userId: user._id,
       title: args.title,
     });
+
+    // Add initial greeting message from the AI directly as an assistant message
+    await saveMessage(ctx, components.agent, {
+      threadId,
+      userId: user._id,
+      message: {
+        role: "assistant",
+        content: "Hello, how can I help you today?",
+      },
+    });
+
     return { threadId };
   },
 });
