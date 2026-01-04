@@ -2,27 +2,29 @@ import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
-import { ClerkLoaded, ClerkProvider } from '@clerk/clerk-expo';
+import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import {
-  Lato_400Regular,
-  Lato_700Bold,
+    Lato_400Regular,
+    Lato_700Bold,
 } from '@expo-google-fonts/lato';
 import {
-  Quicksand_400Regular,
-  Quicksand_500Medium,
-  Quicksand_600SemiBold,
-  Quicksand_700Bold,
-  useFonts,
+    Quicksand_400Regular,
+    Quicksand_500Medium,
+    Quicksand_600SemiBold,
+    Quicksand_700Bold,
+    useFonts,
 } from '@expo-google-fonts/quicksand';
-import { ConvexProvider } from 'convex/react';
+import { ConvexReactClient, useConvexAuth, useMutation } from 'convex/react';
+import { ConvexProviderWithClerk } from 'convex/react-clerk';
 
 import { NavigationTheme } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
+import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
-import { convex } from '@/lib/convex';
+import { DisclaimerManager } from '@/components/disclaimer-modal';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -30,6 +32,36 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Initialize the Convex client
+const convex = new ConvexReactClient(
+  process.env.EXPO_PUBLIC_CONVEX_URL!,
+  {
+    unsavedChangesWarning: false,
+  }
+);
+
+/**
+ * Component that automatically stores the user in the database when they sign in.
+ * This should be rendered inside the ConvexProviderWithClerk.
+ * We use useConvexAuth to wait for Convex to have the auth token (not just Clerk's isSignedIn).
+ */
+function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
+  // useConvexAuth tells us when Convex has received and validated the JWT token
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const storeUser = useMutation(api.users.store);
+
+  useEffect(() => {
+    // Only store user when Convex auth is ready and authenticated
+    if (!isLoading && isAuthenticated) {
+      storeUser().catch((error) => {
+        console.error('Failed to store user in database:', error);
+      });
+    }
+  }, [isLoading, isAuthenticated, storeUser]);
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -62,17 +94,28 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
-        <ConvexProvider client={convex}>
-          <ThemeProvider value={NavigationTheme}>
-            <ChatProvider>
-              <Stack>
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              </Stack>
-              <StatusBar style="dark" />
-            </ChatProvider>
-          </ThemeProvider>
-        </ConvexProvider>
+        <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+          <StoreUserInDatabase>
+            <ThemeProvider value={NavigationTheme}>
+              <ChatProvider>
+                <Stack>
+                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="account"
+                    options={{
+                      headerShown: false,
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                </Stack>
+                <StatusBar style="dark" />
+                <DisclaimerManager />
+              </ChatProvider>
+            </ThemeProvider>
+          </StoreUserInDatabase>
+        </ConvexProviderWithClerk>
       </ClerkLoaded>
     </ClerkProvider>
   );

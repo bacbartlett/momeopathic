@@ -1,4 +1,4 @@
-import { useAction, useMutation, useQuery } from 'convex/react';
+import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react';
 import React, {
   createContext,
   ReactNode,
@@ -57,6 +57,7 @@ interface ChatContextType {
   activeThread: Thread | null;
   isLoading: boolean;
   isSending: boolean;
+  isAuthenticated: boolean;
   createThread: () => Promise<void>;
   selectThread: (threadId: string) => void;
   deleteThread: (threadId: string) => Promise<void>;
@@ -65,20 +66,25 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | null>(null);
 
-// Default user ID for now (can be replaced with auth later)
-const DEFAULT_USER_ID = "default-user";
-
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
 
-  // Fetch threads from Convex
-  const threadsResult = useQuery(api.threads.list, { userId: DEFAULT_USER_ID });
+  // Get auth state from Convex (not Clerk directly)
+  // This ensures we only make authenticated requests when Convex has the JWT token
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+
+  // Fetch threads from Convex (no userId needed - server uses auth)
+  // Skip the query if not authenticated
+  const threadsResult = useQuery(
+    api.threads.list,
+    isAuthenticated ? {} : "skip"
+  );
   
   // Fetch messages for active thread
   const messagesResult = useQuery(
     api.messages.list,
-    activeThreadId ? { threadId: activeThreadId } : "skip"
+    activeThreadId && isAuthenticated ? { threadId: activeThreadId } : "skip"
   );
 
   // Mutations and actions
@@ -137,8 +143,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     activeThreadId,
   }), [threads, activeThreadId, activeThreadMessages]);
 
-  // Loading state
-  const isLoading = threadsResult === undefined;
+  // Loading state - include auth loading
+  const isLoading = isAuthLoading || (isAuthenticated && threadsResult === undefined);
 
   // Auto-select first thread if none selected
   React.useEffect(() => {
@@ -147,18 +153,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isLoading, threads, activeThreadId]);
 
-  // Create new thread
+  // Clear active thread when user signs out
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      setActiveThreadId(null);
+    }
+  }, [isAuthenticated]);
+
+  // Create new thread (no userId needed - server uses auth)
   const createThread = useCallback(async () => {
+    if (!isAuthenticated) {
+      console.error('Cannot create thread: User not authenticated');
+      return;
+    }
     try {
       const result = await createThreadMutation({
-        userId: DEFAULT_USER_ID,
         title: 'New Chat',
       });
       setActiveThreadId(result.threadId);
     } catch (error) {
       console.error('Failed to create thread:', error);
     }
-  }, [createThreadMutation]);
+  }, [isAuthenticated, createThreadMutation]);
 
   // Select thread
   const selectThread = useCallback((threadId: string) => {
@@ -167,6 +183,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Delete thread
   const deleteThread = useCallback(async (threadId: string) => {
+    if (!isAuthenticated) {
+      console.error('Cannot delete thread: User not authenticated');
+      return;
+    }
     try {
       await deleteThreadAction({ threadId });
       if (activeThreadId === threadId) {
@@ -176,25 +196,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to delete thread:', error);
     }
-  }, [deleteThreadAction, activeThreadId, threads]);
+  }, [isAuthenticated, deleteThreadAction, activeThreadId, threads]);
 
-  // Send message
+  // Send message (no userId needed - server uses auth)
   const sendMessage = useCallback(async (content: string) => {
     if (!activeThreadId || isSending) return;
+    if (!isAuthenticated) {
+      console.error('Cannot send message: User not authenticated');
+      return;
+    }
 
     setIsSending(true);
     try {
       await sendMessageAction({
         threadId: activeThreadId,
         content,
-        userId: DEFAULT_USER_ID,
       });
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
       setIsSending(false);
     }
-  }, [activeThreadId, isSending, sendMessageAction]);
+  }, [activeThreadId, isSending, isAuthenticated, sendMessageAction]);
 
   return (
     <ChatContext.Provider
@@ -203,6 +226,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeThread,
         isLoading,
         isSending,
+        isAuthenticated,
         createThread,
         selectThread,
         deleteThread,

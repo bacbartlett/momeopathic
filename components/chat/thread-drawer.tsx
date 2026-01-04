@@ -1,19 +1,26 @@
+import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useChat } from '@/context/chat-context';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
-  View,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Animated,
-  Dimensions,
-  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useChat } from '@/context/chat-context';
+import { AccountBadge } from './account-badge';
 import { ThreadItem } from './thread-item';
-import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
 const DRAWER_WIDTH = 320;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -25,45 +32,38 @@ interface ThreadDrawerProps {
 
 export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
   const { state, activeThread, createThread, selectThread, deleteThread } = useChat();
-  const translateX = React.useRef(new Animated.Value(-DRAWER_WIDTH)).current;
-  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
+  const translateX = useSharedValue(-DRAWER_WIDTH);
+  const overlayOpacity = useSharedValue(0);
   const [isVisible, setIsVisible] = React.useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
       // Show immediately, then animate in
       setIsVisible(true);
-      Animated.parallel([
-        Animated.spring(translateX, {
-          toValue: 0,
-          tension: 65,
-          friction: 11,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      translateX.value = withSpring(0, {
+        overshootClamping: false,
+        damping: 75,
+        stiffness: 250,
+      });
+      overlayOpacity.value = withTiming(1, { duration: 250 });
     } else {
       // Animate out, then hide
-      Animated.parallel([
-        Animated.timing(translateX, {
-          toValue: -DRAWER_WIDTH,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsVisible(false);
+      translateX.value = withTiming(-DRAWER_WIDTH, { duration: 200 });
+      overlayOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+        if (finished) {
+          runOnJS(setIsVisible)(false);
+        }
       });
     }
-  }, [isOpen, translateX, overlayOpacity]);
+  }, [isOpen]);
+
+  const drawerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const overlayAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
 
   const handleNewChat = () => {
     createThread();
@@ -78,12 +78,23 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
   if (!isVisible && !isOpen) return null;
 
   return (
-    <View style={styles.container} pointerEvents={isOpen ? 'auto' : 'none'}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]} />
-      </TouchableWithoutFeedback>
-      <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
-        <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
+      {/* Overlay that blocks ALL touches and closes drawer when tapped */}
+      <Pressable 
+        style={StyleSheet.absoluteFill}
+        onPress={onClose}
+      >
+        <Animated.View 
+          style={[styles.overlay, StyleSheet.absoluteFill, overlayAnimatedStyle]} 
+        />
+      </Pressable>
+      
+      {/* Drawer - positioned on the left, captures all touches within its bounds */}
+      <Animated.View 
+        style={[styles.drawer, drawerAnimatedStyle]}
+      >
+        <View style={styles.drawerTouchBlocker}>
+          <SafeAreaView style={styles.safeArea}>
           {/* Header with branding */}
           <View style={styles.header}>
             <View style={styles.headerBranding}>
@@ -138,14 +149,12 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
             )}
           </ScrollView>
 
-          {/* Footer with helpful info */}
+          {/* Account badge */}
           <View style={styles.footer}>
-            <View style={styles.footerContent}>
-              <Ionicons name="heart-outline" size={14} color={Colors.accent} />
-              <Text style={styles.footerText}>Made with care for families</Text>
-            </View>
+            <AccountBadge onClose={onClose} isDrawerOpen={isOpen} />
           </View>
         </SafeAreaView>
+        </View>
       </Animated.View>
     </View>
   );
@@ -154,10 +163,10 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 100,
+    zIndex: 1000,
+    elevation: 1000,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(61, 57, 53, 0.4)',
   },
   drawer: {
@@ -166,6 +175,11 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: DRAWER_WIDTH,
+    zIndex: 1001,
+    elevation: 1001,
+  },
+  drawerTouchBlocker: {
+    flex: 1,
     backgroundColor: Colors.bgSurface,
     borderRightWidth: 1,
     borderRightColor: Colors.border,
@@ -271,20 +285,9 @@ const styles = StyleSheet.create({
     lineHeight: Typography.sm * Typography.relaxed,
   },
   footer: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-  },
-  footerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-  },
-  footerText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.xs,
-    color: Colors.textMuted,
   },
 });

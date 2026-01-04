@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
-  const { state, activeThread, isLoading, createThread, sendMessage } = useChat();
+  const { state, activeThread, isLoading, isAuthenticated, createThread, sendMessage } = useChat();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const messageListRef = useRef<MessageListHandle>(null);
 
@@ -48,12 +48,12 @@ export default function ChatScreen() {
     };
   }, []);
 
-  // Create initial thread if none exists
+  // Create initial thread if none exists and user is authenticated
   useEffect(() => {
-    if (!isLoading && state.threads.length === 0) {
+    if (!isLoading && isAuthenticated && state.threads.length === 0) {
       createThread();
     }
-  }, [isLoading, state.threads.length, createThread]);
+  }, [isLoading, isAuthenticated, state.threads.length, createThread]);
 
   if (isLoading) {
     return (
