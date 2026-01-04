@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { action, query } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
+import { generateConversationTitle } from "./agents/titleGenerator";
 
 // List messages in a thread (UI-formatted)
 // Only allows access if the thread belongs to the authenticated user
@@ -79,11 +80,31 @@ export const send = action({
     // The thread.userId should match the user's database _id
     // We verify through the thread ownership check
 
+    // Check if this is the first user message (thread title is still default)
+    const isFirstUserMessage = !thread.title || thread.title === "New Chat";
+
     const result = await homeopathicAgent.generateText(
       ctx,
       { threadId: args.threadId, userId: thread.userId },
       { prompt: args.content }
     );
+
+    // Generate and update thread title if this is the first user message
+    if (isFirstUserMessage) {
+      try {
+        const generatedTitle = await generateConversationTitle(args.content);
+        await ctx.runMutation(components.agent.threads.updateThread, {
+          threadId: args.threadId,
+          patch: {
+            title: generatedTitle,
+          },
+        });
+      } catch (error) {
+        // Log error but don't fail the message send
+        console.error("Failed to generate thread title:", error);
+      }
+    }
+
     return {
       text: result.text,
       messageId: result.messageId,
