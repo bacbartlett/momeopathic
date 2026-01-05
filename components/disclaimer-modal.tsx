@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useMutation, useQuery } from 'convex/react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
@@ -289,10 +289,12 @@ export function useHasAcceptedDisclaimer() {
  * Component that manages the disclaimer modal visibility based on database and local storage.
  * Should be rendered inside ConvexProviderWithClerk.
  * Only shows the disclaimer if the user is authenticated (logged in).
+ * Does not show on terms or privacy policy pages.
  */
 export function DisclaimerManager() {
   const { isSignedIn, isLoaded } = useAuth();
   const hasAccepted = useHasAcceptedDisclaimer();
+  const pathname = usePathname();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -309,13 +311,20 @@ export function DisclaimerManager() {
       return;
     }
 
-    // User is signed in - check if they've accepted the disclaimer
+    // Don't show disclaimer on terms or privacy policy pages
+    if (pathname === '/terms' || pathname === '/privacy') {
+      setShowDisclaimer(false);
+      setInitialized(true);
+      return;
+    }
+
+    // User is signed in and not on terms/privacy pages - check if they've accepted the disclaimer
     if (hasAccepted !== null) {
       // Show disclaimer if user hasn't accepted (false) or if status is unknown (null becomes false)
       setShowDisclaimer(!hasAccepted);
       setInitialized(true);
     }
-  }, [isSignedIn, isLoaded, hasAccepted]);
+  }, [isSignedIn, isLoaded, hasAccepted, pathname]);
 
   const handleAgree = () => {
     setShowDisclaimer(false);
