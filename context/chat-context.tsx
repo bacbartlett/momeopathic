@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
+import { useMixpanel } from './mixpanel-context';
 
 // UIMessage shape from the actual Convex agent response
 // Using 'key' instead of '_id' as per the actual type
@@ -70,6 +71,7 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const { track, incrementUserProperty } = useMixpanel();
 
   // Get auth state from Convex (not Clerk directly)
   // This ensures we only make authenticated requests when Convex has the JWT token
@@ -175,10 +177,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         title: 'New Chat',
       });
       setActiveThreadId(result.threadId);
+      track('Thread Created', { thread_id: result.threadId });
+      incrementUserProperty('threads_created');
     } catch (error) {
       console.error('Failed to create thread:', error);
     }
-  }, [isAuthenticated, createThreadAction]);
+  }, [isAuthenticated, createThreadAction, track, incrementUserProperty]);
 
   // Select thread
   const selectThread = useCallback((threadId: string) => {
@@ -193,6 +197,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     try {
       await deleteThreadAction({ threadId });
+      track('Thread Deleted', { thread_id: threadId });
       if (activeThreadId === threadId) {
         const remainingThreads = threads.filter(t => t.id !== threadId);
         setActiveThreadId(remainingThreads[0]?.id ?? null);
@@ -200,7 +205,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to delete thread:', error);
     }
-  }, [isAuthenticated, deleteThreadAction, activeThreadId, threads]);
+  }, [isAuthenticated, deleteThreadAction, activeThreadId, threads, track]);
 
   // Send message (no userId needed - server uses auth)
   const sendMessage = useCallback(async (content: string) => {
@@ -216,12 +221,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         threadId: activeThreadId,
         content,
       });
+      track('Message Sent', { 
+        thread_id: activeThreadId, 
+        message_length: content.length 
+      });
+      incrementUserProperty('messages_sent');
     } catch (error) {
       console.error('Failed to send message:', error);
     } finally {
       setIsSending(false);
     }
-  }, [activeThreadId, isSending, isAuthenticated, sendMessageAction]);
+  }, [activeThreadId, isSending, isAuthenticated, sendMessageAction, track, incrementUserProperty]);
 
   return (
     <ChatContext.Provider

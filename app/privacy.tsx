@@ -1,7 +1,8 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
+import { useMixpanel } from '@/context/mixpanel-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -369,6 +370,12 @@ Thank you for trusting us with your information.
 
 export default function PrivacyScreen() {
   const router = useRouter();
+  const { track } = useMixpanel();
+
+  // Track page view
+  useEffect(() => {
+    track('Privacy Policy Viewed');
+  }, [track]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

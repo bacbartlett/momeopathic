@@ -1,4 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useMixpanel } from '@/context/mixpanel-context';
 import { useSignUp } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const router = useRouter();
+  const { track } = useMixpanel();
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -85,6 +87,7 @@ export default function SignUpScreen() {
       // If verification was completed, set the session to active and redirect
       if (signUpAttempt.status === 'complete') {
         await setActive({ session: signUpAttempt.createdSessionId });
+        track('Sign Up', { method: 'email' });
         router.replace('/(tabs)');
       } else {
         // If the status is not complete, user may need to complete further steps

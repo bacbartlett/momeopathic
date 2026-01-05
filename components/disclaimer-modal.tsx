@@ -1,4 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useMixpanel } from '@/context/mixpanel-context';
 import { api } from '@/convex/_generated/api';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,6 +91,14 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
   const [isFullText, setIsFullText] = useState(false);
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
   const router = useRouter();
+  const { track } = useMixpanel();
+
+  // Track disclaimer viewed when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      track('Disclaimer Viewed', { allow_dismiss: allowDismiss });
+    }
+  }, [visible, allowDismiss, track]);
 
   const handleAgree = async () => {
     try {
@@ -105,6 +114,11 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
         if (dbError instanceof Error && !dbError.message.includes('authentication')) {
           console.error('Failed to save disclaimer to database:', dbError);
         }
+      }
+      
+      // Track disclaimer accepted (only when user clicks agree, not dismiss)
+      if (!allowDismiss) {
+        track('Disclaimer Accepted');
       }
       
       onAgree();

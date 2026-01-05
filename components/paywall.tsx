@@ -1,8 +1,9 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useMixpanel } from '@/context/mixpanel-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -116,11 +117,17 @@ export function Paywall() {
     isLoading,
     error,
   } = useRevenueCat();
+  const { track, setUserProperties } = useMixpanel();
   
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Track paywall viewed
+  useEffect(() => {
+    track('Paywall Viewed');
+  }, [track]);
 
   // Get available packages
   const packages = currentOffering?.availablePackages ?? [];
@@ -144,8 +151,16 @@ export function Paywall() {
     
     try {
       const success = await purchasePackage(selectedPackage);
-      if (!success) {
-        // User may have cancelled, no error needed
+      if (success) {
+        track('Subscription Started', { 
+          package_id: selectedPackage.identifier,
+          price: selectedPackage.product.priceString,
+          period: selectedPackage.product.subscriptionPeriod ?? 'lifetime',
+        });
+        setUserProperties({ subscription_status: 'premium' });
+      } else {
+        // User cancelled
+        track('Paywall Dismissed', { reason: 'cancelled' });
       }
     } catch {
       setLocalError('Something went wrong. Please try again.');

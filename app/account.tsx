@@ -1,30 +1,32 @@
-import React, { useState, useCallback } from 'react';
+import { DisclaimerModal } from '@/components/disclaimer-modal';
+import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useMixpanel } from '@/context/mixpanel-context';
+import { useRevenueCat } from '@/context/revenue-cat-context';
+import { useClerk, useUser } from '@clerk/clerk-expo';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
   Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useUser, useClerk } from '@clerk/clerk-expo';
-import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { DisclaimerModal } from '@/components/disclaimer-modal';
-import { useRevenueCat } from '@/context/revenue-cat-context';
 
 export default function AccountScreen() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const { track } = useMixpanel();
   const { isSubscribed, customerInfo, restorePurchases, isLoading: isSubscriptionLoading } = useRevenueCat();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -35,8 +37,13 @@ export default function AccountScreen() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // Track page view
+  useEffect(() => {
+    track('Account Page Viewed');
+  }, [track]);
+
   // Reset form when user data changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       setFirstName(user.firstName || '');
       setLastName(user.lastName || '');
@@ -83,6 +90,7 @@ export default function AccountScreen() {
           onPress: async () => {
             setIsSigningOut(true);
             try {
+              track('Sign Out');
               await signOut();
               router.replace('/(auth)/sign-in');
             } catch (error) {
@@ -93,7 +101,7 @@ export default function AccountScreen() {
         },
       ]
     );
-  }, [signOut, router]);
+  }, [signOut, router, track]);
 
   const getInitials = useCallback(() => {
     const first = user?.firstName || '';
