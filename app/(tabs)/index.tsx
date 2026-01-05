@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
-  const { state, activeThread, isLoading, isAuthenticated, createThread, sendMessage } = useChat();
+  const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, createThread, sendMessage } = useChat();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const messageListRef = useRef<MessageListHandle>(null);
 
@@ -98,7 +98,7 @@ export default function ChatScreen() {
       </View>
 
       <View style={styles.messagesContainer}>
-        <MessageList ref={messageListRef} messages={activeThread?.messages ?? []} />
+        <MessageList ref={messageListRef} messages={activeThread?.messages ?? []} isLoading={isMessagesLoading} />
       </View>
 
       <Composer onSend={sendMessage} disabled={!activeThread} onFocus={handleComposerFocus} />

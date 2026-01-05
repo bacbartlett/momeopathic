@@ -56,6 +56,7 @@ interface ChatContextType {
   state: ChatState;
   activeThread: Thread | null;
   isLoading: boolean;
+  isMessagesLoading: boolean;
   isSending: boolean;
   isAuthenticated: boolean;
   createThread: () => Promise<void>;
@@ -146,6 +147,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Loading state - include auth loading
   const isLoading = isAuthLoading || (isAuthenticated && threadsResult === undefined);
 
+  // Messages loading state - true when we have an active thread but messages haven't loaded yet
+  const isMessagesLoading = Boolean(activeThreadId && isAuthenticated && messagesResult === undefined);
+
   // Auto-select first thread if none selected
   React.useEffect(() => {
     if (!isLoading && threads.length > 0 && !activeThreadId) {
@@ -225,6 +229,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         state,
         activeThread,
         isLoading,
+        isMessagesLoading,
         isSending,
         isAuthenticated,
         createThread,

@@ -2,19 +2,86 @@ import { ChatColors, Colors, Fonts, Radius, Spacing, Typography } from '@/consta
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
 
 interface MessageListProps {
   messages: Message[];
+  isLoading?: boolean;
 }
 
 export interface MessageListHandle {
   scrollToBottom: (animated?: boolean) => void;
 }
 
+// Skeleton loader component for messages
+function MessageListSkeleton() {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerAnim]);
+
+  const opacity = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <View style={skeletonStyles.container}>
+      {/* User message skeleton */}
+      <View style={skeletonStyles.userRow}>
+        <Animated.View style={[skeletonStyles.userBubble, { opacity }]} />
+      </View>
+
+      {/* Assistant message skeleton */}
+      <View style={skeletonStyles.assistantRow}>
+        <View style={skeletonStyles.avatarSkeleton}>
+          <Animated.View style={[skeletonStyles.avatarInner, { opacity }]} />
+        </View>
+        <View style={skeletonStyles.assistantBubbleWrapper}>
+          <Animated.View style={[skeletonStyles.assistantBubble, { opacity }]} />
+          <Animated.View style={[skeletonStyles.assistantBubbleLine, { opacity }]} />
+        </View>
+      </View>
+
+      {/* Another user message skeleton */}
+      <View style={skeletonStyles.userRow}>
+        <Animated.View style={[skeletonStyles.userBubbleShort, { opacity }]} />
+      </View>
+
+      {/* Another assistant message skeleton */}
+      <View style={skeletonStyles.assistantRow}>
+        <View style={skeletonStyles.avatarSkeleton}>
+          <Animated.View style={[skeletonStyles.avatarInner, { opacity }]} />
+        </View>
+        <View style={skeletonStyles.assistantBubbleWrapper}>
+          <Animated.View style={[skeletonStyles.assistantBubbleLong, { opacity }]} />
+          <Animated.View style={[skeletonStyles.assistantBubble, { opacity }]} />
+          <Animated.View style={[skeletonStyles.assistantBubbleLine, { opacity }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
-  function MessageList({ messages }, ref) {
+  function MessageList({ messages, isLoading = false }, ref) {
   const flatListRef = useRef<FlatList<Message>>(null);
 
   useImperativeHandle(ref, () => ({
@@ -33,6 +100,11 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       }, 100);
     }
   }, [messages.length]);
+
+  // Show skeleton while loading messages for a thread switch
+  if (isLoading) {
+    return <MessageListSkeleton />;
+  }
 
   if (messages.length === 0) {
     return (
@@ -177,5 +249,76 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.sm,
     color: Colors.textSecondary,
+  },
+});
+
+// Skeleton styles
+const skeletonStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: ChatColors.background,
+  },
+  userRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  userBubble: {
+    width: '65%',
+    height: 48,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryAlpha20,
+  },
+  userBubbleShort: {
+    width: '45%',
+    height: 36,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryAlpha20,
+  },
+  assistantRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  avatarSkeleton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryAlpha10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+  },
+  avatarInner: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryAlpha20,
+  },
+  assistantBubbleWrapper: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  assistantBubble: {
+    width: '75%',
+    height: 40,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.secondary,
+  },
+  assistantBubbleLong: {
+    width: '90%',
+    height: 56,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.secondary,
+  },
+  assistantBubbleLine: {
+    width: '50%',
+    height: 24,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.secondary,
   },
 });
