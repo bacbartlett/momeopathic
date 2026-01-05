@@ -4,18 +4,21 @@
     "slug": "homeopathicnative",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/cropped.jpg",
+    "icon": "./assets/images/appicon.png",
     "scheme": "homeopathicnative",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.homeopathicNative"
+      "bundleIdentifier": "com.anonymous.homeopathicNative",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/cropped.jpg",
+        "foregroundImage": "./assets/images/appicon.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -26,7 +29,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/cropped.jpg"
+      "favicon": "./assets/images/appicon.png"
     },
     "plugins": [
       "expo-router",
