@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -18,11 +19,13 @@ import { useRouter } from 'expo-router';
 import { useUser, useClerk } from '@clerk/clerk-expo';
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { DisclaimerModal } from '@/components/disclaimer-modal';
+import { useRevenueCat } from '@/context/revenue-cat-context';
 
 export default function AccountScreen() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const { isSubscribed, customerInfo, restorePurchases, isLoading: isSubscriptionLoading } = useRevenueCat();
 
   const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -30,6 +33,7 @@ export default function AccountScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // Reset form when user data changes
   React.useEffect(() => {
@@ -111,6 +115,56 @@ export default function AccountScreen() {
       month: 'long',
       day: 'numeric',
     });
+  }, []);
+
+  // Get subscription expiration date from customer info
+  const getSubscriptionExpirationDate = useCallback(() => {
+    if (!customerInfo) return null;
+    
+    // Get the first active entitlement's expiration date
+    const activeEntitlements = Object.values(customerInfo.entitlements.active);
+    if (activeEntitlements.length > 0) {
+      const expDate = activeEntitlements[0].expirationDate;
+      if (expDate) {
+        return new Date(expDate).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+      }
+    }
+    return null;
+  }, [customerInfo]);
+
+  // Handle restore purchases
+  const handleRestorePurchases = useCallback(async () => {
+    setIsRestoring(true);
+    try {
+      const success = await restorePurchases();
+      if (success) {
+        Alert.alert('Success', 'Your subscription has been restored!');
+      } else {
+        Alert.alert('No Subscription Found', 'We couldn\'t find an active subscription to restore.');
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to restore purchases. Please try again.');
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [restorePurchases]);
+
+  // Open subscription management in App Store / Play Store
+  const handleManageSubscription = useCallback(() => {
+    const url = Platform.select({
+      ios: 'https://apps.apple.com/account/subscriptions',
+      android: 'https://play.google.com/store/account/subscriptions',
+    });
+    
+    if (url) {
+      Linking.openURL(url).catch(() => {
+        Alert.alert('Error', 'Could not open subscription management. Please manage your subscription in the App Store or Google Play.');
+      });
+    }
   }, []);
 
   if (!isLoaded) {
@@ -310,51 +364,82 @@ export default function AccountScreen() {
             </View>
           </View>
 
-          {/* Security Card */}
+          {/* Subscription Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
-                <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} />
-                <Text style={styles.cardTitle}>Security</Text>
+                <Ionicons name="diamond-outline" size={20} color={Colors.primary} />
+                <Text style={styles.cardTitle}>Subscription</Text>
               </View>
             </View>
 
             <View style={styles.infoList}>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Password</Text>
+                <Text style={styles.infoLabel}>Status</Text>
                 <View style={styles.securityStatus}>
-                  {user.passwordEnabled ? (
+                  {isSubscriptionLoading ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : isSubscribed ? (
                     <>
                       <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                      <Text style={[styles.infoValue, styles.securityEnabled]}>Enabled</Text>
+                      <Text style={[styles.statusText, styles.securityEnabled]}>Active</Text>
                     </>
                   ) : (
                     <>
                       <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
-                      <Text style={[styles.infoValue, styles.securityDisabled]}>Not set</Text>
+                      <Text style={[styles.statusText, styles.securityDisabled]}>Inactive</Text>
                     </>
                   )}
                 </View>
               </View>
+              
+              {isSubscribed && getSubscriptionExpirationDate() && (
+                <>
+                  <View style={styles.divider} />
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Renews</Text>
+                    <Text style={styles.infoValue}>{getSubscriptionExpirationDate()}</Text>
+                  </View>
+                </>
+              )}
+              
               <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Two-Factor Auth</Text>
-                <View style={styles.securityStatus}>
-                  {user.twoFactorEnabled ? (
-                    <>
-                      <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                      <Text style={[styles.infoValue, styles.securityEnabled]}>Enabled</Text>
-                    </>
+              
+              {isSubscribed ? (
+                <TouchableOpacity
+                  style={styles.infoRow}
+                  onPress={handleManageSubscription}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.infoRowContent}>
+                    <Ionicons name="settings-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.infoLabel}>Manage Subscription</Text>
+                  </View>
+                  <Ionicons name="open-outline" size={20} color={Colors.textMuted} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.infoRow}
+                  onPress={handleRestorePurchases}
+                  activeOpacity={0.7}
+                  disabled={isRestoring}
+                >
+                  <View style={styles.infoRowContent}>
+                    <Ionicons name="refresh-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.infoLabel}>Restore Purchases</Text>
+                  </View>
+                  {isRestoring ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
                   ) : (
-                    <>
-                      <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
-                      <Text style={[styles.infoValue, styles.securityDisabled]}>Not enabled</Text>
-                    </>
+                    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                   )}
-                </View>
-              </View>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
+
+    
+          
 
           {/* Legal & Terms Card */}
           <View style={styles.card}>
@@ -374,6 +459,30 @@ export default function AccountScreen() {
                 <View style={styles.infoRowContent}>
                   <Ionicons name="warning-outline" size={18} color={Colors.primary} />
                   <Text style={styles.infoLabel}>View Disclaimer</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={() => router.push('/terms')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>Terms and Conditions</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={() => router.push('/privacy')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>Privacy Policy</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
               </TouchableOpacity>
@@ -665,6 +774,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+  },
+  statusText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '500',
   },
   securityEnabled: {
     color: Colors.success,

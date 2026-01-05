@@ -1,8 +1,10 @@
 import { Composer } from '@/components/chat/composer';
 import { MessageList, MessageListHandle } from '@/components/chat/message-list';
+import { Paywall } from '@/components/paywall';
 import { ThreadDrawer } from '@/components/chat/thread-drawer';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
+import { useSubscription } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -19,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
   const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, createThread, sendMessage } = useChat();
+  const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const messageListRef = useRef<MessageListHandle>(null);
 
@@ -55,13 +58,20 @@ export default function ChatScreen() {
     }
   }, [isLoading, isAuthenticated, state.threads.length, createThread]);
 
-  if (isLoading) {
+  // Show loading while checking auth or subscription status
+  if (isLoading || isSubscriptionLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Getting things ready...</Text>
       </View>
     );
+  }
+
+  // Show paywall only if user is authenticated but not subscribed
+  // Non-authenticated users will be handled by the auth flow
+  if (isAuthenticated && !isSubscribed) {
+    return <Paywall />;
   }
 
   const content = (

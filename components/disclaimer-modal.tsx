@@ -1,6 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { api } from '@/convex/_generated/api';
+import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useMutation, useQuery } from 'convex/react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Modal,
@@ -11,20 +18,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '@/convex/_generated/api';
-import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
 const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed';
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
-const SUMMARY_TEXT = `IMPORTANT DISCLAIMER
+const SUMMARY_TEXT_PARTS = {
+  intro: `This AI chatbot helps you explore Boericke's Materia Medica through conversation - it's an educational tool, not medical advice.
 
-Summary View:
-
-This AI chatbot helps you explore Boericke's Materia Medica through conversation - it's an educational tool, not medical advice.
-
-Important:
+Keep in Mind:
 
 • AI can make mistakes and provide inaccurate information
 • This is not a substitute for professional healthcare
@@ -33,13 +34,15 @@ Important:
 • You assume full responsibility for any actions you take
 • For educational purposes only. 18+ or parental permission required.
 
-By continuing, you agree to these terms.`;
+By continuing, you agree to our `,
+  termsLink: 'Terms and Conditions',
+  and: ' and ',
+  privacyLink: 'Privacy Policy',
+  period: '.',
+};
 
-const FULL_TEXT = `Welcome to the Homeopathic Materia Medica Chat
-
-Before you begin, please read and agree to the following:
-
-What This Tool Is
+const FULL_TEXT_PARTS = {
+  intro: `What This Tool Is:
 
 This is an educational resource that makes William Boericke's Materia Medica more accessible through a conversational interface. It uses AI to help you explore homeopathic remedies described in classical texts.
 
@@ -70,7 +73,12 @@ No Warranty
 
 This service is provided "as is" without any warranties. We make no guarantees about accuracy, completeness, or fitness for any particular purpose.
 
-By clicking "I Understand and Agree," you acknowledge that you have read and accept these terms.`;
+By clicking "I Understand and Agree," you acknowledge that you have read and accept our `,
+  termsLink: 'Terms and Conditions',
+  and: ' and ',
+  privacyLink: 'Privacy Policy',
+  period: '.',
+};
 
 interface DisclaimerModalProps {
   visible: boolean;
@@ -81,6 +89,7 @@ interface DisclaimerModalProps {
 export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: DisclaimerModalProps) {
   const [isFullText, setIsFullText] = useState(false);
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
+  const router = useRouter();
 
   const handleAgree = async () => {
     try {
@@ -112,7 +121,29 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
     }
   };
 
-  const textToDisplay = isFullText ? FULL_TEXT : SUMMARY_TEXT;
+  const handleTermsPress = () => {
+    router.push('/terms');
+  };
+
+  const handlePrivacyPress = () => {
+    router.push('/privacy');
+  };
+
+  const renderTextWithLinks = (parts: typeof SUMMARY_TEXT_PARTS) => {
+    return (
+      <Text style={styles.contentText}>
+        {parts.intro}
+        <Text style={styles.linkText} onPress={handleTermsPress}>
+          {parts.termsLink}
+        </Text>
+        {parts.and}
+        <Text style={styles.linkText} onPress={handlePrivacyPress}>
+          {parts.privacyLink}
+        </Text>
+        {parts.period}
+      </Text>
+    );
+  };
 
   return (
     <Modal
@@ -128,10 +159,23 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
         />
         <View style={styles.modalContainer}>
           <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="warning" size={32} color={Colors.error} />
-            </View>
-            <Text style={styles.title}>IMPORTANT DISCLAIMER</Text>
+      
+            <MaskedView
+              maskElement={
+                <Text style={styles.title}>Welcome</Text>
+              }
+            >
+              <LinearGradient
+                colors={[Colors.primary, Colors.accent, Colors.primaryDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.titleGradient}
+              >
+                <Text style={[styles.title, { opacity: 0 }]}>Welcome</Text>
+              </LinearGradient>
+            </MaskedView>
+            <Text style={styles.subTitle}>A better path to health starts here</Text>
+
           </View>
 
           <ScrollView
@@ -140,7 +184,9 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
             showsVerticalScrollIndicator={true}
             bounces={false}
           >
-            <Text style={styles.contentText}>{textToDisplay}</Text>
+            {isFullText
+              ? renderTextWithLinks(FULL_TEXT_PARTS)
+              : renderTextWithLinks(SUMMARY_TEXT_PARTS)}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -186,6 +232,7 @@ export async function hasAgreedToDisclaimer(): Promise<boolean> {
 /**
  * Hook to check if the user has accepted the disclaimer.
  * Checks both the database (if authenticated) and AsyncStorage.
+ * For authenticated users, database status takes priority to ensure new accounts always see the disclaimer.
  */
 export function useHasAcceptedDisclaimer() {
   const dbAccepted = useQuery(api.users.hasAcceptedDisclaimer);
@@ -212,20 +259,26 @@ export function useHasAcceptedDisclaimer() {
     }
   }, [dbAccepted, localAccepted]);
 
-  // If database says accepted, return true
-  // Otherwise, check local storage
-  // If either is true, user has accepted
-  if (dbAccepted === true) {
-    return true;
+  // If database query has completed (not undefined), prioritize database status
+  // This ensures new accounts always see the disclaimer even if local storage says accepted
+  if (dbAccepted !== undefined) {
+    // Database says accepted
+    if (dbAccepted === true) {
+      return true;
+    }
+    // Database says not accepted (false) or user is new (null becomes false)
+    // For authenticated users, we must show disclaimer if DB says false
+    return false;
   }
   
-  // If dbAccepted is false or null, check local storage
+  // Database query is still loading, check local storage as fallback
+  // This handles the case when user is not authenticated yet
   if (localAccepted === true) {
     return true;
   }
 
   // If we're still loading, return null to indicate loading state
-  if (dbAccepted === undefined || localAccepted === null) {
+  if (localAccepted === null) {
     return null;
   }
 
@@ -235,19 +288,34 @@ export function useHasAcceptedDisclaimer() {
 /**
  * Component that manages the disclaimer modal visibility based on database and local storage.
  * Should be rendered inside ConvexProviderWithClerk.
+ * Only shows the disclaimer if the user is authenticated (logged in).
  */
 export function DisclaimerManager() {
+  const { isSignedIn, isLoaded } = useAuth();
   const hasAccepted = useHasAcceptedDisclaimer();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Once we know the status, show disclaimer if not accepted
+    // Only show disclaimer if user is signed in
+    if (!isLoaded) {
+      return; // Wait for auth to load
+    }
+
+    // If user is not signed in, don't show disclaimer
+    if (!isSignedIn) {
+      setShowDisclaimer(false);
+      setInitialized(true);
+      return;
+    }
+
+    // User is signed in - check if they've accepted the disclaimer
     if (hasAccepted !== null) {
+      // Show disclaimer if user hasn't accepted (false) or if status is unknown (null becomes false)
       setShowDisclaimer(!hasAccepted);
       setInitialized(true);
     }
-  }, [hasAccepted]);
+  }, [isSignedIn, isLoaded, hasAccepted]);
 
   const handleAgree = () => {
     setShowDisclaimer(false);
@@ -299,8 +367,20 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Fonts?.headingBold ?? 'System',
-    fontSize: Typography.xl,
+    fontSize: Typography['3xl'],
     fontWeight: Typography.bold,
+    color: '#3D3935', // Explicit color to ensure visibility
+    textAlign: 'center',
+  },
+  titleGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subTitle: {
+    fontFamily: Fonts?.headingBold ?? 'System',
+    fontSize: Typography.base,
+    fontWeight: Typography.medium,
     color: '#3D3935', // Explicit color to ensure visibility
     textAlign: 'center',
   },
@@ -318,6 +398,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.base,
     lineHeight: Typography.base * Typography.relaxed,
     color: '#3D3935', // Explicit color to ensure visibility
+  },
+  linkText: {
+    color: Colors.primary,
+    textDecorationLine: 'underline',
+    fontWeight: Typography.medium,
   },
   footer: {
     padding: Spacing.lg,

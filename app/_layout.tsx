@@ -2,29 +2,30 @@ import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import {
-    Lato_400Regular,
-    Lato_700Bold,
+  Lato_400Regular,
+  Lato_700Bold,
 } from '@expo-google-fonts/lato';
 import {
-    Quicksand_400Regular,
-    Quicksand_500Medium,
-    Quicksand_600SemiBold,
-    Quicksand_700Bold,
-    useFonts,
+  Quicksand_400Regular,
+  Quicksand_500Medium,
+  Quicksand_600SemiBold,
+  Quicksand_700Bold,
+  useFonts,
 } from '@expo-google-fonts/quicksand';
 import { ConvexReactClient, useConvexAuth, useMutation } from 'convex/react';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 
+import { DisclaimerManager } from '@/components/disclaimer-modal';
 import { NavigationTheme } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
+import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
-import { DisclaimerManager } from '@/components/disclaimer-modal';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -96,24 +97,42 @@ export default function RootLayout() {
       <ClerkLoaded>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <StoreUserInDatabase>
-            <ThemeProvider value={NavigationTheme}>
-              <ChatProvider>
-                <Stack>
-                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen
-                    name="account"
-                    options={{
-                      headerShown: false,
-                      presentation: 'modal',
-                      animation: 'slide_from_bottom',
-                    }}
-                  />
-                </Stack>
-                <StatusBar style="dark" />
-                <DisclaimerManager />
-              </ChatProvider>
-            </ThemeProvider>
+            <RevenueCatProvider>
+              <ThemeProvider value={NavigationTheme}>
+                <ChatProvider>
+                  <Stack>
+                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen
+                      name="account"
+                      options={{
+                        headerShown: false,
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                    <Stack.Screen
+                      name="terms"
+                      options={{
+                        headerShown: false,
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                    <Stack.Screen
+                      name="privacy"
+                      options={{
+                        headerShown: false,
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                  </Stack>
+                  <StatusBar style="dark" />
+                  <DisclaimerManager />
+                </ChatProvider>
+              </ThemeProvider>
+            </RevenueCatProvider>
           </StoreUserInDatabase>
         </ConvexProviderWithClerk>
       </ClerkLoaded>
