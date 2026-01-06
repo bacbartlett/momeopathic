@@ -1,3 +1,4 @@
+import { EXPO_PUBLIC_MIXPANEL_TOKEN } from '@/lib/env';
 import { useUser } from '@clerk/clerk-expo';
 import { Mixpanel } from 'mixpanel-react-native';
 import React, {
@@ -12,7 +13,7 @@ import React, {
 import { Platform } from 'react-native';
 
 // Create Mixpanel instance
-const MIXPANEL_TOKEN = process.env.EXPO_PUBLIC_MIXPANEL_TOKEN;
+const MIXPANEL_TOKEN = EXPO_PUBLIC_MIXPANEL_TOKEN;
 
 // Lazy initialization - only create instance when token is available
 let mixpanelInstance: Mixpanel | null = null;

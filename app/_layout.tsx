@@ -27,6 +27,7 @@ import { MixpanelProvider, useMixpanel } from '@/context/mixpanel-context';
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
+import { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -37,7 +38,7 @@ SplashScreen.preventAutoHideAsync();
 
 // Initialize the Convex client
 const convex = new ConvexReactClient(
-  process.env.EXPO_PUBLIC_CONVEX_URL!,
+  EXPO_PUBLIC_CONVEX_URL,
   {
     unsavedChangesWarning: false,
   }
@@ -101,11 +102,11 @@ export default function RootLayout() {
     return null;
   }
 
-  const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const clerkPublishableKey = EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
   if (!clerkPublishableKey) {
     throw new Error(
-      'Missing Clerk Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env file.'
+      'Missing Clerk Publishable Key'
     );
   }
 

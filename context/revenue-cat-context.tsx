@@ -1,3 +1,4 @@
+import { EXPO_PUBLIC_REVENUECAT_ANDROID_KEY, EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID, EXPO_PUBLIC_REVENUECAT_IOS_KEY } from '@/lib/env';
 import { useUser } from '@clerk/clerk-expo';
 import React, {
   createContext,
@@ -18,7 +19,7 @@ import Purchases, {
 
 // Entitlement identifier - this should match what you set up in RevenueCat dashboard
 // Can be configured via environment variable or defaults to 'premium'
-const ENTITLEMENT_ID = process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID ?? 'premium';
+const ENTITLEMENT_ID = EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID;
 
 interface RevenueCatContextType {
   /** Whether RevenueCat has been initialized */
@@ -87,8 +88,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
 
         // Get platform-specific API key
         const apiKey = Platform.select({
-          ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
-          android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
+          ios: EXPO_PUBLIC_REVENUECAT_IOS_KEY,
+          android: EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
         });
 
         if (!apiKey) {
