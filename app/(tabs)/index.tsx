@@ -1,7 +1,7 @@
 import { Composer } from '@/components/chat/composer';
 import { MessageList, MessageListHandle } from '@/components/chat/message-list';
-import { Paywall } from '@/components/paywall';
 import { ThreadDrawer } from '@/components/chat/thread-drawer';
+import { Paywall } from '@/components/paywall';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
 import { useSubscription } from '@/context/revenue-cat-context';
@@ -23,6 +23,7 @@ export default function ChatScreen() {
   const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, createThread, sendMessage } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
 
   const handleComposerFocus = useCallback(() => {
@@ -48,6 +49,23 @@ export default function ChatScreen() {
 
     return () => {
       keyboardDidShowListener.remove();
+    };
+  }, []);
+
+  // Handle keyboard dismiss on Android to reset KeyboardAvoidingView
+  // Reset immediately when keyboard hides (no delay to avoid visual glitch)
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      // Reset immediately - keyboardDidHide already fires after keyboard is dismissed
+      setKeyboardKey(prev => prev + 1);
+    });
+
+    return () => {
+      keyboardDidHideListener.remove();
     };
   }, []);
 
@@ -117,10 +135,18 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {Platform.OS === 'ios' || Platform.OS === 'android' ? (
+      {Platform.OS === 'ios' ? (
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
           behavior="padding"
+        >
+          {content}
+        </KeyboardAvoidingView>
+      ) : Platform.OS === 'android' ? (
+        <KeyboardAvoidingView
+          key={keyboardKey}
+          style={styles.keyboardAvoidingView}
+          behavior="height"
         >
           {content}
         </KeyboardAvoidingView>

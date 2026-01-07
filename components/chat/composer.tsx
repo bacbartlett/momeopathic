@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
+  Platform,
+  StyleSheet,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Platform,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
 interface ComposerProps {
   onSend: (message: string) => void;
@@ -17,6 +17,7 @@ interface ComposerProps {
 
 export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
   const [text, setText] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const textRef = useRef(text);
 
@@ -24,6 +25,15 @@ export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
   useEffect(() => {
     textRef.current = text;
   }, [text]);
+
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+    onFocus?.();
+  }, [onFocus]);
+
+  const handleBlur = useCallback(() => {
+    setIsFocused(false);
+  }, []);
 
   const handleSend = useCallback(() => {
     const trimmed = textRef.current.trim();
@@ -67,7 +77,8 @@ export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
           placeholderTextColor={Colors.textMuted}
           value={text}
           onChangeText={setText}
-          onFocus={onFocus}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           multiline
           maxLength={4000}
           editable={!disabled}
@@ -90,7 +101,10 @@ export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
       </View>
       
       {/* Disclaimer text */}
-      <View style={styles.disclaimerContainer}>
+      <View style={[
+        styles.disclaimerContainer,
+        { paddingBottom: isFocused ? Spacing.xs : Spacing.md }
+      ]}>
         <Ionicons name="information-circle-outline" size={12} color={Colors.textMuted} />
         <Text style={styles.disclaimerText}>
           For educational purposes only. Always consult a healthcare provider.
@@ -156,7 +170,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.xs,
     marginTop: Spacing.sm,
-    paddingBottom: Spacing.xs,
   },
   disclaimerText: {
     fontFamily: Fonts?.body ?? 'System',

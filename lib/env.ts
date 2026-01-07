@@ -11,6 +11,6 @@ export const EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = isDev ? 'pk_test_cHJvLXR1cmtleS
 export const EXPO_PUBLIC_REVENUECAT_IOS_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : 'appl_WolnANIJoYtoDiSDOFkmTZuJpsM';
 export const EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : null;
 
-export const EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID = isDev ? 'entlee9b3be026' : 'entlee9b3be026';
+export const EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID = isDev ? 'Homeopathy Chat Unlimited' : 'Homeopathy Chat Unlimited';
 
 export const EXPO_PUBLIC_MIXPANEL_TOKEN = isDev ? null : '6037d2f23f573005cb6f760a73dbbb0b';

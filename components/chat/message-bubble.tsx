@@ -1,18 +1,151 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, Animated } from 'react-native';
-import Markdown from 'react-native-markdown-display';
-import { Message } from '@/types/chat';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 
 interface MessageBubbleProps {
   message: Message;
 }
 
+const filterBrokenLinks = (text: string): string => {
+  // Regex to match markdown links: [text](url)
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  
+  // Check if there are any links
+  const hasLinks = linkRegex.test(text);
+  if (!hasLinks) {
+    return text;
+  }
+  
+  // Reset regex lastIndex
+  linkRegex.lastIndex = 0;
+  
+  // Find all links and check which are broken
+  const matches: Array<{ fullMatch: string; url: string; startIndex: number; endIndex: number }> = [];
+  let match;
+  
+  while ((match = linkRegex.exec(text)) !== null) {
+    const url = match[2];
+    // Check if URL is valid (basic validation: starts with http:// or https://, or has valid domain structure)
+    const isValidUrl = /^https?:\/\/.+/.test(url) || /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}/.test(url);
+    
+    if (!isValidUrl) {
+      matches.push({
+        fullMatch: match[0],
+        url: url,
+        startIndex: match.index,
+        endIndex: match.index + match[0].length,
+      });
+    }
+  }
+  
+  // If no broken links, return original text
+  if (matches.length === 0) {
+    return text;
+  }
+  
+  // Process broken links from end to start to maintain indices
+  let result = text;
+  
+  // Process each broken link URL
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const brokenUrl = matches[i].url;
+    
+    // Find this broken link in the current result string
+    // Escape special regex characters in the URL
+    const escapedUrl = brokenUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const linkPattern = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
+    
+    // Find the last occurrence (since we're processing backwards)
+    let linkMatch: RegExpExecArray | null = null;
+    let lastMatch: RegExpExecArray | null = null;
+    linkPattern.lastIndex = 0;
+    
+    while ((linkMatch = linkPattern.exec(result)) !== null) {
+      lastMatch = linkMatch;
+    }
+    
+    if (!lastMatch) {
+      // Link already removed, skip
+      continue;
+    }
+    
+    const brokenLinkStart = lastMatch.index;
+    const brokenLinkEnd = brokenLinkStart + lastMatch[0].length;
+    
+    // Check if this broken link is part of the specific "Would you like to know more" section
+    const sectionPattern = /Would you like to know more about it\? You can ask me questions or read \[the full Materia Medica entry here\]\([^)]+\)\.?/i;
+    const sectionMatch = result.match(sectionPattern);
+    
+    if (sectionMatch && sectionMatch.index !== undefined && 
+        brokenLinkStart >= sectionMatch.index && 
+        brokenLinkEnd <= sectionMatch.index + sectionMatch[0].length) {
+      // Remove the entire section
+      const sectionStart = sectionMatch.index;
+      const sectionEnd = sectionStart + sectionMatch[0].length;
+      
+      // Remove the section, but preserve newlines that precede it
+      // Only remove trailing spaces/tabs (not newlines) from beforeSection
+      const beforeSection = result.substring(0, sectionStart).replace(/[ \t]+$/, '');
+      const afterSection = result.substring(sectionEnd).replace(/^\s+/, '');
+      
+      // Add a period if the section before ended without punctuation
+      const needsPeriod = beforeSection.length > 0 && !/[.!?]$/.test(beforeSection.trim());
+      result = beforeSection + (needsPeriod ? '.' : '') + (afterSection ? ' ' + afterSection : '');
+    } else {
+      // Find the sentence containing the broken link
+      const beforeLink = result.substring(0, brokenLinkStart);
+      const afterLink = result.substring(brokenLinkEnd);
+      
+      // Find the start of the sentence (last sentence boundary before the link)
+      // Look for the last occurrence of . ! or ? followed by whitespace
+      let sentenceStart = 0;
+      const lastBoundaryMatch = beforeLink.match(/[.!?]\s+[^.!?]*$/);
+      if (lastBoundaryMatch) {
+        sentenceStart = beforeLink.lastIndexOf(lastBoundaryMatch[0]) + lastBoundaryMatch[0].length;
+      } else {
+        // If no boundary found, check if there's whitespace or start of string
+        const whitespaceMatch = beforeLink.match(/\s+[^\s]*$/);
+        if (whitespaceMatch) {
+          const leadingWhitespace = whitespaceMatch[0].match(/^\s+/)?.[0];
+          const whitespaceLength = leadingWhitespace ? leadingWhitespace.length : 0;
+          sentenceStart = beforeLink.lastIndexOf(whitespaceMatch[0]) + whitespaceMatch[0].length - whitespaceLength;
+        }
+      }
+      
+      // Find the end of the sentence (first sentence boundary after the link)
+      let sentenceEnd = result.length;
+      const firstBoundaryMatch = afterLink.match(/^[^.!?]*[.!?]/);
+      if (firstBoundaryMatch) {
+        sentenceEnd = brokenLinkEnd + firstBoundaryMatch[0].length;
+      } else {
+        // If no boundary found, look for end of line or end of string
+        const lineEndMatch = afterLink.match(/^[^\n]*\n/);
+        if (lineEndMatch) {
+          sentenceEnd = brokenLinkEnd + lineEndMatch[0].length;
+        }
+      }
+      
+      // Remove the sentence
+      const beforeSentence = result.substring(0, sentenceStart).trim();
+      const afterSentence = result.substring(sentenceEnd).trim();
+      
+      // Combine, ensuring proper spacing
+      result = beforeSentence + (beforeSentence && afterSentence ? ' ' : '') + afterSentence;
+    }
+  }
+  
+  return result.trim();
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
+  console.log(message.content)
   const isUser = message.role === 'user';
   const isLoading = !isUser && (message.status === 'pending' || message.status === 'streaming');
-  const hasContent = message.content && message.content.trim().length > 0;
+  const filteredContent = message.content ? filterBrokenLinks(message.content) : '';
+  const hasContent = filteredContent && filteredContent.trim().length > 0;
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
@@ -35,7 +168,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 <Markdown
                   style={isUser ? markdownStyles.user : markdownStyles.assistant}
                 >
-                  {message.content}
+                  {filteredContent}
                 </Markdown>
               )}
               {isLoading && hasContent && (
@@ -192,7 +325,8 @@ const styles = StyleSheet.create({
   },
   bubble: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     borderRadius: Radius.xl,
     ...Shadows.sm,
   },
@@ -202,7 +336,13 @@ const styles = StyleSheet.create({
     // Subtle gradient effect via shadow
     ...Platform.select({
       ios: Shadows.glow,
-      android: { elevation: 4 },
+      android: {
+        shadowColor: '#3D3935',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        elevation: 4,
+      },
       default: {},
     }),
   },
@@ -257,7 +397,7 @@ const markdownStyles = {
     },
     paragraph: {
       marginTop: 0,
-      marginBottom: Spacing.sm,
+      marginBottom: Spacing.xs,
       color: Colors.textInverse,
     },
     heading1: {
@@ -289,12 +429,12 @@ const markdownStyles = {
       color: Colors.textInverse,
     },
     em: {
-      fontStyle: 'italic',
+      fontStyle: 'italic' as const,
       color: Colors.textInverse,
     },
     link: {
       color: Colors.textInverse,
-      textDecorationLine: 'underline',
+      textDecorationLine: 'underline' as const,
       opacity: 0.9,
     },
     listItem: {
@@ -388,12 +528,12 @@ const markdownStyles = {
       color: Colors.textPrimary,
     },
     em: {
-      fontStyle: 'italic',
+      fontStyle: 'italic' as const,
       color: Colors.textPrimary,
     },
     link: {
       color: Colors.primary,
-      textDecorationLine: 'underline',
+      textDecorationLine: 'underline' as const,
     },
     listItem: {
       color: Colors.textPrimary,

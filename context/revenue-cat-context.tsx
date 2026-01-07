@@ -64,16 +64,15 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   // Check if user has active subscription
   // First check for the specific entitlement ID, then fall back to checking if ANY entitlement is active
   const hasSpecificEntitlement = customerInfo?.entitlements.active[ENTITLEMENT_ID]?.isActive ?? false;
+  console.log(customerInfo?.entitlements.active)
   const hasAnyEntitlement = Object.keys(customerInfo?.entitlements.active ?? {}).length > 0;
   const isSubscribed = hasSpecificEntitlement || hasAnyEntitlement;
   
   // Debug logging in development
   if (__DEV__ && customerInfo) {
     const activeEntitlements = Object.keys(customerInfo.entitlements.active);
-    console.log('[RevenueCat] Active entitlements:', activeEntitlements);
-    console.log('[RevenueCat] Looking for entitlement:', ENTITLEMENT_ID);
+    console.log(customerInfo.entitlements.active)
     console.log('[RevenueCat] Has specific entitlement:', hasSpecificEntitlement);
-    console.log('[RevenueCat] Has any entitlement:', hasAnyEntitlement);
     console.log('[RevenueCat] isSubscribed:', isSubscribed);
   }
 
@@ -119,6 +118,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         setIsLoading(false);
       }
     };
+
 
     initRevenueCat();
 

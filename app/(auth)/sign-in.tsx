@@ -1,6 +1,7 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useMixpanel } from '@/context/mixpanel-context';
 import { useSignIn } from '@clerk/clerk-expo';
+import type { EmailCodeFactor } from '@clerk/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -24,6 +25,8 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showEmailCode, setShowEmailCode] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
 
   const handleSignIn = async () => {
     if (!isLoaded || !signIn) return;
@@ -41,8 +44,27 @@ export default function SignInScreen() {
         await setActive({ session: result.createdSessionId });
         track('Sign In', { method: 'email' });
         router.replace('/(tabs)');
+      } else if (result.status === 'needs_second_factor') {
+        // Check if email_code is a valid second factor
+        // This is required when Client Trust is enabled and the user
+        // is signing in from a new device.
+        const emailCodeFactor = result.supportedSecondFactors?.find(
+          (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+        );
+
+        if (emailCodeFactor) {
+          await signIn.prepareSecondFactor({
+            strategy: 'email_code',
+            emailAddressId: emailCodeFactor.emailAddressId,
+          });
+          setShowEmailCode(true);
+        } else {
+          setError('Second factor authentication required but email code is not available.');
+        }
       } else {
         setError('Sign in incomplete. Please try again.');
+        console.log(result);
+        console.log(result.status);
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -54,6 +76,156 @@ export default function SignInScreen() {
       setIsLoading(false);
     }
   };
+
+  const handleVerifyCode = async () => {
+    if (!isLoaded || !signIn) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const result = await signIn.attemptSecondFactor({
+        strategy: 'email_code',
+        code: verificationCode,
+      });
+
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        track('Sign In', { method: 'email', mfa: true });
+        router.replace('/(tabs)');
+      } else {
+        setError('Verification incomplete. Please try again.');
+        console.log(result);
+        console.log(result.status);
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Invalid verification code. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!isLoaded || !signIn) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const emailCodeFactor = signIn.supportedSecondFactors?.find(
+        (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+      );
+
+      if (emailCodeFactor) {
+        await signIn.prepareSecondFactor({
+          strategy: 'email_code',
+          emailAddressId: emailCodeFactor.emailAddressId,
+        });
+        setError(''); // Clear any previous error
+      } else {
+        setError('Unable to resend code. Please try signing in again.');
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to resend code. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Verification code screen
+  if (showEmailCode) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          style={styles.keyboardView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.content}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.logoContainer}>
+                <Ionicons name="mail" size={32} color={Colors.primary} />
+              </View>
+              <Text style={styles.title}>Verify Your Email</Text>
+              <Text style={styles.subtitle}>
+                We sent a verification code to{'\n'}
+                <Text style={styles.emailText}>{emailAddress}</Text>
+              </Text>
+            </View>
+
+            {/* Verification Form */}
+            <View style={styles.form}>
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={20} color={Colors.error} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Verification Code</Text>
+                <TextInput
+                  style={[styles.input, styles.codeInput]}
+                  value={verificationCode}
+                  onChangeText={setVerificationCode}
+                  placeholder="Enter 6-digit code"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="number-pad"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  editable={!isLoading}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
+                onPress={handleVerifyCode}
+                disabled={isLoading || verificationCode.length < 6}
+                activeOpacity={0.7}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={Colors.textInverse} />
+                ) : (
+                  <Text style={styles.signInButtonText}>Verify Email</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.resendContainer}>
+                <Text style={styles.resendText}>Didn't receive the code?</Text>
+                <TouchableOpacity
+                  onPress={handleResendCode}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.resendLink}>Resend Code</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => {
+                  setShowEmailCode(false);
+                  setVerificationCode('');
+                  setError('');
+                }}
+                disabled={isLoading}
+              >
+                <Ionicons name="arrow-back" size={20} color={Colors.textSecondary} />
+                <Text style={styles.backButtonText}>Back to Sign In</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -177,6 +349,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.base,
     color: Colors.textSecondary,
   },
+  emailText: {
+    fontFamily: Fonts?.bodyMedium ?? 'System',
+    fontWeight: Typography.semibold,
+    color: Colors.primary,
+  },
   form: {
     width: '100%',
   },
@@ -216,6 +393,12 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     ...Shadows.sm,
   },
+  codeInput: {
+    textAlign: 'center',
+    fontSize: Typography['2xl'],
+    letterSpacing: 8,
+    fontFamily: Fonts?.heading ?? 'System',
+  },
   signInButton: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.md,
@@ -247,5 +430,35 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.bodyMedium ?? 'System',
     fontWeight: Typography.semibold,
     color: Colors.primary,
+  },
+  resendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+    gap: Spacing.xs,
+  },
+  resendText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textSecondary,
+  },
+  resendLink: {
+    fontFamily: Fonts?.bodyMedium ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: Typography.semibold,
+    color: Colors.primary,
+  },
+  backButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Spacing.xl,
+    gap: Spacing.xs,
+  },
+  backButtonText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
+    color: Colors.textSecondary,
   },
 });
