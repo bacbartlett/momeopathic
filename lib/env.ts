@@ -9,7 +9,9 @@ export const EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = isDev ? 'pk_test_cHJvLXR1cmtleS
 // export const CLERK_JWT_ISSUER_DOMAIN = isDev ? 'https://pro-turkey-6.clerk.accounts.dev' : 'https://clerk.mymateria.app';
 
 export const EXPO_PUBLIC_REVENUECAT_IOS_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : 'appl_WolnANIJoYtoDiSDOFkmTZuJpsM';
-export const EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : null;
+// TODO: Replace 'YOUR_REVENUECAT_ANDROID_API_KEY' with your actual production API key from RevenueCat Dashboard
+// Go to: RevenueCat Dashboard → Project Settings → API Keys → Google Play public API key
+export const EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : 'goog_bSiHsKxbXVpuCMpQAQiVjqZRujU';
 
 export const EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID = isDev ? 'Homeopathy Chat Unlimited' : 'Homeopathy Chat Unlimited';
 

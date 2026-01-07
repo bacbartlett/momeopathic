@@ -24,6 +24,8 @@ const ENTITLEMENT_ID = EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID;
 interface RevenueCatContextType {
   /** Whether RevenueCat has been initialized */
   isReady: boolean;
+  /** Whether RevenueCat failed to initialize (e.g., missing API key) */
+  initializationFailed: boolean;
   /** Whether the user has an active subscription */
   isSubscribed: boolean;
   /** Whether we're currently loading subscription status */
@@ -50,6 +52,7 @@ interface RevenueCatProviderProps {
 
 export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   const [isReady, setIsReady] = useState(false);
+  const [initializationFailed, setInitializationFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
@@ -114,6 +117,9 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to initialize RevenueCat';
         console.error('RevenueCat initialization error:', errorMessage);
         setError(errorMessage);
+        setInitializationFailed(true);
+        // Mark as "ready" even on failure so the app doesn't hang on a grey screen
+        setIsReady(true);
       } finally {
         setIsLoading(false);
       }
@@ -284,6 +290,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     <RevenueCatContext.Provider
       value={{
         isReady,
+        initializationFailed,
         isSubscribed,
         isLoading,
         customerInfo,
@@ -309,6 +316,11 @@ export function useRevenueCat() {
 
 // Convenience hook for checking subscription status
 export function useSubscription() {
-  const { isSubscribed, isLoading, isReady } = useRevenueCat();
-  return { isSubscribed, isLoading: isLoading || !isReady };
+  const { isSubscribed, isLoading, isReady, initializationFailed, error } = useRevenueCat();
+  return { 
+    isSubscribed, 
+    isLoading: isLoading || !isReady,
+    initializationFailed,
+    error,
+  };
 }
