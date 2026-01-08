@@ -518,7 +518,7 @@ export default function AccountScreen() {
           <View style={styles.footer}>
             <View style={styles.footerContent}>
               <Ionicons name="leaf" size={16} color={Colors.primaryLight} />
-              <Text style={styles.footerText}>Homeopathy Guide</Text>
+              <Text style={styles.footerText}>My Materia</Text>
             </View>
             <Text style={styles.versionText}>Version 1.0.0</Text>
           </View>

@@ -102,7 +102,7 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
                 <Ionicons name="leaf" size={24} color={Colors.primary} />
               </View>
               <View>
-                <Text style={styles.brandTitle}>Homeopathy Guide</Text>
+                <Text style={styles.brandTitle}>My Materia</Text>
                 <Text style={styles.brandSubtitle}>Natural family wellness</Text>
               </View>
             </View>

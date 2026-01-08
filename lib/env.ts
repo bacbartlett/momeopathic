@@ -1,4 +1,4 @@
-const isDev = __DEV__;
+export const isDev = __DEV__;
 
 export const CONVEX_DEPLOYMENT = isDev ? 'dev:abundant-bandicoot-147' : 'prod:avid-toad-683';
 

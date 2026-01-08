@@ -116,6 +116,7 @@ export function Paywall() {
     restorePurchases,
     isLoading,
     error,
+    isInitialized,
   } = useRevenueCat();
   const { track, setUserProperties } = useMixpanel();
   
@@ -123,6 +124,11 @@ export function Paywall() {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Don't show paywall if RevenueCat is not initialized (e.g., dev mode without API key)
+  if (!isInitialized) {
+    return null;
+  }
 
   // Track paywall viewed
   useEffect(() => {

@@ -4,7 +4,7 @@ import { ThreadDrawer } from '@/components/chat/thread-drawer';
 import { Paywall } from '@/components/paywall';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
-import { useSubscription } from '@/context/revenue-cat-context';
+import { useRevenueCat, useSubscription } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function ChatScreen() {
   const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, createThread, sendMessage } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
+  const { isInitialized } = useRevenueCat();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
@@ -88,7 +89,8 @@ export default function ChatScreen() {
 
   // Show paywall only if user is authenticated but not subscribed
   // Non-authenticated users will be handled by the auth flow
-  if (isAuthenticated && !isSubscribed) {
+  // Don't show paywall if RevenueCat is not initialized (e.g., dev mode without API key)
+  if (isAuthenticated && !isSubscribed && isInitialized) {
     return <Paywall />;
   }
 

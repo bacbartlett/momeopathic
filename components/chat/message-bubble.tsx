@@ -9,6 +9,40 @@ interface MessageBubbleProps {
   message: Message;
 }
 
+const fixRepeatText = (text: string): string => {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return text;
+  
+  const midPoint = Math.floor(trimmed.length / 2);
+  
+  // Check for exact split in the middle (no separator)
+  const firstHalf = trimmed.substring(0, midPoint);
+  const secondHalf = trimmed.substring(midPoint);
+  if (firstHalf === secondHalf) {
+    return firstHalf;
+  }
+  
+  // Check for repetition with whitespace separator
+  // Look for a split point where both parts are identical
+  // Search around the middle point (±20% of length)
+  const searchRange = Math.floor(trimmed.length * 0.2);
+  const startSearch = Math.max(1, midPoint - searchRange);
+  const endSearch = Math.min(trimmed.length - 1, midPoint + searchRange);
+  
+  for (let i = startSearch; i <= endSearch; i++) {
+    const part1 = trimmed.substring(0, i).trim();
+    const part2 = trimmed.substring(i).trim();
+    
+    // If parts match exactly, return first part
+    if (part1 === part2 && part1.length > 0) {
+      return part1;
+    }
+  }
+  
+  // No exact repetition found, return original text
+  return text;
+}
+
 const filterBrokenLinks = (text: string): string => {
   // Regex to match markdown links: [text](url)
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
@@ -144,7 +178,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   console.log(message.content)
   const isUser = message.role === 'user';
   const isLoading = !isUser && (message.status === 'pending' || message.status === 'streaming');
-  const filteredContent = message.content ? filterBrokenLinks(message.content) : '';
+  const filteredContent = message.content ? fixRepeatText(filterBrokenLinks(message.content)) : '';
   const hasContent = filteredContent && filteredContent.trim().length > 0;
 
   return (

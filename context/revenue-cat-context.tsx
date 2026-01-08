@@ -1,4 +1,4 @@
-import { EXPO_PUBLIC_REVENUECAT_ANDROID_KEY, EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID, EXPO_PUBLIC_REVENUECAT_IOS_KEY } from '@/lib/env';
+import { EXPO_PUBLIC_REVENUECAT_ANDROID_KEY, EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID, EXPO_PUBLIC_REVENUECAT_IOS_KEY, isDev } from '@/lib/env';
 import { useUser } from '@clerk/clerk-expo';
 import React, {
   createContext,
@@ -24,6 +24,8 @@ const ENTITLEMENT_ID = EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID;
 interface RevenueCatContextType {
   /** Whether RevenueCat has been initialized */
   isReady: boolean;
+  /** Whether RevenueCat was successfully initialized (false if skipped in dev mode) */
+  isInitialized: boolean;
   /** Whether RevenueCat failed to initialize (e.g., missing API key) */
   initializationFailed: boolean;
   /** Whether the user has an active subscription */
@@ -57,6 +59,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   // Get Clerk user for identity sync
   const { user, isLoaded: isClerkLoaded } = useUser();
@@ -83,23 +86,34 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   useEffect(() => {
     const initRevenueCat = async () => {
       try {
-        // Set log level for debugging (remove in production)
-        if (__DEV__) {
-          Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
-        }
-
         // Get platform-specific API key
         const apiKey = Platform.select({
           ios: EXPO_PUBLIC_REVENUECAT_IOS_KEY,
           android: EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
         });
 
+        // If in dev mode and no API key, skip initialization gracefully
+        if (isDev && !apiKey) {
+          console.log('[RevenueCat] Skipping initialization in dev mode (no API key provided)');
+          setIsReady(true);
+          setIsLoading(false);
+          setInitializationFailed(false);
+          setIsInitialized(false);
+          return;
+        }
+
         if (!apiKey) {
           throw new Error('RevenueCat API key not found for this platform');
         }
 
+        // Set log level for debugging (remove in production)
+        if (__DEV__) {
+          Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+        }
+
         // Configure RevenueCat
         await Purchases.configure({ apiKey });
+        setIsInitialized(true);
 
         // Get initial customer info
         const info = await Purchases.getCustomerInfo();
@@ -118,6 +132,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         console.error('RevenueCat initialization error:', errorMessage);
         setError(errorMessage);
         setInitializationFailed(true);
+        setIsInitialized(false);
         // Mark as "ready" even on failure so the app doesn't hang on a grey screen
         setIsReady(true);
       } finally {
@@ -150,7 +165,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   // Sync RevenueCat user identity with Clerk user ID
   useEffect(() => {
     // Wait for both RevenueCat and Clerk to be ready
-    if (!isReady || !isClerkLoaded) {
+    // Skip if RevenueCat wasn't initialized (e.g., dev mode without API key)
+    if (!isReady || !isClerkLoaded || !isInitialized) {
       return;
     }
 
@@ -198,10 +214,15 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     };
 
     syncUserIdentity();
-  }, [isReady, isClerkLoaded, user?.id]);
+  }, [isReady, isClerkLoaded, user?.id, isInitialized]);
 
   // Purchase a package
   const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
+    if (!isInitialized) {
+      console.log('[RevenueCat] Purchase skipped - RevenueCat not initialized');
+      return false;
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -238,10 +259,15 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isInitialized]);
 
   // Restore purchases
   const restorePurchases = useCallback(async (): Promise<boolean> => {
+    if (!isInitialized) {
+      console.log('[RevenueCat] Restore skipped - RevenueCat not initialized');
+      return false;
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -271,10 +297,15 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isInitialized]);
 
   // Refresh customer info
   const refreshCustomerInfo = useCallback(async (): Promise<void> => {
+    if (!isInitialized) {
+      console.log('[RevenueCat] Refresh skipped - RevenueCat not initialized');
+      return;
+    }
+    
     try {
       const info = await Purchases.getCustomerInfo();
       setCustomerInfo(info);
@@ -284,12 +315,13 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
       console.error('Refresh error:', errorMessage);
       setError(errorMessage);
     }
-  }, []);
+  }, [isInitialized]);
 
   return (
     <RevenueCatContext.Provider
       value={{
         isReady,
+        isInitialized,
         initializationFailed,
         isSubscribed,
         isLoading,
