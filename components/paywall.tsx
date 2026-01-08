@@ -208,7 +208,7 @@ export function Paywall() {
           <View style={styles.iconContainer}>
             <Ionicons name="leaf" size={48} color={Colors.primary} />
           </View>
-          <Text style={styles.title}>Unlock Premium</Text>
+          <Text style={styles.title}>My Materia</Text>
           <Text style={styles.subtitle}>
             Get unlimited access to your personal homeopathy assistant
           </Text>
