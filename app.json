@@ -3,6 +3,8 @@
     "name": "My Materia",
     "slug": "homeopathicnative",
     "version": "1.0.0",
+    "description": "Homeopathy reference guide powered by Boericke's Materia Medica. Search remedies, symptoms, and get personalized homeopathic recommendations through an AI-powered chat interface.",
+    "primaryColor": "#E6F4FE",
     "orientation": "portrait",
     "icon": "./assets/images/appicon.png",
     "scheme": "homeopathicnative",
@@ -10,7 +12,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.homeopathicNative",
+      "bundleIdentifier": "com.brandonbdev.mymateria",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +28,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "com.anonymous.homeopathicNative"
+      "package": "com.brandonbdev.mymateria",
+      "versionCode": 1
     },
     "web": {
       "output": "static",

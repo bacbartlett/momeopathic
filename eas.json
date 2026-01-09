@@ -16,6 +16,16 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "brandonacb@gmail.com",
+        "ascAppId": "6757407731",
+        "appleTeamId": "9TT5KKD56C"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./path-to-service-account.json",
+        "track": "internal"
+      }
+    }
   }
 }
