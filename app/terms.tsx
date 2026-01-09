@@ -19,7 +19,7 @@ const tandc = `# TERMS AND CONDITIONS
 
 ## 1. AGREEMENT TO TERMS
 
-These Terms and Conditions ("Terms") constitute a legally binding agreement between you and BrandonBDev LLC ("Company," "we," "us," or "our") concerning your access to and use of the Homeopathy Chat application, including any iOS, Android, or web-based versions (collectively, the "App").
+These Terms and Conditions ("Terms") constitute a legally binding agreement between you and BrandonBDev LLC ("Company," "we," "us," or "our") concerning your access to and use of the My Materia application, including any iOS, Android, or web-based versions (collectively, the "App").
 
 By accessing or using the App, you agree that you have read, understood, and agree to be bound by these Terms. If you do not agree with these Terms, you must not access or use the App.
 
@@ -27,7 +27,7 @@ By accessing or using the App, you agree that you have read, understood, and agr
 
 **THE APP IS FOR EDUCATIONAL AND INFORMATIONAL PURPOSES ONLY. IT IS NOT INTENDED TO PROVIDE MEDICAL ADVICE, DIAGNOSIS, TREATMENT, OR CURE FOR ANY DISEASE OR MEDICAL CONDITION.**
 
-The Homeopathy Chat app provides access to information from Boericke's Materia Medica and related homeopathic reference materials through an interactive chat interface. This information is presented for educational purposes only and should not be construed as medical advice or used as a substitute for consultation with a qualified healthcare professional.
+The My Materia app provides access to information from Boericke's Materia Medica and related homeopathic reference materials through an interactive chat interface. This information is presented for educational purposes only and should not be construed as medical advice or used as a substitute for consultation with a qualified healthcare professional.
 
 **YOU ACKNOWLEDGE AND AGREE THAT:**
 
