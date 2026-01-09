@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
   View,
@@ -112,12 +113,6 @@ export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
       </View>
     </View>
   );
-}
-
-// Manual Text component since we're in a module
-function Text({ style, children }: { style?: object; children: React.ReactNode }) {
-  const RNText = require('react-native').Text;
-  return <RNText style={style}>{children}</RNText>;
 }
 
 const styles = StyleSheet.create({

@@ -1,12 +1,24 @@
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import React, { useCallback, useEffect, useRef } from 'react';
+import {
+    ActionSheetIOS,
+    Alert,
+    Animated,
+    Platform,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
 interface MessageBubbleProps {
   message: Message;
+  onRetry?: () => void;
 }
 
 const fixRepeatText = (text: string): string => {
@@ -174,15 +186,81 @@ const filterBrokenLinks = (text: string): string => {
   return result.trim();
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
-  console.log(message.content)
+export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
+  if (__DEV__) {
+    console.log('[MessageBubble] Content:', message.content);
+  }
   const isUser = message.role === 'user';
   const isLoading = !isUser && (message.status === 'pending' || message.status === 'streaming');
+  const isFailed = message.status === 'failed';
   const filteredContent = message.content ? fixRepeatText(filterBrokenLinks(message.content)) : '';
   const hasContent = filteredContent && filteredContent.trim().length > 0;
 
+  const handleCopy = useCallback(async () => {
+    if (filteredContent) {
+      await Clipboard.setStringAsync(filteredContent);
+      if (Platform.OS === 'android') {
+        Alert.alert('Copied', 'Message copied to clipboard');
+      }
+    }
+  }, [filteredContent]);
+
+  const handleShare = useCallback(async () => {
+    if (filteredContent) {
+      try {
+        await Share.share({
+          message: filteredContent,
+        });
+      } catch (error) {
+        if (__DEV__) {
+          console.log('[MessageBubble] Share error:', error);
+        }
+      }
+    }
+  }, [filteredContent]);
+
+  const handleLongPress = useCallback(() => {
+    if (!hasContent) return;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Copy', 'Share'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            handleCopy();
+          } else if (buttonIndex === 2) {
+            handleShare();
+          }
+        }
+      );
+    } else {
+      // Android - use Alert as a simple menu
+      Alert.alert(
+        'Message Options',
+        undefined,
+        [
+          { text: 'Copy', onPress: handleCopy },
+          { text: 'Share', onPress: handleShare },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+        { cancelable: true }
+      );
+    }
+  }, [hasContent, handleCopy, handleShare]);
+
   return (
-    <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
+    <TouchableOpacity
+      style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}
+      onLongPress={handleLongPress}
+      activeOpacity={0.9}
+      delayLongPress={300}
+      accessibilityLabel={`${isUser ? 'Your' : 'Assistant'} message: ${filteredContent?.slice(0, 100) || 'Loading...'}`}
+      accessibilityRole="text"
+      accessibilityHint="Long press to copy or share"
+    >
       {/* Avatar for assistant messages */}
       {!isUser && (
         <View style={styles.avatarContainer}>
@@ -193,7 +271,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       )}
       
       <View style={styles.bubbleWrapper}>
-        <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+        <View style={[
+          styles.bubble, 
+          isUser ? styles.userBubble : styles.assistantBubble,
+          isFailed && styles.failedBubble,
+        ]}>
           {isLoading && !hasContent ? (
             <TypingIndicator />
           ) : (
@@ -213,13 +295,33 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             </>
           )}
         </View>
-        {!isLoading && (
+        
+        {/* Error state with retry button */}
+        {isFailed && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={14} color={Colors.error} />
+            <Text style={styles.errorText}>Failed to send</Text>
+            {onRetry && (
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={onRetry}
+                accessibilityLabel="Retry sending message"
+                accessibilityRole="button"
+              >
+                <Ionicons name="refresh" size={14} color={Colors.primary} />
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        
+        {!isLoading && !isFailed && (
           <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.assistantTimestamp]}>
             {formatTime(message.timestamp)}
           </Text>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -383,6 +485,39 @@ const styles = StyleSheet.create({
   assistantBubble: {
     backgroundColor: ChatColors.assistantBubble,
     borderBottomLeftRadius: Radius.sm,
+  },
+  failedBubble: {
+    opacity: 0.7,
+    borderWidth: 1,
+    borderColor: Colors.error,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
+  },
+  errorText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.error,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: Colors.primaryAlpha10,
+    borderRadius: Radius.sm,
+  },
+  retryText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    fontWeight: '500',
+    color: Colors.primary,
   },
   timestamp: {
     fontFamily: Fonts?.body ?? 'System',

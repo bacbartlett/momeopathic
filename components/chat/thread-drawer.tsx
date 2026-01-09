@@ -3,6 +3,7 @@ import { useChat } from '@/context/chat-context';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
+  Alert,
   Dimensions,
   Pressable,
   ScrollView,
@@ -75,6 +76,25 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
     onClose();
   };
 
+  const handleDeleteThread = (threadId: string, threadTitle: string) => {
+    Alert.alert(
+      'Delete Conversation',
+      `Are you sure you want to delete "${threadTitle}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteThread(threadId),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   if (!isVisible && !isOpen) return null;
 
   return (
@@ -110,6 +130,9 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
               style={styles.newChatButton}
               onPress={handleNewChat}
               activeOpacity={0.7}
+              accessibilityLabel="Start new chat"
+              accessibilityRole="button"
+              accessibilityHint="Creates a new conversation thread"
             >
               <Ionicons name="add" size={22} color={Colors.primary} />
             </TouchableOpacity>
@@ -143,7 +166,7 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
                   thread={thread}
                   isActive={thread.id === activeThread?.id}
                   onPress={() => handleSelectThread(thread.id)}
-                  onDelete={() => deleteThread(thread.id)}
+                  onDelete={() => handleDeleteThread(thread.id, thread.title)}
                 />
               ))
             )}

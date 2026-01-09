@@ -4,11 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +19,7 @@ const pp = `# PRIVACY POLICY
 
 ## 1. INTRODUCTION
 
-BrandonBDev LLC ("Company," "we," "us," or "our") operates the Homeopathy Chat application (the "App"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our App.
+BrandonBDev LLC ("Company," "we," "us," or "our") operates the My Materia application (the "App"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our App.
 
 **Please read this Privacy Policy carefully.** By using the App, you agree to the collection and use of information in accordance with this Privacy Policy. If you do not agree with this Privacy Policy, please do not use the App.
 

@@ -1,14 +1,18 @@
+import { ChatState, Message, Thread } from '@/types/chat';
 import { useAction, useConvexAuth, useQuery } from 'convex/react';
 import React, {
-  createContext,
-  ReactNode,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
+    createContext,
+    ReactNode,
+    useCallback,
+    useContext,
+    useMemo,
+    useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
 import { useMixpanel } from './mixpanel-context';
+
+// Re-export types for consumers who import from context
+export type { ChatState, Message, Thread } from '@/types/chat';
 
 // UIMessage shape from the actual Convex agent response
 // Using 'key' instead of '_id' as per the actual type
@@ -30,28 +34,6 @@ interface ConvexThread {
   userId?: string;
 }
 
-// UI-friendly types
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-  status?: 'pending' | 'streaming' | 'complete' | 'failed';
-}
-
-export interface Thread {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface ChatState {
-  threads: Thread[];
-  activeThreadId: string | null;
-}
-
 // Context types
 interface ChatContextType {
   state: ChatState;
@@ -60,10 +42,13 @@ interface ChatContextType {
   isMessagesLoading: boolean;
   isSending: boolean;
   isAuthenticated: boolean;
+  sendError: string | null;
   createThread: () => Promise<void>;
   selectThread: (threadId: string) => void;
   deleteThread: (threadId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
+  retryLastMessage: () => Promise<void>;
+  clearSendError: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -71,6 +56,8 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const { track, incrementUserProperty } = useMixpanel();
 
   // Get auth state from Convex (not Clerk directly)
@@ -207,6 +194,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, deleteThreadAction, activeThreadId, threads, track]);
 
+  // Clear send error
+  const clearSendError = useCallback(() => {
+    setSendError(null);
+    setLastFailedMessage(null);
+  }, []);
+
   // Send message (no userId needed - server uses auth)
   const sendMessage = useCallback(async (content: string) => {
     if (!activeThreadId || isSending) return;
@@ -216,22 +209,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     setIsSending(true);
+    setSendError(null);
     try {
       await sendMessageAction({
         threadId: activeThreadId,
         content,
       });
+      setLastFailedMessage(null);
       track('Message Sent', { 
         thread_id: activeThreadId, 
         message_length: content.length 
       });
       incrementUserProperty('messages_sent');
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
       console.error('Failed to send message:', error);
+      setSendError(errorMessage);
+      setLastFailedMessage(content);
     } finally {
       setIsSending(false);
     }
   }, [activeThreadId, isSending, isAuthenticated, sendMessageAction, track, incrementUserProperty]);
+
+  // Retry last failed message
+  const retryLastMessage = useCallback(async () => {
+    if (!lastFailedMessage) return;
+    await sendMessage(lastFailedMessage);
+  }, [lastFailedMessage, sendMessage]);
 
   return (
     <ChatContext.Provider
@@ -242,10 +246,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isMessagesLoading,
         isSending,
         isAuthenticated,
+        sendError,
         createThread,
         selectThread,
         deleteThread,
         sendMessage,
+        retryLastMessage,
+        clearSendError,
       }}
     >
       {children}

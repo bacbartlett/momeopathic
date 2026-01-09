@@ -5,13 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { PurchasesPackage } from 'react-native-purchases';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,14 +63,11 @@ function PackageCard({ pkg, isSelected, onSelect, isBestValue }: PackageCardProp
     } else if (period.includes('P1W') || period === 'P1W') {
       periodLabel = 'Weekly';
       pricePerPeriod = '/week';
-    } else if (period === null) {
-      console.log('HI')
-      periodLabel = 'Lifetime',
-      pricePerPeriod = '/account'
     }
-  } else if (product.subscriptionPeriod === null) {
-    periodLabel = 'Lifetime',
-    pricePerPeriod = '/account'
+  } else {
+    // No subscription period means it's a lifetime purchase
+    periodLabel = 'Lifetime';
+    pricePerPeriod = '/account';
   }
 
   return (

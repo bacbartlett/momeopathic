@@ -184,10 +184,7 @@ export const remove = action({
     threadId: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Unauthenticated: Must be logged in to delete threads");
-    }
+    const user = await getCurrentUserFromAction(ctx);
 
     // Get the thread to verify ownership
     const thread = await ctx.runQuery(components.agent.threads.getThread, {
@@ -198,8 +195,10 @@ export const remove = action({
       throw new Error("Thread not found");
     }
 
-    // The thread.userId stores our user's database _id
-    // We verify ownership through the thread's userId field
+    // Verify the thread belongs to the authenticated user
+    if (thread.userId !== user._id) {
+      throw new Error("Access denied: Thread does not belong to current user");
+    }
 
     await homeopathicAgent.deleteThreadSync(ctx, { threadId: args.threadId });
     return { success: true };

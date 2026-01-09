@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
 import { Thread } from '@/types/chat';
-import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface ThreadItemProps {
   thread: Thread;
@@ -17,6 +17,9 @@ export function ThreadItem({ thread, isActive, onPress, onDelete }: ThreadItemPr
       style={[styles.container, isActive && styles.containerActive]}
       onPress={onPress}
       activeOpacity={0.7}
+      accessibilityLabel={`${thread.title} conversation, ${isActive ? 'currently active' : ''} ${formatDate(thread.updatedAt)}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
     >
       <View style={styles.content}>
         <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
@@ -40,6 +43,9 @@ export function ThreadItem({ thread, isActive, onPress, onDelete }: ThreadItemPr
           onDelete();
         }}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityLabel={`Delete ${thread.title} conversation`}
+        accessibilityRole="button"
+        accessibilityHint="Removes this conversation permanently"
       >
         <Ionicons name="trash-outline" size={16} color={Colors.textMuted} />
       </TouchableOpacity>

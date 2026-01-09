@@ -125,6 +125,10 @@ export function AccountBadge({ onClose, isDrawerOpen }: AccountBadgeProps) {
         style={[styles.badge, isMenuOpen && styles.badgeActive]}
         onPress={toggleMenu}
         activeOpacity={0.8}
+        accessibilityLabel={`Account menu for ${displayName}, ${isMenuOpen ? 'expanded' : 'collapsed'}`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isMenuOpen }}
+        accessibilityHint="Double tap to expand account options"
       >
         {/* Avatar */}
         <View style={styles.avatarContainer}>
@@ -176,6 +180,9 @@ export function AccountBadge({ onClose, isDrawerOpen }: AccountBadgeProps) {
             style={styles.menuItem}
             onPress={handleManageAccount}
             activeOpacity={0.7}
+            accessibilityLabel="Manage Account"
+            accessibilityRole="button"
+            accessibilityHint="Opens account settings page"
           >
             <View style={styles.menuItemIcon}>
               <Ionicons name="person-outline" size={18} color={Colors.textSecondary} />
@@ -193,6 +200,10 @@ export function AccountBadge({ onClose, isDrawerOpen }: AccountBadgeProps) {
             onPress={handleSignOut}
             activeOpacity={0.7}
             disabled={isSigningOut}
+            accessibilityLabel={isSigningOut ? 'Signing out' : 'Sign Out'}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isSigningOut }}
+            accessibilityHint="Signs you out of the app"
           >
             <View style={[styles.menuItemIcon, styles.signOutIcon]}>
               {isSigningOut ? (

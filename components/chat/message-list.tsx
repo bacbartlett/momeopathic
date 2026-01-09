@@ -1,8 +1,9 @@
 import { ChatColors, Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
+import { useChat } from '@/context/chat-context';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
 
 interface MessageListProps {
@@ -83,6 +84,7 @@ function MessageListSkeleton() {
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   function MessageList({ messages, isLoading = false }, ref) {
   const flatListRef = useRef<FlatList<Message>>(null);
+  const { sendError, retryLastMessage, clearSendError } = useChat();
 
   useImperativeHandle(ref, () => ({
     scrollToBottom: (animated = true) => {
@@ -150,25 +152,110 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   }
 
   return (
-    <FlatList
-      ref={flatListRef}
-      data={messages}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => <MessageBubble message={item} />}
-      contentContainerStyle={styles.listContent}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      onContentSizeChange={() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }}
-    />
+    <View style={styles.listWrapper}>
+      {/* Error banner */}
+      {sendError && (
+        <View style={styles.errorBanner}>
+          <View style={styles.errorBannerContent}>
+            <Ionicons name="alert-circle" size={18} color={Colors.error} />
+            <Text style={styles.errorBannerText} numberOfLines={2}>
+              {sendError}
+            </Text>
+          </View>
+          <View style={styles.errorBannerActions}>
+            <TouchableOpacity
+              style={styles.errorRetryButton}
+              onPress={retryLastMessage}
+              accessibilityLabel="Retry sending message"
+              accessibilityRole="button"
+            >
+              <Text style={styles.errorRetryText}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.errorDismissButton}
+              onPress={clearSendError}
+              accessibilityLabel="Dismiss error"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <MessageBubble 
+            message={item} 
+            onRetry={item.status === 'failed' ? retryLastMessage : undefined}
+          />
+        )}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }}
+      />
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
+  listWrapper: {
+    flex: 1,
+  },
   listContent: {
     paddingVertical: Spacing.md,
     flexGrow: 1,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(212, 132, 124, 0.15)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 132, 124, 0.3)',
+  },
+  errorBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.sm,
+  },
+  errorBannerText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.error,
+    flex: 1,
+  },
+  errorBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  errorRetryButton: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    backgroundColor: Colors.error,
+    borderRadius: Radius.sm,
+  },
+  errorRetryText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '600',
+    color: Colors.textInverse,
+  },
+  errorDismissButton: {
+    padding: Spacing.xs,
   },
   emptyContainer: {
     flex: 1,

@@ -8,14 +8,14 @@ import { useRevenueCat, useSubscription } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -103,6 +103,9 @@ export default function ChatScreen() {
             style={styles.menuButton}
             onPress={() => setIsDrawerOpen(true)}
             activeOpacity={0.7}
+            accessibilityLabel="Open menu"
+            accessibilityRole="button"
+            accessibilityHint="Opens the conversation drawer"
           >
             <Ionicons name="menu" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
@@ -120,6 +123,9 @@ export default function ChatScreen() {
             style={styles.newChatButton}
             onPress={createThread}
             activeOpacity={0.7}
+            accessibilityLabel="New conversation"
+            accessibilityRole="button"
+            accessibilityHint="Creates a new conversation thread"
           >
             <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
           </TouchableOpacity>
