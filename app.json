@@ -6,12 +6,12 @@
     "description": "Homeopathy reference guide powered by Boericke's Materia Medica. Search remedies, symptoms, and get personalized homeopathic recommendations through an AI-powered chat interface.",
     "primaryColor": "#E6F4FE",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/appicon.png",
     "scheme": "homeopathicnative",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/appicon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.brandonbdev.mymateria",
       "buildNumber": "1",
@@ -22,7 +22,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FEFAF3",
-        "foregroundImage": "./assets/images/icon.png"
+        "foregroundImage": "./assets/images/appicon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
