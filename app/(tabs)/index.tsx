@@ -1,4 +1,4 @@
-import { Composer } from '@/components/chat/composer';
+import { Composer, ComposerHandle } from '@/components/chat/composer';
 import { MessageList, MessageListHandle } from '@/components/chat/message-list';
 import { ThreadDrawer } from '@/components/chat/thread-drawer';
 import { Paywall } from '@/components/paywall';
@@ -26,6 +26,7 @@ export default function ChatScreen() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
+  const composerRef = useRef<ComposerHandle>(null);
 
   const handleComposerFocus = useCallback(() => {
     // On Android, scroll immediately (current working behavior)
@@ -76,6 +77,13 @@ export default function ChatScreen() {
       createThread();
     }
   }, [isLoading, isAuthenticated, state.threads.length, createThread]);
+
+  // Blur composer when drawer opens to collapse keyboard
+  useEffect(() => {
+    if (isDrawerOpen) {
+      composerRef.current?.blur();
+    }
+  }, [isDrawerOpen]);
 
   // Show loading while checking auth or subscription status
   if (isLoading || isSubscriptionLoading) {
@@ -137,7 +145,7 @@ export default function ChatScreen() {
         <MessageList ref={messageListRef} messages={activeThread?.messages ?? []} isLoading={isMessagesLoading} />
       </View>
 
-      <Composer onSend={sendMessage} disabled={!activeThread} onFocus={handleComposerFocus} />
+      <Composer ref={composerRef} onSend={sendMessage} disabled={!activeThread} onFocus={handleComposerFocus} />
     </>
   );
 

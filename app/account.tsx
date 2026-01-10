@@ -494,6 +494,18 @@ export default function AccountScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
               </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={() => router.push('/revenuecat-logs')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>Revenue Cat Logs</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
             </View>
           </View>
 

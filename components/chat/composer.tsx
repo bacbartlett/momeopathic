@@ -1,6 +1,6 @@
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Platform,
   StyleSheet,
@@ -16,7 +16,11 @@ interface ComposerProps {
   onFocus?: () => void;
 }
 
-export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
+export interface ComposerHandle {
+  blur: () => void;
+}
+
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, disabled = false, onFocus }, ref) => {
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -26,6 +30,13 @@ export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
   useEffect(() => {
     textRef.current = text;
   }, [text]);
+
+  // Expose blur method via ref
+  useImperativeHandle(ref, () => ({
+    blur: () => {
+      inputRef.current?.blur();
+    },
+  }));
 
   const handleFocus = useCallback(() => {
     setIsFocused(true);
@@ -113,7 +124,9 @@ export function Composer({ onSend, disabled = false, onFocus }: ComposerProps) {
       </View>
     </View>
   );
-}
+});
+
+Composer.displayName = 'Composer';
 
 const styles = StyleSheet.create({
   container: {
