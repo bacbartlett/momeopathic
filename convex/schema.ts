@@ -15,6 +15,8 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     // Whether the user has accepted the disclaimer
     disclaimerAccepted: v.optional(v.boolean()),
+    // If true, allows user to engage with the app without a subscription
+    noPaywall: v.optional(v.boolean()),
   })
     .index("by_token", ["tokenIdentifier"]),
 });

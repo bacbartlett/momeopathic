@@ -6,23 +6,26 @@ import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from 
 import { useChat } from '@/context/chat-context';
 import { useRevenueCat, useSubscription } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from 'convex/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { api } from '../../convex/_generated/api';
 
 export default function ChatScreen() {
   const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, createThread, sendMessage } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isInitialized } = useRevenueCat();
+  const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
@@ -86,7 +89,7 @@ export default function ChatScreen() {
   }, [isDrawerOpen]);
 
   // Show loading while checking auth or subscription status
-  if (isLoading || isSubscriptionLoading) {
+  if (isLoading || isSubscriptionLoading || (isAuthenticated && currentUser === undefined)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -95,10 +98,13 @@ export default function ChatScreen() {
     );
   }
 
-  // Show paywall only if user is authenticated but not subscribed
+  // Check if user has noPaywall flag set to true
+  const hasNoPaywall = currentUser?.noPaywall === true;
+
+  // Show paywall only if user is authenticated but not subscribed and doesn't have noPaywall flag
   // Non-authenticated users will be handled by the auth flow
   // Don't show paywall if RevenueCat is not initialized (e.g., dev mode without API key)
-  if (isAuthenticated && !isSubscribed && isInitialized) {
+  if (isAuthenticated && !isSubscribed && isInitialized && !hasNoPaywall) {
     return <Paywall />;
   }
 
