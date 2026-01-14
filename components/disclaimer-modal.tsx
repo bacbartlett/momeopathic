@@ -1,11 +1,10 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useMixpanel } from '@/context/mixpanel-context';
 import { api } from '@/convex/_generated/api';
-import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
-import { useMutation, useQuery } from 'convex/react';
+import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -180,7 +179,7 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
               }
             >
               <LinearGradient
-                colors={[Colors.primary, Colors.accent, Colors.primaryDark]}
+                colors={[Colors.primary, Colors.primaryLight, Colors.primaryDark]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.titleGradient}
@@ -285,18 +284,10 @@ export function useHasAcceptedDisclaimer() {
     return false;
   }
   
-  // Database query is still loading, check local storage as fallback
-  // This handles the case when user is not authenticated yet
-  if (localAccepted === true) {
-    return true;
-  }
-
-  // If we're still loading, return null to indicate loading state
-  if (localAccepted === null) {
-    return null;
-  }
-
-  return false;
+  // Database query is still loading - return null to indicate loading state
+  // This prevents the modal from briefly flashing while waiting for DB response
+  // The DB is the source of truth for authenticated users
+  return null;
 }
 
 /**
@@ -306,20 +297,22 @@ export function useHasAcceptedDisclaimer() {
  * Does not show on terms or privacy policy pages.
  */
 export function DisclaimerManager() {
-  const { isSignedIn, isLoaded } = useAuth();
+  // Use Convex auth instead of Clerk auth to ensure auth state is synchronized with queries
+  // This prevents race conditions where Clerk says "signed in" but Convex queries haven't caught up
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const hasAccepted = useHasAcceptedDisclaimer();
   const pathname = usePathname();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Only show disclaimer if user is signed in
-    if (!isLoaded) {
-      return; // Wait for auth to load
+    // Wait for Convex auth to be ready
+    if (isAuthLoading) {
+      return;
     }
 
-    // If user is not signed in, don't show disclaimer
-    if (!isSignedIn) {
+    // If user is not authenticated, don't show disclaimer
+    if (!isAuthenticated) {
       setShowDisclaimer(false);
       setInitialized(true);
       return;
@@ -332,13 +325,18 @@ export function DisclaimerManager() {
       return;
     }
 
-    // User is signed in and not on terms/privacy pages - check if they've accepted the disclaimer
-    if (hasAccepted !== null) {
-      // Show disclaimer if user hasn't accepted (false) or if status is unknown (null becomes false)
-      setShowDisclaimer(!hasAccepted);
-      setInitialized(true);
+    // User is authenticated and not on terms/privacy pages - check if they've accepted
+    // Only show modal when we have a definitive answer (hasAccepted is not null)
+    if (hasAccepted === null) {
+      // Still loading disclaimer status - keep modal hidden
+      setShowDisclaimer(false);
+      return;
     }
-  }, [isSignedIn, isLoaded, hasAccepted, pathname]);
+
+    // We have a definitive answer - show modal only if user hasn't accepted
+    setShowDisclaimer(!hasAccepted);
+    setInitialized(true);
+  }, [isAuthenticated, isAuthLoading, hasAccepted, pathname]);
 
   const handleAgree = () => {
     setShowDisclaimer(false);

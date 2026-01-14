@@ -41,6 +41,7 @@ interface ChatContextType {
   isLoading: boolean;
   isMessagesLoading: boolean;
   isSending: boolean;
+  isCreatingThread: boolean;
   isAuthenticated: boolean;
   sendError: string | null;
   createThread: () => Promise<void>;
@@ -56,6 +57,7 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const { track, incrementUserProperty } = useMixpanel();
@@ -159,6 +161,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('Cannot create thread: User not authenticated');
       return;
     }
+    if (isCreatingThread) {
+      // Prevent concurrent thread creation
+      return;
+    }
+    setIsCreatingThread(true);
     try {
       const result = await createThreadAction({
         title: 'New Chat',
@@ -168,8 +175,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       incrementUserProperty('threads_created');
     } catch (error) {
       console.error('Failed to create thread:', error);
+    } finally {
+      setIsCreatingThread(false);
     }
-  }, [isAuthenticated, createThreadAction, track, incrementUserProperty]);
+  }, [isAuthenticated, isCreatingThread, createThreadAction, track, incrementUserProperty]);
 
   // Select thread
   const selectThread = useCallback((threadId: string) => {
@@ -245,6 +254,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isLoading,
         isMessagesLoading,
         isSending,
+        isCreatingThread,
         isAuthenticated,
         sendError,
         createThread,

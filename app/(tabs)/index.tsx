@@ -22,7 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../convex/_generated/api';
 
 export default function ChatScreen() {
-  const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, createThread, sendMessage } = useChat();
+  const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, isCreatingThread, createThread, sendMessage } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isInitialized } = useRevenueCat();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
@@ -76,10 +76,10 @@ export default function ChatScreen() {
 
   // Create initial thread if none exists and user is authenticated
   useEffect(() => {
-    if (!isLoading && isAuthenticated && state.threads.length === 0) {
+    if (!isLoading && isAuthenticated && state.threads.length === 0 && !isCreatingThread) {
       createThread();
     }
-  }, [isLoading, isAuthenticated, state.threads.length, createThread]);
+  }, [isLoading, isAuthenticated, state.threads.length, isCreatingThread, createThread]);
 
   // Blur composer when drawer opens to collapse keyboard
   useEffect(() => {

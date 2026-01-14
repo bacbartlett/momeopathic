@@ -5,16 +5,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { PurchasesPackage } from 'react-native-purchases';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+interface PaywallProps {
+  isModal?: boolean;
+  onClose?: () => void;
+  showCloseButton?: boolean;
+}
 
 const { width } = Dimensions.get('window');
 
@@ -43,9 +49,10 @@ interface PackageCardProps {
   isSelected: boolean;
   onSelect: () => void;
   isBestValue?: boolean;
+  isCurrentPlan?: boolean;
 }
 
-function PackageCard({ pkg, isSelected, onSelect, isBestValue }: PackageCardProps) {
+function PackageCard({ pkg, isSelected, onSelect, isBestValue, isCurrentPlan }: PackageCardProps) {
   const product = pkg.product;
   
   // Determine period label
@@ -75,18 +82,28 @@ function PackageCard({ pkg, isSelected, onSelect, isBestValue }: PackageCardProp
       style={[
         styles.packageCard,
         isSelected && styles.packageCardSelected,
+        isCurrentPlan && styles.packageCardCurrent,
       ]}
       onPress={onSelect}
       activeOpacity={0.8}
+      disabled={isCurrentPlan}
     >
-      {isBestValue && (
+      {isCurrentPlan ? (
+        <View style={styles.currentPlanBadge}>
+          <Ionicons name="checkmark-circle" size={16} color={Colors.textInverse} />
+          <Text style={styles.currentPlanText}>Current Plan</Text>
+        </View>
+      ) : isBestValue ? (
         <View style={styles.bestValueBadge}>
           <Text style={styles.bestValueText}>Most Popular</Text>
         </View>
-      )}
+      ) : null}
       <View style={styles.packageHeader}>
-        <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+        <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected, isCurrentPlan && styles.radioOuterCurrent]}>
           {isSelected && <View style={styles.radioInner} />}
+          {isCurrentPlan && !isSelected && (
+            <Ionicons name="checkmark" size={14} color={Colors.success} />
+          )}
         </View>
         <Text style={styles.packagePeriod}>{periodLabel}</Text>
       </View>
@@ -106,7 +123,7 @@ const stripCents = (t: string): string => {
   return t;
 }
 
-export function Paywall() {
+export function Paywall({ isModal = false, onClose, showCloseButton = false }: PaywallProps = {}) {
   const {
     currentOffering,
     purchasePackage,
@@ -114,6 +131,8 @@ export function Paywall() {
     isLoading,
     error,
     isInitialized,
+    customerInfo,
+    isSubscribed,
   } = useRevenueCat();
   const { track, setUserProperties } = useMixpanel();
   
@@ -122,10 +141,8 @@ export function Paywall() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Don't show paywall if RevenueCat is not initialized (e.g., dev mode without API key)
-  if (!isInitialized) {
-    return null;
-  }
+  // Show a limited paywall if RevenueCat is not initialized (e.g., dev mode without API key)
+  // This still allows users to see the UI and dismiss the modal with the close button
 
   // Track paywall viewed
   useEffect(() => {
@@ -134,6 +151,16 @@ export function Paywall() {
 
   // Get available packages
   const packages = currentOffering?.availablePackages ?? [];
+  
+  // Detect current subscription product identifier
+  const currentProductId = React.useMemo(() => {
+    if (!customerInfo || !isSubscribed) return null;
+    const activeEntitlements = Object.values(customerInfo.entitlements.active);
+    if (activeEntitlements.length > 0) {
+      return activeEntitlements[0].productIdentifier;
+    }
+    return null;
+  }, [customerInfo, isSubscribed]);
   
   // Auto-select first package if none selected
   React.useEffect(() => {
@@ -149,18 +176,28 @@ export function Paywall() {
   const handlePurchase = async () => {
     if (!selectedPackage) return;
     
+    // Don't allow purchasing the current plan
+    if (currentProductId && selectedPackage.product.identifier === currentProductId) {
+      return;
+    }
+    
     setIsPurchasing(true);
     setLocalError(null);
     
     try {
       const success = await purchasePackage(selectedPackage);
       if (success) {
-        track('Subscription Started', { 
+        const eventName = isSubscribed ? 'Subscription Updated' : 'Subscription Started';
+        track(eventName, { 
           package_id: selectedPackage.identifier,
           price: selectedPackage.product.priceString,
           period: selectedPackage.product.subscriptionPeriod ?? 'lifetime',
         });
         setUserProperties({ subscription_status: 'premium' });
+        // Close modal after successful purchase
+        if (onClose) {
+          onClose();
+        }
       } else {
         // User cancelled
         track('Paywall Dismissed', { reason: 'cancelled' });
@@ -190,8 +227,32 @@ export function Paywall() {
 
   const displayError = localError || error;
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+  // Determine if selected package is the current plan
+  const isSelectedCurrentPlan = currentProductId && selectedPackage?.product.identifier === currentProductId;
+  
+  // Determine button text and disabled state
+  const getButtonText = () => {
+    if (isSelectedCurrentPlan) {
+      return 'Current Plan';
+    }
+    if (isSubscribed) {
+      return 'Change Plan';
+    }
+    return 'Subscribe Now';
+  };
+
+  const content = (
+    <View style={styles.contentWrapper}>
+      {/* Close Button (for modal mode) */}
+      {showCloseButton && onClose && (
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={onClose}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
+      )}
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -243,15 +304,19 @@ export function Paywall() {
           </View>
         ) : packages.length > 0 ? (
           <View style={styles.packagesContainer}>
-            {packages.map((pkg, index) => (
-              <PackageCard
-                key={pkg.identifier}
-                pkg={pkg}
-                isSelected={selectedPackage?.identifier === pkg.identifier}
-                onSelect={() => setSelectedPackage(pkg)}
-                isBestValue={pkg.product.subscriptionPeriod?.includes('P1Y')}
-              />
-            ))}
+            {packages.map((pkg, index) => {
+              const isCurrentPlan = currentProductId === pkg.product.identifier;
+              return (
+                <PackageCard
+                  key={pkg.identifier}
+                  pkg={pkg}
+                  isSelected={selectedPackage?.identifier === pkg.identifier}
+                  onSelect={() => setSelectedPackage(pkg)}
+                  isBestValue={pkg.product.subscriptionPeriod?.includes('P1Y') && !isCurrentPlan}
+                  isCurrentPlan={isCurrentPlan}
+                />
+              );
+            })}
           </View>
         ) : (
           <View style={styles.loadingContainer}>
@@ -273,18 +338,18 @@ export function Paywall() {
         <TouchableOpacity
           style={[
             styles.purchaseButton,
-            (!selectedPackage || isPurchasing) && styles.purchaseButtonDisabled,
+            (!selectedPackage || isPurchasing || !!isSelectedCurrentPlan) && styles.purchaseButtonDisabled,
           ]}
           onPress={handlePurchase}
-          disabled={!selectedPackage || isPurchasing}
+          disabled={!selectedPackage || isPurchasing || !!isSelectedCurrentPlan}
           activeOpacity={0.8}
         >
           {isPurchasing ? (
             <ActivityIndicator color={Colors.textInverse} />
           ) : (
             <>
-              <Text style={styles.purchaseButtonText}>Subscribe Now</Text>
-              {selectedPackage && (
+              <Text style={styles.purchaseButtonText}>{getButtonText()}</Text>
+              {selectedPackage && !isSelectedCurrentPlan && (
                 <Text style={styles.purchaseButtonPrice}>
                   {selectedPackage.product.priceString}
                 </Text>
@@ -314,6 +379,17 @@ export function Paywall() {
           before the end of the current period.
         </Text>
       </ScrollView>
+    </View>
+  );
+
+  // Wrap in SafeAreaView only if not in modal mode
+  if (isModal) {
+    return content;
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {content}
     </SafeAreaView>
   );
 }
@@ -323,8 +399,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bgPrimary,
   },
+  contentWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
   scrollContent: {
     paddingBottom: Spacing.xl,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.bgSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.sm,
   },
   header: {
     alignItems: 'center',
@@ -418,6 +511,30 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: Colors.primaryAlpha10,
   },
+  packageCardCurrent: {
+    borderColor: Colors.success,
+    backgroundColor: Colors.success + '10',
+  },
+  currentPlanBadge: {
+    position: 'absolute',
+    top: -10,
+    right: Spacing.lg,
+    backgroundColor: Colors.success,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  currentPlanText: {
+    fontFamily: Fonts?.heading ?? 'System',
+    fontSize: Typography.xs,
+    fontWeight: '700',
+    color: Colors.textInverse,
+    letterSpacing: 0.5,
+  },
   bestValueBadge: {
     position: 'absolute',
     top: -10,
@@ -451,6 +568,9 @@ const styles = StyleSheet.create({
   },
   radioOuterSelected: {
     borderColor: Colors.primary,
+  },
+  radioOuterCurrent: {
+    borderColor: Colors.success,
   },
   radioInner: {
     width: 12,

@@ -3,7 +3,7 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
-import { action, ActionCtx, internalQuery, mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
+import { action, ActionCtx, internalAction, internalQuery, mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 
 /**
@@ -92,6 +92,89 @@ async function getCurrentUserFromQuery(ctx: QueryCtx): Promise<Doc<"users">> {
   return user;
 }
 
+/**
+ * Helper function to check if a thread is empty (has no user messages).
+ * Returns true if the thread only contains assistant/system messages.
+ */
+async function isThreadEmpty(ctx: ActionCtx, threadId: string): Promise<boolean> {
+  try {
+    const messages = await ctx.runQuery(
+      components.agent.messages.listMessagesByThreadId,
+      {
+        threadId,
+        order: "asc",
+        paginationOpts: { cursor: null, numItems: 100 },
+        excludeToolMessages: false,
+      }
+    );
+
+    // Check if there are any user messages
+    // The message structure has a nested message object with role field
+    const hasUserMessage = messages.page.some((msg) => {
+      if (!msg.message || typeof msg.message !== "object") {
+        return false;
+      }
+      // Type guard to check if message has role property
+      if ("role" in msg.message) {
+        return msg.message.role === "user";
+      }
+      return false;
+    });
+
+    return !hasUserMessage;
+  } catch (error) {
+    // If we can't check messages, assume thread is not empty to be safe
+    console.error(`Error checking if thread ${threadId} is empty:`, error);
+    return false;
+  }
+}
+
+/**
+ * Internal action to cleanup empty threads for a user.
+ * Scheduled to run after thread creation to avoid dangling promises.
+ * Excludes the newly created thread to prevent race conditions.
+ */
+export const cleanupEmptyThreads = internalAction({
+  args: {
+    userId: v.string(),
+    excludeThreadId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      // Get all threads for the user
+      const threadsResult = await ctx.runQuery(
+        components.agent.threads.listThreadsByUserId,
+        {
+          userId: args.userId,
+          paginationOpts: { cursor: null, numItems: 100 },
+        }
+      );
+
+      // Check each thread (except the newly created one) and delete empty ones
+      for (const thread of threadsResult.page) {
+        if (thread._id === args.excludeThreadId) {
+          continue; // Skip the newly created thread
+        }
+
+        const isEmpty = await isThreadEmpty(ctx, thread._id);
+        if (isEmpty) {
+          try {
+            await homeopathicAgent.deleteThreadSync(ctx, {
+              threadId: thread._id,
+            });
+          } catch (error) {
+            // Log but don't fail cleanup if a single thread deletion fails
+            console.error(`Error deleting empty thread ${thread._id}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      // Log but don't fail - this is a background cleanup task
+      console.error("Error during empty thread cleanup:", error);
+    }
+  },
+});
+
 // Create a new thread for the authenticated user
 // Converted to action to allow adding initial greeting message
 export const create = action({
@@ -115,6 +198,13 @@ export const create = action({
         role: "assistant",
         content: "Hello, how can I help you today?",
       },
+    });
+
+    // Schedule cleanup of empty threads to run immediately after this action completes
+    // Using runAfter(0) ensures proper execution without dangling promises
+    await ctx.scheduler.runAfter(0, internal.threads.cleanupEmptyThreads, {
+      userId: user._id,
+      excludeThreadId: threadId,
     });
 
     return { threadId };

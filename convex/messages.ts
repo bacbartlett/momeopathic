@@ -16,7 +16,9 @@ export const list = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Unauthenticated: Must be logged in to view messages");
+      // Return empty result during auth race condition - client will retry once authenticated
+      // This handles the brief window where client thinks it's authenticated but JWT hasn't propagated
+      return { page: [], isDone: true, continueCursor: "" };
     }
 
     // Get the user from the database

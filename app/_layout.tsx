@@ -21,7 +21,7 @@ import { ConvexReactClient, useConvexAuth, useMutation } from 'convex/react';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 
 import { DisclaimerManager } from '@/components/disclaimer-modal';
-import { NavigationTheme } from '@/constants/theme';
+import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
 import { MixpanelProvider, useMixpanel } from '@/context/mixpanel-context';
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
@@ -145,6 +145,25 @@ export default function RootLayout() {
                             headerShown: false,
                             presentation: 'modal',
                             animation: 'slide_from_bottom',
+                          }}
+                        />
+                        <Stack.Screen
+                          name="delete-account"
+                          options={{
+                            headerShown: true,
+                            title: 'Delete Account',
+                            headerBackTitle: 'Back',
+                            presentation: 'modal',
+                            animation: 'slide_from_bottom',
+                            headerStyle: {
+                              backgroundColor: Colors.bgSurface,
+                            },
+                            headerTintColor: Colors.textPrimary,
+                            headerTitleStyle: {
+                              fontFamily: Fonts?.heading ?? 'System',
+                              fontSize: Typography.lg,
+                              fontWeight: Typography.semibold,
+                            },
                           }}
                         />
                       </Stack>

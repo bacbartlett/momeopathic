@@ -1,4 +1,5 @@
 import { DisclaimerModal } from '@/components/disclaimer-modal';
+import { PaywallModal } from '@/components/paywall-modal';
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useMixpanel } from '@/context/mixpanel-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
@@ -8,17 +9,17 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Linking,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -36,6 +37,7 @@ export default function AccountScreen() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   // Track page view
   useEffect(() => {
@@ -413,36 +415,53 @@ export default function AccountScreen() {
               
               <View style={styles.divider} />
               
-              {isSubscribed ? (
-                <TouchableOpacity
-                  style={styles.infoRow}
-                  onPress={handleManageSubscription}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.infoRowContent}>
-                    <Ionicons name="settings-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.infoLabel}>Manage Subscription</Text>
-                  </View>
-                  <Ionicons name="open-outline" size={20} color={Colors.textMuted} />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.infoRow}
-                  onPress={handleRestorePurchases}
-                  activeOpacity={0.7}
-                  disabled={isRestoring}
-                >
-                  <View style={styles.infoRowContent}>
-                    <Ionicons name="refresh-outline" size={18} color={Colors.primary} />
-                    <Text style={styles.infoLabel}>Restore Purchases</Text>
-                  </View>
-                  {isRestoring ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                  ) : (
-                    <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-                  )}
-                </TouchableOpacity>
+              {isSubscribed && (
+                <>
+                  <TouchableOpacity
+                    style={styles.infoRow}
+                    onPress={handleManageSubscription}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.infoRowContent}>
+                      <Ionicons name="settings-outline" size={18} color={Colors.primary} />
+                      <Text style={styles.infoLabel}>Manage Subscription</Text>
+                    </View>
+                    <Ionicons name="open-outline" size={20} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                  <View style={styles.divider} />
+                </>
               )}
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={() => {
+                  track(isSubscribed ? 'Update Subscription Clicked' : 'Choose Plan Clicked');
+                  setShowPaywallModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name={isSubscribed ? 'swap-horizontal-outline' : 'diamond-outline'} size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>{isSubscribed ? 'Update Subscription' : 'Choose a Plan'}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={handleRestorePurchases}
+                activeOpacity={0.7}
+                disabled={isRestoring}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name="refresh-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>Restore Purchases</Text>
+                </View>
+                {isRestoring ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : (
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -526,6 +545,16 @@ export default function AccountScreen() {
             )}
           </TouchableOpacity>
 
+          {/* Delete Account Button */}
+          <TouchableOpacity
+            style={styles.deleteAccountButton}
+            onPress={() => router.push('/delete-account')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={20} color={Colors.error} />
+            <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
+          </TouchableOpacity>
+
           {/* Footer */}
           <View style={styles.footer}>
             <View style={styles.footerContent}>
@@ -540,6 +569,10 @@ export default function AccountScreen() {
         visible={showDisclaimer} 
         onAgree={() => setShowDisclaimer(false)} 
         allowDismiss={true}
+      />
+      <PaywallModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
       />
     </SafeAreaView>
   );
@@ -825,6 +858,25 @@ const styles = StyleSheet.create({
     borderColor: Colors.error + '30',
   },
   signOutButtonText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
+    fontWeight: '600',
+    color: Colors.error,
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.error + '10',
+    borderWidth: 1,
+    borderColor: Colors.error + '30',
+  },
+  deleteAccountButtonText: {
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.base,
     fontWeight: '600',
