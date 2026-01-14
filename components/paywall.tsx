@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -134,7 +134,7 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
     customerInfo,
     isSubscribed,
   } = useRevenueCat();
-  const { track, setUserProperties } = useMixpanel();
+  const { track, setUserProperties } = usePostHogAnalytics();
   
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);

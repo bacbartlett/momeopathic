@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -90,7 +90,7 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
   const [isFullText, setIsFullText] = useState(false);
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
   const router = useRouter();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
 
   // Track disclaimer viewed when modal becomes visible
   useEffect(() => {

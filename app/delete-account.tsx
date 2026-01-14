@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function DeleteAccountScreen() {
   const router = useRouter();
   const { user } = useUser();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
   
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');

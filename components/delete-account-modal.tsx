@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useSignIn, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -27,7 +27,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
   const router = useRouter();
   const { user } = useUser();
   const { signIn, isLoaded: isSignInLoaded } = useSignIn();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
   
   const [step, setStep] = useState<'warning' | 'password'>('warning');
   const [password, setPassword] = useState('');

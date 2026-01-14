@@ -9,7 +9,7 @@ import React, {
     useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
-import { useMixpanel } from './mixpanel-context';
+import { usePostHogAnalytics } from './posthog-context';
 
 // Re-export types for consumers who import from context
 export type { ChatState, Message, Thread } from '@/types/chat';
@@ -60,7 +60,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
-  const { track, incrementUserProperty } = useMixpanel();
+  const { track, incrementUserProperty } = usePostHogAnalytics();
 
   // Get auth state from Convex (not Clerk directly)
   // This ensures we only make authenticated requests when Convex has the JWT token

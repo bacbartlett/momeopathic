@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
@@ -370,7 +370,7 @@ Thank you for trusting us with your information.
 
 export default function PrivacyScreen() {
   const router = useRouter();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
 
   // Track page view
   useEffect(() => {

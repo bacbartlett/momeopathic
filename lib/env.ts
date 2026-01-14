@@ -15,4 +15,6 @@ export const EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = isDev ? 'test_obVyjOiqZssaWBxa
 
 export const EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID = isDev ? 'Homeopathy Chat Unlimited' : 'Homeopathy Chat Unlimited';
 
-export const EXPO_PUBLIC_MIXPANEL_TOKEN = isDev ? null : '6037d2f23f573005cb6f760a73dbbb0b';
+// TODO: Replace 'YOUR_POSTHOG_API_KEY' with your actual PostHog project API key from the PostHog dashboard
+export const EXPO_PUBLIC_POSTHOG_API_KEY = isDev ? 'phc_71PdQlY1NaecBD1Kz79ZGrVSO4NskfKOdCzlUGHMyid' : 'phc_71PdQlY1NaecBD1Kz79ZGrVSO4NskfKOdCzlUGHMyid';
+export const EXPO_PUBLIC_POSTHOG_HOST = 'https://us.i.posthog.com';

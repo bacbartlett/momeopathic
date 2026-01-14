@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
@@ -320,7 +320,7 @@ If you are a California resident, in accordance with Cal. Civ. Code § 1789.3, y
 
 export default function TermsScreen() {
   const router = useRouter();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
 
   // Track page view
   useEffect(() => {

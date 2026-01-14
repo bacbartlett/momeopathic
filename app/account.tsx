@@ -1,7 +1,7 @@
 import { DisclaimerModal } from '@/components/disclaimer-modal';
 import { PaywallModal } from '@/components/paywall-modal';
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
 import { useClerk, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +27,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
   const { isSubscribed, customerInfo, restorePurchases, isLoading: isSubscriptionLoading } = useRevenueCat();
 
   const [isEditing, setIsEditing] = useState(false);

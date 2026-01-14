@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useMixpanel } from '@/context/mixpanel-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useSignIn } from '@clerk/clerk-expo';
 import type { EmailCodeFactor } from '@clerk/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
-  const { track } = useMixpanel();
+  const { track } = usePostHogAnalytics();
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);

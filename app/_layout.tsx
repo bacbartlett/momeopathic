@@ -23,7 +23,7 @@ import { ConvexProviderWithClerk } from 'convex/react-clerk';
 import { DisclaimerManager } from '@/components/disclaimer-modal';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
-import { MixpanelProvider, useMixpanel } from '@/context/mixpanel-context';
+import { PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
@@ -68,10 +68,10 @@ function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
 
 /**
  * Component that tracks when the app is opened.
- * Must be rendered inside MixpanelProvider.
+ * Must be rendered inside PostHogProviderWrapper.
  */
 function AppOpenedTracker({ children }: { children: React.ReactNode }) {
-  const { track, isReady } = useMixpanel();
+  const { track, isReady } = usePostHogAnalytics();
 
   useEffect(() => {
     if (isReady) {
@@ -115,7 +115,7 @@ export default function RootLayout() {
       <ClerkLoaded>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <StoreUserInDatabase>
-            <MixpanelProvider>
+            <PostHogProviderWrapper>
               <AppOpenedTracker>
                 <RevenueCatProvider>
                   <ThemeProvider value={NavigationTheme}>
@@ -173,7 +173,7 @@ export default function RootLayout() {
                   </ThemeProvider>
                 </RevenueCatProvider>
               </AppOpenedTracker>
-            </MixpanelProvider>
+            </PostHogProviderWrapper>
           </StoreUserInDatabase>
         </ConvexProviderWithClerk>
       </ClerkLoaded>
