@@ -50,14 +50,16 @@ interface PackageCardProps {
   onSelect: () => void;
   isBestValue?: boolean;
   isCurrentPlan?: boolean;
+  isEligibleForTrial?: boolean;
 }
 
-function PackageCard({ pkg, isSelected, onSelect, isBestValue, isCurrentPlan }: PackageCardProps) {
+function PackageCard({ pkg, isSelected, onSelect, isBestValue, isCurrentPlan, isEligibleForTrial }: PackageCardProps) {
   const product = pkg.product;
   
   // Determine period label
   let periodLabel = '';
   let pricePerPeriod = '';
+  const isSubscription = !!product.subscriptionPeriod;
 
   if (product.subscriptionPeriod) {
     const period = product.subscriptionPeriod;
@@ -111,6 +113,12 @@ function PackageCard({ pkg, isSelected, onSelect, isBestValue, isCurrentPlan }: 
         <Text style={styles.packagePrice}>{stripCents(product.priceString)}</Text>
         <Text style={styles.packagePricePeriod}>{pricePerPeriod}</Text>
       </View>
+      {isSubscription && !isCurrentPlan && isEligibleForTrial && (
+        <View style={styles.freeTrialBadge}>
+          <Ionicons name="gift" size={14} color={Colors.primary} />
+          <Text style={styles.freeTrialText}>7-day free trial</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -133,6 +141,7 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
     isInitialized,
     customerInfo,
     isSubscribed,
+    isEligibleForIntro,
   } = useRevenueCat();
   const { track, setUserProperties } = usePostHogAnalytics();
   
@@ -238,6 +247,10 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
     if (isSubscribed) {
       return 'Change Plan';
     }
+    // Show "Start Free Trial" if the selected package is eligible for intro pricing
+    if (selectedPackage && isEligibleForIntro(selectedPackage.product.identifier)) {
+      return 'Start Free Trial';
+    }
     return 'Subscribe Now';
   };
 
@@ -303,21 +316,38 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
             <Text style={styles.loadingText}>Loading subscription options...</Text>
           </View>
         ) : packages.length > 0 ? (
-          <View style={styles.packagesContainer}>
-            {packages.map((pkg, index) => {
-              const isCurrentPlan = currentProductId === pkg.product.identifier;
-              return (
-                <PackageCard
-                  key={pkg.identifier}
-                  pkg={pkg}
-                  isSelected={selectedPackage?.identifier === pkg.identifier}
-                  onSelect={() => setSelectedPackage(pkg)}
-                  isBestValue={pkg.product.subscriptionPeriod?.includes('P1Y') && !isCurrentPlan}
-                  isCurrentPlan={isCurrentPlan}
-                />
-              );
-            })}
-          </View>
+          <>
+            {/* Free Trial Notice - only show if user is eligible for at least one trial */}
+            {packages.some(pkg => 
+              pkg.product.subscriptionPeriod && 
+              currentProductId !== pkg.product.identifier &&
+              isEligibleForIntro(pkg.product.identifier)
+            ) && (
+              <View style={styles.freeTrialNotice}>
+                <Ionicons name="gift-outline" size={20} color={Colors.primary} />
+                <Text style={styles.freeTrialNoticeText}>
+                  Start with a <Text style={styles.freeTrialNoticeBold}>7-day free trial</Text> on all subscriptions
+                </Text>
+              </View>
+            )}
+            <View style={styles.packagesContainer}>
+              {packages.map((pkg, index) => {
+                const isCurrentPlan = currentProductId === pkg.product.identifier;
+                const productIsEligibleForTrial = isEligibleForIntro(pkg.product.identifier);
+                return (
+                  <PackageCard
+                    key={pkg.identifier}
+                    pkg={pkg}
+                    isSelected={selectedPackage?.identifier === pkg.identifier}
+                    onSelect={() => setSelectedPackage(pkg)}
+                    isBestValue={pkg.product.subscriptionPeriod?.includes('P1Y') && !isCurrentPlan}
+                    isCurrentPlan={isCurrentPlan}
+                    isEligibleForTrial={productIsEligibleForTrial}
+                  />
+                );
+              })}
+            </View>
+          </>
         ) : (
           <View style={styles.loadingContainer}>
             <Text style={styles.errorText}>
@@ -374,7 +404,9 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
 
         {/* Terms */}
         <Text style={styles.termsText}>
-          Payment will be charged to your App Store or Google Play account. 
+          {selectedPackage && isEligibleForIntro(selectedPackage.product.identifier)
+            ? 'Start with a 7-day free trial. Payment will be charged to your App Store or Google Play account after the trial period ends. '
+            : 'Payment will be charged to your App Store or Google Play account. '}
           Subscription automatically renews unless canceled at least 24 hours 
           before the end of the current period.
         </Text>
@@ -600,6 +632,42 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.sm,
     color: Colors.textSecondary,
+  },
+  freeTrialBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Spacing.sm,
+    marginLeft: 30,
+  },
+  freeTrialText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  freeTrialNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.primaryAlpha10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.primaryAlpha20,
+  },
+  freeTrialNoticeText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  freeTrialNoticeBold: {
+    fontFamily: Fonts?.headingBold ?? 'System',
+    fontWeight: '700',
+    color: Colors.primary,
   },
   loadingContainer: {
     padding: Spacing.xl,

@@ -132,13 +132,13 @@ async function isThreadEmpty(ctx: ActionCtx, threadId: string): Promise<boolean>
 /**
  * Internal action to cleanup empty threads for a user.
  * Scheduled to run after thread creation to avoid dangling promises.
- * Excludes the newly created thread to prevent race conditions.
+ * Keeps the most recently created empty thread, deletes all older empty threads.
  */
 export const cleanupEmptyThreads = internalAction({
   args: {
     userId: v.string(),
-    excludeThreadId: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     try {
       // Get all threads for the user
@@ -150,28 +150,37 @@ export const cleanupEmptyThreads = internalAction({
         }
       );
 
-      // Check each thread (except the newly created one) and delete empty ones
+      // Find all empty threads
+      const emptyThreads: Array<{ id: string; creationTime: number }> = [];
       for (const thread of threadsResult.page) {
-        if (thread._id === args.excludeThreadId) {
-          continue; // Skip the newly created thread
-        }
-
         const isEmpty = await isThreadEmpty(ctx, thread._id);
         if (isEmpty) {
-          try {
-            await homeopathicAgent.deleteThreadSync(ctx, {
-              threadId: thread._id,
-            });
-          } catch (error) {
-            // Log but don't fail cleanup if a single thread deletion fails
-            console.error(`Error deleting empty thread ${thread._id}:`, error);
-          }
+          emptyThreads.push({
+            id: thread._id,
+            creationTime: thread._creationTime,
+          });
+        }
+      }
+
+      // Sort by creation time descending (most recent first)
+      emptyThreads.sort((a, b) => b.creationTime - a.creationTime);
+
+      // Delete all empty threads except the most recent one
+      for (let i = 1; i < emptyThreads.length; i++) {
+        try {
+          await homeopathicAgent.deleteThreadSync(ctx, {
+            threadId: emptyThreads[i].id,
+          });
+        } catch (error) {
+          // Log but don't fail cleanup if a single thread deletion fails
+          console.error(`Error deleting empty thread ${emptyThreads[i].id}:`, error);
         }
       }
     } catch (error) {
       // Log but don't fail - this is a background cleanup task
       console.error("Error during empty thread cleanup:", error);
     }
+    return null;
   },
 });
 
@@ -202,9 +211,9 @@ export const create = action({
 
     // Schedule cleanup of empty threads to run immediately after this action completes
     // Using runAfter(0) ensures proper execution without dangling promises
+    // Keeps only the most recently created empty thread (which will be the one just created)
     await ctx.scheduler.runAfter(0, internal.threads.cleanupEmptyThreads, {
       userId: user._id,
-      excludeThreadId: threadId,
     });
 
     return { threadId };

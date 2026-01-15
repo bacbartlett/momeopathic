@@ -13,6 +13,8 @@ import React, {
 import { Platform } from 'react-native';
 import Purchases, {
   CustomerInfo,
+  INTRO_ELIGIBILITY_STATUS,
+  IntroEligibility,
   LOG_LEVEL,
   PurchasesOffering,
   PurchasesPackage,
@@ -21,6 +23,9 @@ import Purchases, {
 // Entitlement identifier - this should match what you set up in RevenueCat dashboard
 // Can be configured via environment variable or defaults to 'premium'
 const ENTITLEMENT_ID = EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID;
+
+// Map of product ID to intro eligibility status
+type IntroEligibilityMap = Record<string, IntroEligibility>;
 
 interface RevenueCatContextType {
   /** Whether RevenueCat has been initialized */
@@ -37,6 +42,10 @@ interface RevenueCatContextType {
   customerInfo: CustomerInfo | null;
   /** Current offerings available for purchase */
   currentOffering: PurchasesOffering | null;
+  /** Map of product IDs to their intro/trial eligibility status */
+  introEligibility: IntroEligibilityMap;
+  /** Check if a specific product is eligible for intro pricing/free trial */
+  isEligibleForIntro: (productId: string) => boolean;
   /** Purchase a package */
   purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
   /** Restore purchases */
@@ -63,6 +72,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [introEligibility, setIntroEligibility] = useState<IntroEligibilityMap>({});
   
   // Get Clerk user for identity sync
   const { user, isLoaded: isClerkLoaded } = useUser();
@@ -194,6 +204,21 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         if (offerings.current) {
           setCurrentOffering(offerings.current);
           logRevenueCat('log', 'Current offering state updated');
+          
+          // Check intro/trial eligibility for all subscription products
+          const subscriptionProductIds = offerings.current.availablePackages
+            .filter(pkg => pkg.product.subscriptionPeriod)
+            .map(pkg => pkg.product.identifier);
+          
+          if (subscriptionProductIds.length > 0) {
+            logRevenueCat('log', 'Checking intro eligibility for products:', subscriptionProductIds);
+            const eligibilityStartTime = Date.now();
+            const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(subscriptionProductIds);
+            const eligibilityDuration = Date.now() - eligibilityStartTime;
+            logRevenueCat('log', '✅ Intro eligibility check completed in', eligibilityDuration, 'ms');
+            logRevenueCat('log', 'Eligibility results:', eligibility);
+            setIntroEligibility(eligibility);
+          }
         } else {
           logRevenueCat('log', '⚠️ No current offering available');
         }
@@ -352,6 +377,18 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           if (offerings.current) {
             setCurrentOffering(offerings.current);
             logRevenueCat('log', 'Current offering state updated');
+            
+            // Re-check intro eligibility for the logged-in user
+            const subscriptionProductIds = offerings.current.availablePackages
+              .filter(pkg => pkg.product.subscriptionPeriod)
+              .map(pkg => pkg.product.identifier);
+            
+            if (subscriptionProductIds.length > 0) {
+              logRevenueCat('log', 'Re-checking intro eligibility after login for products:', subscriptionProductIds);
+              const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(subscriptionProductIds);
+              logRevenueCat('log', 'Eligibility results after login:', eligibility);
+              setIntroEligibility(eligibility);
+            }
           }
           
           logRevenueCat('log', 'Setting isLoading=false, error=null');
@@ -619,6 +656,16 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     }
   }, [isInitialized]);
 
+  // Helper function to check if a product is eligible for intro pricing/free trial
+  const isEligibleForIntro = useCallback((productId: string): boolean => {
+    const eligibility = introEligibility[productId];
+    if (!eligibility) {
+      // Unknown eligibility - be conservative and don't show trial
+      return false;
+    }
+    return eligibility.status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE;
+  }, [introEligibility]);
+
   // Log state changes
   useEffect(() => {
     logRevenueCat('log', 'State changed:', {
@@ -629,9 +676,10 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
       isSubscribed,
       hasCustomerInfo: !!customerInfo,
       hasCurrentOffering: !!currentOffering,
+      introEligibilityCount: Object.keys(introEligibility).length,
       error,
     });
-  }, [isReady, isInitialized, initializationFailed, isLoading, isSubscribed, customerInfo, currentOffering, error]);
+  }, [isReady, isInitialized, initializationFailed, isLoading, isSubscribed, customerInfo, currentOffering, introEligibility, error]);
 
   logRevenueCat('log', 'Rendering RevenueCatProvider with context value');
   
@@ -645,6 +693,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         isLoading,
         customerInfo,
         currentOffering,
+        introEligibility,
+        isEligibleForIntro,
         purchasePackage,
         restorePurchases,
         refreshCustomerInfo,
