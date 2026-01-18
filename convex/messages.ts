@@ -6,6 +6,43 @@ import { action, query } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 import { generateConversationTitle } from "./agents/titleGenerator";
 
+/**
+ * Strategy B: Clear text from intermediate step messages to prevent duplication.
+ *
+ * When multi-step tool calling occurs, each step's text gets concatenated by
+ * listUIMessages. This function clears text from intermediate steps (those that
+ * ended with tool-calls) so only the final response text is shown to users.
+ */
+async function clearIntermediateStepText(
+  ctx: Parameters<typeof homeopathicAgent.updateMessage>[0],
+  savedMessages: Array<{ _id: string; finishReason?: string; message?: { role: string; content: unknown } }> | undefined
+): Promise<void> {
+  if (!savedMessages) return;
+
+  for (const msg of savedMessages) {
+    // Only process intermediate assistant messages (those that ended by calling a tool)
+    if (
+      msg.message?.role === 'assistant' &&
+      msg.finishReason === 'tool-calls'
+    ) {
+      try {
+        // Clear the content from intermediate steps
+        // This preserves the message for context but removes text from UI display
+        await homeopathicAgent.updateMessage(ctx, {
+          messageId: msg._id,
+          patch: {
+            message: { role: 'assistant', content: [] }, // Empty content array
+            status: 'success'
+          }
+        });
+      } catch (error) {
+        // Log but don't fail the request if cleanup fails
+        console.error('Failed to clear intermediate step text:', error);
+      }
+    }
+  }
+}
+
 // List messages in a thread (UI-formatted)
 // Only allows access if the thread belongs to the authenticated user
 export const list = query({
@@ -90,6 +127,10 @@ export const send = action({
       { threadId: args.threadId, userId: thread.userId },
       { prompt: args.content }
     );
+
+    // Strategy B: Clear text from intermediate steps to prevent duplication in UI
+    // This removes "Let me search..." type preamble text from tool-calling steps
+    await clearIntermediateStepText(ctx, result.savedMessages);
 
     // Generate and update thread title if this is the first user message
     if (isFirstUserMessage) {
