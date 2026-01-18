@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type ResetStep = 'email' | 'code' | 'password';
+
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
@@ -27,6 +29,14 @@ export default function SignInScreen() {
   const [error, setError] = useState('');
   const [showEmailCode, setShowEmailCode] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
+
+  // Password reset state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetStep, setResetStep] = useState<ResetStep>('email');
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSignIn = async () => {
     if (!isLoaded || !signIn) return;
@@ -140,6 +150,108 @@ export default function SignInScreen() {
     }
   };
 
+  // Password reset handlers
+  const handleSendResetCode = async () => {
+    if (!isLoaded || !signIn) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await signIn.create({
+        strategy: 'reset_password_email_code',
+        identifier: forgotPasswordEmail,
+      });
+      setResetStep('code');
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to send reset code. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendResetCode = async () => {
+    if (!isLoaded || !signIn) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await signIn.create({
+        strategy: 'reset_password_email_code',
+        identifier: forgotPasswordEmail,
+      });
+      setError(''); // Clear any previous error
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to resend code. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyResetCode = async () => {
+    if (!isLoaded || !signIn) return;
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const result = await signIn.attemptFirstFactor({
+        strategy: 'reset_password_email_code',
+        code: resetCode,
+        password: newPassword,
+      });
+
+      if (result.status === 'needs_second_factor') {
+        // Handle 2FA if required
+        setError('Two-factor authentication is required. Please sign in normally.');
+        resetForgotPasswordState();
+      } else if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        track('Password Reset', { method: 'email_code' });
+        router.replace('/(tabs)');
+      } else {
+        setError('Password reset incomplete. Please try again.');
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to reset password. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetForgotPasswordState = () => {
+    setShowForgotPassword(false);
+    setResetStep('email');
+    setForgotPasswordEmail('');
+    setResetCode('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setError('');
+  };
+
   // Verification code screen
   if (showEmailCode) {
     return (
@@ -227,6 +339,196 @@ export default function SignInScreen() {
     );
   }
 
+  // Password reset flow
+  if (showForgotPassword) {
+    // Step 1: Enter email
+    if (resetStep === 'email') {
+      return (
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+          <KeyboardAvoidingView
+            style={styles.keyboardView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <View style={styles.logoContainer}>
+                  <Ionicons name="key" size={32} color={Colors.primary} />
+                </View>
+                <Text style={styles.title}>Reset Password</Text>
+                <Text style={styles.subtitle}>
+                  Enter your email and we'll send you a code to reset your password
+                </Text>
+              </View>
+
+              <View style={styles.form}>
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="alert-circle" size={20} color={Colors.error} />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={forgotPasswordEmail}
+                    onChangeText={setForgotPasswordEmail}
+                    placeholder="Enter your email"
+                    placeholderTextColor={Colors.textMuted}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
+                  onPress={handleSendResetCode}
+                  disabled={isLoading || !forgotPasswordEmail}
+                  activeOpacity={0.7}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color={Colors.textInverse} />
+                  ) : (
+                    <Text style={styles.signInButtonText}>Send Reset Code</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={resetForgotPasswordState}
+                  disabled={isLoading}
+                >
+                  <Ionicons name="arrow-back" size={20} color={Colors.textSecondary} />
+                  <Text style={styles.backButtonText}>Back to Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      );
+    }
+
+    // Step 2: Enter verification code and new password
+    if (resetStep === 'code') {
+      return (
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+          <KeyboardAvoidingView
+            style={styles.keyboardView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <View style={styles.logoContainer}>
+                  <Ionicons name="mail" size={32} color={Colors.primary} />
+                </View>
+                <Text style={styles.title}>Check Your Email</Text>
+                <Text style={styles.subtitle}>
+                  We sent a code to{'\n'}
+                  <Text style={styles.emailText}>{forgotPasswordEmail}</Text>
+                </Text>
+              </View>
+
+              <View style={styles.form}>
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="alert-circle" size={20} color={Colors.error} />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Verification Code</Text>
+                  <TextInput
+                    style={[styles.input, styles.codeInput]}
+                    value={resetCode}
+                    onChangeText={setResetCode}
+                    placeholder="Enter 6-digit code"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>New Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Enter new password"
+                    placeholderTextColor={Colors.textMuted}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoComplete="new-password"
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Confirm Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm new password"
+                    placeholderTextColor={Colors.textMuted}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoComplete="new-password"
+                    editable={!isLoading}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
+                  onPress={handleVerifyResetCode}
+                  disabled={isLoading || resetCode.length < 6 || !newPassword || !confirmPassword}
+                  activeOpacity={0.7}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color={Colors.textInverse} />
+                  ) : (
+                    <Text style={styles.signInButtonText}>Reset Password</Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.resendContainer}>
+                  <Text style={styles.resendText}>Didn't receive the code?</Text>
+                  <TouchableOpacity
+                    onPress={handleResendResetCode}
+                    disabled={isLoading}
+                  >
+                    <Text style={styles.resendLink}>Resend Code</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => {
+                    setResetStep('email');
+                    setResetCode('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setError('');
+                  }}
+                  disabled={isLoading}
+                >
+                  <Ionicons name="arrow-back" size={20} color={Colors.textSecondary} />
+                  <Text style={styles.backButtonText}>Back</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      );
+    }
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -281,6 +583,18 @@ export default function SignInScreen() {
                 editable={!isLoading}
               />
             </View>
+
+            <TouchableOpacity
+              style={styles.forgotPasswordLink}
+              onPress={() => {
+                setShowForgotPassword(true);
+                setForgotPasswordEmail(emailAddress); // Pre-fill with current email if any
+                setError('');
+              }}
+              disabled={isLoading}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
@@ -429,6 +743,16 @@ const styles = StyleSheet.create({
   signUpLinkBold: {
     fontFamily: Fonts?.bodyMedium ?? 'System',
     fontWeight: Typography.semibold,
+    color: Colors.primary,
+  },
+  forgotPasswordLink: {
+    alignSelf: 'flex-end',
+    marginTop: -Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  forgotPasswordText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
     color: Colors.primary,
   },
   resendContainer: {
