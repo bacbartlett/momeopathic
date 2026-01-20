@@ -29,7 +29,13 @@ export type PostHogEvent =
   | 'Terms Viewed'
   | 'Privacy Policy Viewed'
   | 'Disclaimer Accepted'
-  | 'Disclaimer Viewed';
+  | 'Disclaimer Viewed'
+  | 'Feedback Prompt Shown'
+  | 'Feedback Happy Selected'
+  | 'Feedback Unhappy Selected'
+  | 'Feedback Submitted'
+  | 'Feedback Prompt Dismissed'
+  | 'In-App Review Requested';
 
 // Properties type for events
 export interface EventProperties {

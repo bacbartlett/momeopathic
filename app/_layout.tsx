@@ -21,6 +21,7 @@ import { ConvexReactClient, useConvexAuth, useMutation } from 'convex/react';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 
 import { DisclaimerManager } from '@/components/disclaimer-modal';
+import { FeedbackManager } from '@/components/feedback-modal';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
 import { PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
@@ -169,6 +170,7 @@ export default function RootLayout() {
                       </Stack>
                       <StatusBar style="dark" />
                       <DisclaimerManager />
+                      <FeedbackManager />
                     </ChatProvider>
                   </ThemeProvider>
                 </RevenueCatProvider>

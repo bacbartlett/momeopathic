@@ -1,5 +1,5 @@
 import { ChatState, Message, Thread } from '@/types/chat';
-import { useAction, useConvexAuth, useQuery } from 'convex/react';
+import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react';
 import React, {
     createContext,
     ReactNode,
@@ -83,6 +83,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const createThreadAction = useAction(api.threads.create);
   const deleteThreadAction = useAction(api.threads.remove);
   const sendMessageAction = useAction(api.messages.send);
+  const incrementFeedbackThreadCount = useMutation(api.feedback.incrementThreadCount);
 
   // Transform Convex threads to UI threads
   const threads = useMemo((): Thread[] => {
@@ -230,6 +231,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         message_length: content.length 
       });
       incrementUserProperty('messages_sent');
+      // Increment feedback thread count for review prompt tracking
+      incrementFeedbackThreadCount().catch((err) => {
+        // Silent fail - feedback tracking is non-critical
+        console.debug('Failed to increment feedback thread count:', err);
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
       console.error('Failed to send message:', error);
@@ -238,7 +244,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsSending(false);
     }
-  }, [activeThreadId, isSending, isAuthenticated, sendMessageAction, track, incrementUserProperty]);
+  }, [activeThreadId, isSending, isAuthenticated, sendMessageAction, track, incrementUserProperty, incrementFeedbackThreadCount]);
 
   // Retry last failed message
   const retryLastMessage = useCallback(async () => {

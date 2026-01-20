@@ -4,15 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useCallback, useEffect, useRef } from 'react';
 import {
-    ActionSheetIOS,
-    Alert,
-    Animated,
-    Platform,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActionSheetIOS,
+  Alert,
+  Animated,
+  Platform,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
@@ -281,11 +281,13 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
           ) : (
             <>
               {hasContent && (
-                <Markdown
-                  style={isUser ? markdownStyles.user : markdownStyles.assistant}
-                >
-                  {filteredContent}
-                </Markdown>
+                <View style={styles.markdownWrapper}>
+                  <Markdown
+                    style={isUser ? markdownStyles.user : markdownStyles.assistant}
+                  >
+                    {filteredContent}
+                  </Markdown>
+                </View>
               )}
               {isLoading && hasContent && (
                 <View style={styles.loadingIndicatorContainer}>
@@ -458,12 +460,16 @@ const styles = StyleSheet.create({
   },
   bubbleWrapper: {
     maxWidth: '80%',
+    flexShrink: 1,
+    minWidth: 0,
   },
   bubble: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
     borderRadius: Radius.xl,
+    flex: 1,
+    minWidth: 0,
     ...Shadows.sm,
   },
   userBubble: {
@@ -551,6 +557,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: Colors.textSecondary,
   },
+  markdownWrapper: {
+    flexShrink: 1,
+    minWidth: 0,
+    width: '100%',
+  },
 });
 
 // Markdown styles that match the theme
@@ -563,11 +574,13 @@ const markdownStyles = {
       color: Colors.textInverse,
       margin: 0,
       padding: 0,
+      flexShrink: 1,
     },
     paragraph: {
       marginTop: 0,
       marginBottom: Spacing.xs,
       color: Colors.textInverse,
+      flexShrink: 1,
     },
     heading1: {
       fontFamily: Fonts?.heading ?? 'System',
@@ -662,11 +675,13 @@ const markdownStyles = {
       color: Colors.textPrimary,
       margin: 0,
       padding: 0,
+      flexShrink: 1,
     },
     paragraph: {
       marginTop: 0,
       marginBottom: Spacing.sm,
       color: Colors.textPrimary,
+      flexShrink: 1,
     },
     heading1: {
       fontFamily: Fonts?.heading ?? 'System',

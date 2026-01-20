@@ -17,6 +17,13 @@ export default defineSchema({
     disclaimerAccepted: v.optional(v.boolean()),
     // If true, allows user to engage with the app without a subscription
     noPaywall: v.optional(v.boolean()),
+    // Feedback prompt tracking
+    // Number of threads interacted with since last prompt (or since start)
+    feedbackThreadCount: v.optional(v.number()),
+    // Number of times the user has dismissed the feedback prompt
+    feedbackDismissCount: v.optional(v.number()),
+    // Whether the user has given feedback (happy or submitted negative feedback)
+    feedbackGiven: v.optional(v.boolean()),
   })
     .index("by_token", ["tokenIdentifier"]),
 });
