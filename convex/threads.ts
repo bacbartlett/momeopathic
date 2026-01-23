@@ -184,13 +184,24 @@ export const cleanupEmptyThreads = internalAction({
   },
 });
 
+// Maximum length for title and summary
+const MAX_TITLE_LENGTH = 200;
+const MAX_SUMMARY_LENGTH = 1000;
+
 // Create a new thread for the authenticated user
 // Converted to action to allow adding initial greeting message
 export const create = action({
   args: {
     title: v.optional(v.string()),
   },
+  returns: v.object({
+    threadId: v.string(),
+  }),
   handler: async (ctx, args) => {
+    // Validate title length if provided
+    if (args.title && args.title.length > MAX_TITLE_LENGTH) {
+      throw new Error(`Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`);
+    }
     const user = await getCurrentUserFromAction(ctx);
 
     // Create thread using the agent's createThread method which returns both threadId and thread object
@@ -282,6 +293,9 @@ export const remove = action({
   args: {
     threadId: v.string(),
   },
+  returns: v.object({
+    success: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const user = await getCurrentUserFromAction(ctx);
 
@@ -311,7 +325,18 @@ export const updateMetadata = mutation({
     title: v.optional(v.string()),
     summary: v.optional(v.string()),
   },
+  returns: v.object({
+    success: v.boolean(),
+  }),
   handler: async (ctx, args) => {
+    // Validate title length if provided
+    if (args.title && args.title.length > MAX_TITLE_LENGTH) {
+      throw new Error(`Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`);
+    }
+    // Validate summary length if provided
+    if (args.summary && args.summary.length > MAX_SUMMARY_LENGTH) {
+      throw new Error(`Summary too long. Maximum length is ${MAX_SUMMARY_LENGTH} characters.`);
+    }
     const user = await getCurrentUserFromMutation(ctx);
 
     // Get the thread to verify ownership

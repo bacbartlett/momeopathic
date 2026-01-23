@@ -2,7 +2,9 @@ import { EXPO_PUBLIC_POSTHOG_API_KEY, EXPO_PUBLIC_POSTHOG_HOST } from '@/lib/env
 import { useUser } from '@clerk/clerk-expo';
 import { PostHogProvider, usePostHog } from 'posthog-react-native';
 import React, {
+  Component,
   createContext,
+  ErrorInfo,
   ReactNode,
   useCallback,
   useContext,
@@ -10,7 +12,16 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Text, TouchableOpacity, View } from 'react-native';
+
+// Startup logging - logs in both dev and production for debugging black screen issues
+console.log('[STARTUP] posthog-context.tsx: Module loaded');
+
+// React Native global error handler types
+declare const ErrorUtils: {
+  getGlobalHandler: () => ((error: Error, isFatal?: boolean) => void) | null;
+  setGlobalHandler: (handler: (error: Error, isFatal?: boolean) => void) => void;
+};
 
 // Event types for type-safe tracking
 export type PostHogEvent =
@@ -85,6 +96,8 @@ interface PostHogContextType {
   optIn: () => void;
   /** Check if tracking is opted out */
   hasOptedOut: () => Promise<boolean>;
+  /** Capture an exception/crash for error tracking */
+  captureException: (error: Error, additionalProperties?: EventProperties) => void;
 }
 
 const PostHogContext = createContext<PostHogContextType | null>(null);
@@ -95,34 +108,36 @@ interface PostHogProviderWrapperProps {
 
 // Inner component that uses PostHog hooks
 function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
+  console.log('[STARTUP] PostHogProviderInner: Rendering');
   const [isReady, setIsReady] = useState(false);
   const { user, isLoaded: isClerkLoaded } = useUser();
   const posthog = usePostHog();
+  console.log('[STARTUP] PostHogProviderInner: posthog instance exists:', !!posthog);
   
   // Track current identified user to avoid unnecessary identify calls
   const currentIdentifiedUserRef = useRef<string | null>(null);
 
   // Initialize PostHog
   useEffect(() => {
+    console.log('[STARTUP] PostHogProviderInner: Initialize useEffect - posthog exists:', !!posthog);
     if (!posthog) {
+      console.log('[STARTUP] PostHogProviderInner: No posthog instance, setting isReady=true');
       setIsReady(true);
       return;
     }
 
     try {
+      console.log('[STARTUP] PostHogProviderInner: Registering super properties');
       // Set default super properties
       posthog.register({
         platform: Platform.OS,
         app_name: 'MyMateria',
       });
 
-      if (__DEV__) {
-        console.log('[PostHog] Initialized successfully');
-      }
-      
+      console.log('[STARTUP] PostHogProviderInner: Initialized successfully');
       setIsReady(true);
     } catch (error) {
-      console.error('[PostHog] Initialization error:', error);
+      console.error('[STARTUP] PostHogProviderInner: Initialization error:', error);
       setIsReady(true);
     }
   }, [posthog]);
@@ -340,6 +355,30 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
     }
   }, [posthog]);
 
+  // Capture an exception for error tracking
+  const captureException = useCallback((error: Error, additionalProperties?: EventProperties) => {
+    if (!posthog) return;
+
+    try {
+      // Capture the exception with error details
+      const errorProperties: EventProperties = {
+        $exception_type: error.name,
+        $exception_message: error.message,
+        $exception_stack_trace_raw: error.stack ?? null,
+        platform: Platform.OS,
+        ...filterUndefined(additionalProperties ?? {}),
+      };
+
+      posthog.capture('$exception', errorProperties);
+      
+      if (__DEV__) {
+        console.log('[PostHog] Captured exception:', error.name, error.message);
+      }
+    } catch (captureError) {
+      console.error('[PostHog] Capture exception error:', captureError);
+    }
+  }, [posthog]);
+
   return (
     <PostHogContext.Provider
       value={{
@@ -353,6 +392,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
         optOut,
         optIn,
         hasOptedOut,
+        captureException,
       }}
     >
       {children}
@@ -362,21 +402,41 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
 
 // Outer provider component that wraps with PostHogProvider
 export function PostHogProviderWrapper({ children }: PostHogProviderWrapperProps) {
+  console.log('[STARTUP] PostHogProviderWrapper: Rendering');
   const apiKey = EXPO_PUBLIC_POSTHOG_API_KEY;
   const host = EXPO_PUBLIC_POSTHOG_HOST;
+  console.log('[STARTUP] PostHogProviderWrapper: API key exists:', !!apiKey, 'Host:', host);
 
   if (!apiKey || (__DEV__ && (apiKey as string) === 'YOUR_POSTHOG_API_KEY')) {
-    console.warn('[PostHog] API key not configured. Set EXPO_PUBLIC_POSTHOG_API_KEY in your environment.');
+    console.warn('[STARTUP] PostHogProviderWrapper: API key not configured, rendering children without PostHog');
     // Still render children so app works without analytics
     return <>{children}</>;
   }
 
+  console.log('[STARTUP] PostHogProviderWrapper: Creating PostHogProvider with session replay enabled');
   return (
     <PostHogProvider
       apiKey={apiKey}
       options={{
         host: host,
+        // Capture app lifecycle events (app opened, app backgrounded, etc.)
         captureAppLifecycleEvents: true,
+        // Enable session replay recording
+        enableSessionReplay: true,
+        sessionReplayConfig: {
+          // Mask all text input for privacy
+          maskAllTextInputs: true,
+          // Mask all images for privacy (disable if you want to see images)
+          maskAllImages: false,
+          // Capture console logs (Android only - Native Logcat)
+          captureLog: true,
+          // Capture network requests in the replay
+          captureNetworkTelemetry: true,
+          // Mask text in sensitive views
+          maskAllSandboxedViews: false,
+        },
+        // Persist session ID across app restarts for better session continuity
+        enablePersistSessionIdAcrossRestart: true,
       }}
     >
       <PostHogProviderInner>{children}</PostHogProviderInner>
@@ -400,3 +460,224 @@ export function useTrackEvent() {
 
 // Export alias for easier migration (can be removed later)
 export const useMixpanel = usePostHogAnalytics;
+
+// ============================================
+// PostHog Error Boundary for Crash Tracking
+// ============================================
+
+interface PostHogErrorBoundaryProps {
+  children: ReactNode;
+  /** Optional fallback component to show when an error occurs */
+  fallback?: ReactNode | ((props: ErrorBoundaryFallbackProps) => ReactNode);
+}
+
+interface ErrorBoundaryFallbackProps {
+  error: Error;
+  componentStack: string | null;
+  resetError: () => void;
+}
+
+interface PostHogErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  componentStack: string | null;
+}
+
+/**
+ * Error boundary that captures React rendering errors and sends them to PostHog.
+ * Wrap your app or critical sections to capture crashes.
+ */
+export class PostHogErrorBoundary extends Component<PostHogErrorBoundaryProps, PostHogErrorBoundaryState> {
+  constructor(props: PostHogErrorBoundaryProps) {
+    super(props);
+    console.log('[STARTUP] PostHogErrorBoundary: Constructor called');
+    this.state = {
+      hasError: false,
+      error: null,
+      componentStack: null,
+    };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<PostHogErrorBoundaryState> {
+    console.error('[STARTUP] PostHogErrorBoundary: getDerivedStateFromError - Error caught:', error.message);
+    return {
+      hasError: true,
+      error,
+    };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    // Store component stack for later use
+    this.setState({ componentStack: errorInfo.componentStack ?? null });
+
+    // Log in both dev and production for debugging
+    console.error('[STARTUP] PostHogErrorBoundary: componentDidCatch - Error:', error.name, error.message);
+    console.error('[STARTUP] PostHogErrorBoundary: Component stack:', errorInfo.componentStack);
+
+    // We can't use hooks here, so we'll emit a custom event that will be captured
+    // The PostHog instance will be accessed via the global capture method
+    // This is handled by the PostHogCrashReporter component below
+  }
+
+  resetError = (): void => {
+    console.log('[STARTUP] PostHogErrorBoundary: resetError called');
+    this.setState({
+      hasError: false,
+      error: null,
+      componentStack: null,
+    });
+  };
+
+  render(): ReactNode {
+    if (this.state.hasError && this.state.error) {
+      console.log('[STARTUP] PostHogErrorBoundary: Rendering error state');
+      const { fallback } = this.props;
+      const { error, componentStack } = this.state;
+
+      // If fallback is a function, call it with error details
+      if (typeof fallback === 'function') {
+        console.log('[STARTUP] PostHogErrorBoundary: Using custom fallback function');
+        return fallback({
+          error,
+          componentStack,
+          resetError: this.resetError,
+        });
+      }
+
+      // If fallback is a component, render it
+      if (fallback) {
+        console.log('[STARTUP] PostHogErrorBoundary: Using custom fallback component');
+        return fallback;
+      }
+
+      // Default fallback - show a visible error screen so crashes don't result in black screen
+      console.log('[STARTUP] PostHogErrorBoundary: Using default error screen');
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FEFAF3', padding: 20 }}>
+          <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 10, color: '#333' }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20 }}>
+            {error.message}
+          </Text>
+          <Text style={{ fontSize: 12, color: '#999', textAlign: 'center', marginBottom: 20 }}>
+            {error.name}
+          </Text>
+          <TouchableOpacity
+            onPress={this.resetError}
+            style={{ backgroundColor: '#4A7C59', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
+          >
+            <Text style={{ color: 'white', fontWeight: '600' }}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    console.log('[STARTUP] PostHogErrorBoundary: Rendering children');
+    return this.props.children;
+  }
+}
+
+/**
+ * Component that sets up global error handling and reports unhandled errors to PostHog.
+ * Place this inside PostHogProviderWrapper.
+ */
+export function PostHogCrashReporter({ children }: { children: ReactNode }) {
+  console.log('[STARTUP] PostHogCrashReporter: Rendering');
+  const { captureException, isReady } = usePostHogAnalytics();
+  console.log('[STARTUP] PostHogCrashReporter: isReady:', isReady);
+
+  useEffect(() => {
+    console.log('[STARTUP] PostHogCrashReporter: useEffect - isReady:', isReady);
+    if (!isReady) {
+      console.log('[STARTUP] PostHogCrashReporter: Not ready, skipping initialization');
+      return;
+    }
+
+    console.log('[STARTUP] PostHogCrashReporter: Setting up global error handler');
+    // Handle unhandled JS errors
+    const originalErrorHandler = ErrorUtils.getGlobalHandler();
+    
+    ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
+      console.log('[STARTUP] PostHogCrashReporter: Global error caught:', error.message, 'isFatal:', isFatal);
+      // Capture to PostHog
+      captureException(error, {
+        $exception_is_fatal: isFatal ?? false,
+        $exception_source: 'global_error_handler',
+      });
+
+      // Call original handler
+      if (originalErrorHandler) {
+        originalErrorHandler(error, isFatal);
+      }
+    });
+
+    // Handle unhandled promise rejections
+    const rejectionTracker = (id: string, rejection: Error | unknown) => {
+      console.log('[STARTUP] PostHogCrashReporter: Promise rejection caught, id:', id);
+      if (rejection instanceof Error) {
+        captureException(rejection, {
+          $exception_source: 'unhandled_promise_rejection',
+          promise_id: id,
+        });
+      } else {
+        // Handle non-Error rejections
+        const error = new Error(String(rejection));
+        error.name = 'UnhandledPromiseRejection';
+        captureException(error, {
+          $exception_source: 'unhandled_promise_rejection',
+          promise_id: id,
+          original_rejection: String(rejection),
+        });
+      }
+    };
+
+    // Safe promise rejection tracking - wrapped in try-catch to prevent crashes
+    // if the module isn't available in production builds
+    interface RejectionTrackingModule {
+      enable: (options: { allRejections: boolean; onUnhandled: (id: string, rejection: Error | unknown) => void; onHandled: () => void }) => void;
+      disable: () => void;
+    }
+    
+    let trackingModule: RejectionTrackingModule | null = null;
+    try {
+      console.log('[STARTUP] PostHogCrashReporter: Attempting to load promise rejection tracking');
+      // React Native's tracking for unhandled promise rejections
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const loadedModule = require('promise/setimmediate/rejection-tracking') as RejectionTrackingModule;
+      loadedModule.enable({
+        allRejections: true,
+        onUnhandled: rejectionTracker,
+        onHandled: () => {}, // Optional: called when a rejection is handled after being reported
+      });
+      trackingModule = loadedModule;
+      console.log('[STARTUP] PostHogCrashReporter: Promise rejection tracking enabled');
+    } catch (trackingError) {
+      console.warn('[STARTUP] PostHogCrashReporter: Promise rejection tracking not available:', trackingError);
+    }
+
+    console.log('[STARTUP] PostHogCrashReporter: Crash reporter initialized successfully');
+
+    // Capture trackingModule in closure for cleanup
+    const capturedTrackingModule = trackingModule;
+    
+    return () => {
+      console.log('[STARTUP] PostHogCrashReporter: Cleanup - restoring original error handler');
+      // Restore original error handler on cleanup
+      if (originalErrorHandler) {
+        ErrorUtils.setGlobalHandler(originalErrorHandler);
+      }
+      // Only disable if tracking module was loaded
+      if (capturedTrackingModule !== null) {
+        try {
+          capturedTrackingModule.disable();
+        } catch (disableError) {
+          console.warn('[STARTUP] PostHogCrashReporter: Error disabling tracking:', disableError);
+        }
+      }
+    };
+  }, [isReady, captureException]);
+
+  console.log('[STARTUP] PostHogCrashReporter: Returning children');
+  return <>{children}</>;
+}

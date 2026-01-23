@@ -31,6 +31,18 @@ export function logRevenueCat(
 }
 
 /**
+ * Safely serialize data, handling circular references and non-serializable values.
+ */
+function safeSerialize(data: unknown): unknown {
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch {
+    // If serialization fails (e.g., circular reference), return a safe representation
+    return String(data);
+  }
+}
+
+/**
  * Add a log entry to storage
  */
 export async function addRevenueCatLog(
@@ -43,7 +55,7 @@ export async function addRevenueCatLog(
       timestamp: Date.now(),
       level,
       message,
-      data: data ? JSON.parse(JSON.stringify(data)) : undefined, // Deep clone to avoid circular references
+      data: data ? safeSerialize(data) : undefined,
     };
 
     const existingLogs = await getRevenueCatLogs();
@@ -57,13 +69,51 @@ export async function addRevenueCatLog(
 }
 
 /**
+ * Validate that parsed data is an array of log entries.
+ */
+function validateLogEntries(data: unknown): RevenueCatLogEntry[] | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+  
+  // Filter out invalid entries but don't fail completely
+  const validEntries: RevenueCatLogEntry[] = [];
+  for (const entry of data) {
+    if (
+      entry &&
+      typeof entry === 'object' &&
+      typeof (entry as Record<string, unknown>).timestamp === 'number' &&
+      typeof (entry as Record<string, unknown>).level === 'string' &&
+      typeof (entry as Record<string, unknown>).message === 'string'
+    ) {
+      validEntries.push(entry as RevenueCatLogEntry);
+    }
+  }
+  
+  return validEntries;
+}
+
+/**
  * Get all stored logs
  */
 export async function getRevenueCatLogs(): Promise<RevenueCatLogEntry[]> {
   try {
     const data = await AsyncStorage.getItem(LOG_STORAGE_KEY);
     if (data) {
-      return JSON.parse(data) as RevenueCatLogEntry[];
+      try {
+        const parsed = JSON.parse(data);
+        const validated = validateLogEntries(parsed);
+        if (!validated) {
+          console.warn('Invalid log data in storage, clearing...');
+          await AsyncStorage.removeItem(LOG_STORAGE_KEY);
+          return [];
+        }
+        return validated;
+      } catch (parseError) {
+        console.error('Failed to parse RevenueCat logs, clearing storage:', parseError);
+        await AsyncStorage.removeItem(LOG_STORAGE_KEY);
+        return [];
+      }
     }
     return [];
   } catch (error) {
@@ -92,7 +142,14 @@ export async function getRevenueCatLogsAsString(): Promise<string> {
     .map((log) => {
       const date = new Date(log.timestamp).toISOString();
       const level = log.level.toUpperCase().padEnd(5);
-      const dataStr = log.data ? `\n  Data: ${JSON.stringify(log.data, null, 2)}` : '';
+      let dataStr = '';
+      if (log.data) {
+        try {
+          dataStr = `\n  Data: ${JSON.stringify(log.data, null, 2)}`;
+        } catch {
+          dataStr = `\n  Data: [Unable to serialize]`;
+        }
+      }
       return `[${date}] ${level} ${log.message}${dataStr}`;
     })
     .join('\n\n');

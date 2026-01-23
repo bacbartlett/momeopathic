@@ -24,17 +24,21 @@ import { DisclaimerManager } from '@/components/disclaimer-modal';
 import { FeedbackManager } from '@/components/feedback-modal';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
-import { PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
+import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
 import { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
+
+// Startup logging - logs in both dev and production for debugging black screen issues
+console.log('[STARTUP] _layout.tsx: Module loaded');
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
+console.log('[STARTUP] Preventing splash screen auto-hide');
 SplashScreen.preventAutoHideAsync();
 
 // Initialize the Convex client
@@ -51,19 +55,23 @@ const convex = new ConvexReactClient(
  * We use useConvexAuth to wait for Convex to have the auth token (not just Clerk's isSignedIn).
  */
 function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
+  console.log('[STARTUP] StoreUserInDatabase: Rendering');
   // useConvexAuth tells us when Convex has received and validated the JWT token
   const { isAuthenticated, isLoading } = useConvexAuth();
   const storeUser = useMutation(api.users.store);
 
   useEffect(() => {
+    console.log('[STARTUP] StoreUserInDatabase: useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
     // Only store user when Convex auth is ready and authenticated
     if (!isLoading && isAuthenticated) {
+      console.log('[STARTUP] StoreUserInDatabase: Storing user in database');
       storeUser().catch((error) => {
-        console.error('Failed to store user in database:', error);
+        console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', error);
       });
     }
   }, [isLoading, isAuthenticated, storeUser]);
 
+  console.log('[STARTUP] StoreUserInDatabase: Returning children');
   return <>{children}</>;
 }
 
@@ -72,18 +80,25 @@ function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
  * Must be rendered inside PostHogProviderWrapper.
  */
 function AppOpenedTracker({ children }: { children: React.ReactNode }) {
+  console.log('[STARTUP] AppOpenedTracker: Rendering');
   const { track, isReady } = usePostHogAnalytics();
+  console.log('[STARTUP] AppOpenedTracker: PostHog isReady:', isReady);
 
   useEffect(() => {
+    console.log('[STARTUP] AppOpenedTracker: useEffect - isReady:', isReady);
     if (isReady) {
+      console.log('[STARTUP] AppOpenedTracker: Tracking App Opened event');
       track('App Opened');
     }
   }, [isReady, track]);
 
+  console.log('[STARTUP] AppOpenedTracker: Returning children');
   return <>{children}</>;
 }
 
 export default function RootLayout() {
+  console.log('[STARTUP] RootLayout: Component rendering');
+  
   const [fontsLoaded] = useFonts({
     'Quicksand-Regular': Quicksand_400Regular,
     'Quicksand-Medium': Quicksand_500Medium,
@@ -92,89 +107,102 @@ export default function RootLayout() {
     'Lato-Regular': Lato_400Regular,
     'Lato-Bold': Lato_700Bold,
   });
+  console.log('[STARTUP] RootLayout: Fonts loaded:', fontsLoaded);
 
   useEffect(() => {
+    console.log('[STARTUP] RootLayout: useEffect - fontsLoaded:', fontsLoaded);
     if (fontsLoaded) {
-      SplashScreen.hideAsync();
+      console.log('[STARTUP] RootLayout: Hiding splash screen');
+      SplashScreen.hideAsync().catch((error) => {
+        console.error('[STARTUP] RootLayout: Failed to hide splash screen:', error);
+      });
     }
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
+    console.log('[STARTUP] RootLayout: Fonts not loaded, returning null');
     return null;
   }
 
   const clerkPublishableKey = EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  console.log('[STARTUP] RootLayout: Clerk key exists:', !!clerkPublishableKey);
 
   if (!clerkPublishableKey) {
+    console.error('[STARTUP] RootLayout: Missing Clerk Publishable Key');
     throw new Error(
       'Missing Clerk Publishable Key'
     );
   }
 
+  console.log('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
   return (
     <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <StoreUserInDatabase>
             <PostHogProviderWrapper>
-              <AppOpenedTracker>
-                <RevenueCatProvider>
-                  <ThemeProvider value={NavigationTheme}>
-                    <ChatProvider>
-                      <Stack>
-                        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                        <Stack.Screen
-                          name="account"
-                          options={{
-                            headerShown: false,
-                            presentation: 'modal',
-                            animation: 'slide_from_bottom',
-                          }}
-                        />
-                        <Stack.Screen
-                          name="terms"
-                          options={{
-                            headerShown: false,
-                            presentation: 'modal',
-                            animation: 'slide_from_bottom',
-                          }}
-                        />
-                        <Stack.Screen
-                          name="privacy"
-                          options={{
-                            headerShown: false,
-                            presentation: 'modal',
-                            animation: 'slide_from_bottom',
-                          }}
-                        />
-                        <Stack.Screen
-                          name="delete-account"
-                          options={{
-                            headerShown: true,
-                            title: 'Delete Account',
-                            headerBackTitle: 'Back',
-                            presentation: 'modal',
-                            animation: 'slide_from_bottom',
-                            headerStyle: {
-                              backgroundColor: Colors.bgSurface,
-                            },
-                            headerTintColor: Colors.textPrimary,
-                            headerTitleStyle: {
-                              fontFamily: Fonts?.heading ?? 'System',
-                              fontSize: Typography.lg,
-                              fontWeight: Typography.semibold,
-                            },
-                          }}
-                        />
-                      </Stack>
-                      <StatusBar style="dark" />
-                      <DisclaimerManager />
-                      <FeedbackManager />
-                    </ChatProvider>
-                  </ThemeProvider>
-                </RevenueCatProvider>
-              </AppOpenedTracker>
+              <PostHogCrashReporter>
+                <PostHogErrorBoundary>
+                  <AppOpenedTracker>
+                    <RevenueCatProvider>
+                      <ThemeProvider value={NavigationTheme}>
+                        <ChatProvider>
+                          <Stack>
+                            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                            <Stack.Screen
+                              name="account"
+                              options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                animation: 'slide_from_bottom',
+                              }}
+                            />
+                            <Stack.Screen
+                              name="terms"
+                              options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                animation: 'slide_from_bottom',
+                              }}
+                            />
+                            <Stack.Screen
+                              name="privacy"
+                              options={{
+                                headerShown: false,
+                                presentation: 'modal',
+                                animation: 'slide_from_bottom',
+                              }}
+                            />
+                            <Stack.Screen
+                              name="delete-account"
+                              options={{
+                                headerShown: true,
+                                title: 'Delete Account',
+                                headerBackTitle: 'Back',
+                                presentation: 'modal',
+                                animation: 'slide_from_bottom',
+                                headerStyle: {
+                                  backgroundColor: Colors.bgSurface,
+                                },
+                                headerTintColor: Colors.textPrimary,
+                                headerTitleStyle: {
+                                  fontFamily: Fonts?.heading ?? 'System',
+                                  fontSize: Typography.lg,
+                                  fontWeight: Typography.semibold,
+                                },
+                              }}
+                            />
+                          </Stack>
+                          <StatusBar style="dark" />
+                          <DisclaimerManager />
+                          <FeedbackManager />
+                        </ChatProvider>
+                      </ThemeProvider>
+                    </RevenueCatProvider>
+                  </AppOpenedTracker>
+                </PostHogErrorBoundary>
+              </PostHogCrashReporter>
             </PostHogProviderWrapper>
           </StoreUserInDatabase>
         </ConvexProviderWithClerk>

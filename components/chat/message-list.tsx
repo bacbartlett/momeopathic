@@ -104,6 +104,8 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
 
   // Detect thread change: when isLoading goes from true -> false, we need to scroll to bottom
   useEffect(() => {
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+    
     if (wasLoadingRef.current && !isLoading) {
       // Just finished loading messages for a new thread - scroll to bottom
       // Reset autoscroll state for new thread
@@ -120,14 +122,18 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       
       // Immediate + delayed attempts to ensure we catch the render
       scrollToBottom();
-      setTimeout(scrollToBottom, 50);
-      setTimeout(scrollToBottom, 150);
-      setTimeout(() => {
+      timeoutIds.push(setTimeout(scrollToBottom, 50));
+      timeoutIds.push(setTimeout(scrollToBottom, 150));
+      timeoutIds.push(setTimeout(() => {
         scrollToBottom();
         pendingScrollToBottomRef.current = false;
-      }, 300);
+      }, 300));
     }
     wasLoadingRef.current = isLoading;
+    
+    return () => {
+      timeoutIds.forEach(clearTimeout);
+    };
   }, [isLoading]);
 
   // Handle scroll events - disable autoscroll when user scrolls up
@@ -181,6 +187,8 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   useEffect(() => {
     if (!lastMessage || messages.length === 0) return;
 
+    let scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    
     const contentLength = lastMessage.content.length;
     const isNewMessage = lastMessageId !== lastSeenMessageIdRef.current;
     const contentGrew = contentLength > lastContentLengthRef.current;
@@ -197,11 +205,13 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       
       // Scroll to bottom for: user messages OR assistant thinking animation
       if (isUserMessage || isThinkingAnimation) {
-        setTimeout(() => {
+        scrollTimeoutId = setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
         lastContentLengthRef.current = contentLength;
-        return;
+        return () => {
+          if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+        };
       }
     }
 
@@ -218,12 +228,16 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     const maxScrollToKeepTopVisible = lastMessageTopYRef.current;
     const targetScroll = Math.min(scrollToEndPosition, maxScrollToKeepTopVisible);
 
-    setTimeout(() => {
+    scrollTimeoutId = setTimeout(() => {
       flatListRef.current?.scrollToOffset({
         offset: Math.max(0, targetScroll),
         animated: true,
       });
     }, 100);
+    
+    return () => {
+      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+    };
   }, [lastMessageId, lastMessage?.content.length, isAutoScrollEnabled, messages.length]);
 
   // Show skeleton while loading messages for a thread switch
@@ -323,6 +337,11 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         onContentSizeChange={handleContentSizeChange}
         onLayout={handleLayout}
         scrollEventThrottle={16}
+        // Performance optimizations
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={15}
       />
     </View>
   );

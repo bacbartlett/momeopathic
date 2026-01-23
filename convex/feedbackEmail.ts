@@ -5,6 +5,9 @@ import { Resend } from "resend";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
 
+// Maximum feedback length (50KB)
+const MAX_FEEDBACK_LENGTH = 51200;
+
 /**
  * Submit negative feedback via email using Resend.
  */
@@ -20,6 +23,14 @@ export const submitFeedback = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return { success: false, error: "Unauthenticated" };
+    }
+
+    // Validate feedback length
+    if (args.feedback.length > MAX_FEEDBACK_LENGTH) {
+      return { success: false, error: `Feedback too long. Maximum length is ${MAX_FEEDBACK_LENGTH} characters.` };
+    }
+    if (args.feedback.trim().length === 0) {
+      return { success: false, error: "Feedback cannot be empty." };
     }
 
     // Get user info and mark feedback as given

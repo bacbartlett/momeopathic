@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useConvexAuth, useAction, useMutation, useQuery } from 'convex/react';
 import * as StoreReview from 'expo-store-review';
 import { usePathname } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -31,10 +31,22 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   const [feedbackText, setFeedbackText] = useState('');
   const [error, setError] = useState<string | null>(null);
   
+  // Track timeouts for cleanup
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   const { track } = usePostHogAnalytics();
   const recordFeedbackGiven = useMutation(api.feedback.recordFeedbackGiven);
   const recordDismissed = useMutation(api.feedback.recordFeedbackPromptDismissed);
   const submitFeedback = useAction(api.feedbackEmail.submitFeedback);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Track when modal becomes visible
   useEffect(() => {
@@ -63,13 +75,13 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
       }
       
       // Close the modal after a brief delay
-      setTimeout(() => {
+      closeTimeoutRef.current = setTimeout(() => {
         onClose();
       }, 1500);
     } catch (err) {
       console.error('Error requesting review:', err);
       // Still close the modal
-      setTimeout(() => {
+      closeTimeoutRef.current = setTimeout(() => {
         onClose();
       }, 1500);
     }
@@ -98,7 +110,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         setFeedbackState('success');
         
         // Close modal after showing success
-        setTimeout(() => {
+        closeTimeoutRef.current = setTimeout(() => {
           onClose();
         }, 2000);
       } else {

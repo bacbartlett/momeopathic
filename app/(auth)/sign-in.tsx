@@ -19,6 +19,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ResetStep = 'email' | 'code' | 'password';
 
+/**
+ * Simple email validation - checks for basic format.
+ * Returns true if email appears valid.
+ */
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+}
+
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
@@ -53,7 +62,12 @@ export default function SignInScreen() {
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         track('Sign In', { method: 'email' });
-        router.replace('/(tabs)');
+        setError(''); // Clear error on success
+        try {
+          router.replace('/(tabs)');
+        } catch (navError) {
+          console.error('[SignIn] Navigation error:', navError);
+        }
       } else if (result.status === 'needs_second_factor') {
         // Check if email_code is a valid second factor
         // This is required when Client Trust is enabled and the user
@@ -102,7 +116,12 @@ export default function SignInScreen() {
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         track('Sign In', { method: 'email', mfa: true });
-        router.replace('/(tabs)');
+        setError(''); // Clear error on success
+        try {
+          router.replace('/(tabs)');
+        } catch (navError) {
+          console.error('[SignIn] Navigation error:', navError);
+        }
       } else {
         setError('Verification incomplete. Please try again.');
         console.log(result);
@@ -154,13 +173,19 @@ export default function SignInScreen() {
   const handleSendResetCode = async () => {
     if (!isLoaded || !signIn) return;
 
+    // Validate email format
+    if (!isValidEmail(forgotPasswordEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
     try {
       await signIn.create({
         strategy: 'reset_password_email_code',
-        identifier: forgotPasswordEmail,
+        identifier: forgotPasswordEmail.trim(),
       });
       setResetStep('code');
     } catch (err) {
@@ -227,7 +252,12 @@ export default function SignInScreen() {
       } else if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         track('Password Reset', { method: 'email_code' });
-        router.replace('/(tabs)');
+        setError(''); // Clear error on success
+        try {
+          router.replace('/(tabs)');
+        } catch (navError) {
+          console.error('[SignIn] Navigation error:', navError);
+        }
       } else {
         setError('Password reset incomplete. Please try again.');
       }

@@ -1,12 +1,13 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useChat } from '@/context/chat-context';
+import { useChat, Thread } from '@/context/chat-context';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Alert,
   Dimensions,
+  FlatList,
+  ListRenderItem,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -66,17 +67,17 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
     opacity: overlayOpacity.value,
   }));
 
-  const handleNewChat = () => {
-    createThread();
+  const handleNewChat = useCallback(() => {
+    createThread().catch(console.error);
     onClose();
-  };
+  }, [createThread, onClose]);
 
-  const handleSelectThread = (threadId: string) => {
+  const handleSelectThread = useCallback((threadId: string) => {
     selectThread(threadId);
     onClose();
-  };
+  }, [selectThread, onClose]);
 
-  const handleDeleteThread = (threadId: string, threadTitle: string) => {
+  const handleDeleteThread = useCallback((threadId: string, threadTitle: string) => {
     Alert.alert(
       'Delete Conversation',
       `Are you sure you want to delete "${threadTitle}"? This action cannot be undone.`,
@@ -93,7 +94,33 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
       ],
       { cancelable: true }
     );
-  };
+  }, [deleteThread]);
+
+  // Render function for FlatList
+  const renderThread: ListRenderItem<Thread> = useCallback(({ item: thread }) => (
+    <ThreadItem
+      thread={thread}
+      isActive={thread.id === activeThread?.id}
+      onPress={() => handleSelectThread(thread.id)}
+      onDelete={() => handleDeleteThread(thread.id, thread.title)}
+    />
+  ), [activeThread?.id, handleSelectThread, handleDeleteThread]);
+
+  // Key extractor for FlatList
+  const keyExtractor = useCallback((thread: Thread) => thread.id, []);
+
+  // Empty state component
+  const renderEmptyState = useCallback(() => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="chatbubbles-outline" size={40} color={Colors.primaryLight} />
+      </View>
+      <Text style={styles.emptyTitle}>No conversations yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Tap the + button to start exploring homeopathic remedies for your family
+      </Text>
+    </View>
+  ), []);
 
   if (!isVisible && !isOpen) return null;
 
@@ -144,33 +171,25 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
             <Text style={styles.sectionTitle}>Your Conversations</Text>
           </View>
 
-          <ScrollView
+          <FlatList
+            data={state.threads}
+            renderItem={renderThread}
+            keyExtractor={keyExtractor}
             style={styles.threadList}
-            showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.threadListContent}
-          >
-            {state.threads.length === 0 ? (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIconContainer}>
-                  <Ionicons name="chatbubbles-outline" size={40} color={Colors.primaryLight} />
-                </View>
-                <Text style={styles.emptyTitle}>No conversations yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  Tap the + button to start exploring homeopathic remedies for your family
-                </Text>
-              </View>
-            ) : (
-              state.threads.map((thread) => (
-                <ThreadItem
-                  key={thread.id}
-                  thread={thread}
-                  isActive={thread.id === activeThread?.id}
-                  onPress={() => handleSelectThread(thread.id)}
-                  onDelete={() => handleDeleteThread(thread.id, thread.title)}
-                />
-              ))
-            )}
-          </ScrollView>
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={renderEmptyState}
+            // Performance optimizations
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            initialNumToRender={10}
+            getItemLayout={(_, index) => ({
+              length: 72, // Approximate height of ThreadItem
+              offset: 72 * index,
+              index,
+            })}
+          />
 
           {/* Account badge */}
           <View style={styles.footer}>

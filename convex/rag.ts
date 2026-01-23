@@ -4,6 +4,10 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { rag } from "./rag/mainrag.rag";
 
+// Maximum lengths for RAG content
+const MAX_RAG_CONTENT_LENGTH = 51200; // 50KB
+const MAX_SEARCH_QUERY_LENGTH = 1000;
+
 export const vSearchRAGTextResult = v.object({
   results: v.array(vSearchResult),
   text: v.string(),
@@ -15,6 +19,7 @@ export type SearchRAGTextResult = Infer<typeof vSearchRAGTextResult>;
 
 /**
  * Insert RAG text content for a user.
+ * Requires authentication.
  * 
  * @param userId - The user ID (as string) to associate the RAG content with
  * @param content - The text content to add to RAG
@@ -24,8 +29,22 @@ export const insertRAGText = action({
     content: v.string(),
     userId: v.string()
   },
-  handler: async (convexToJson, args) => {
-    const result = await rag.add(convexToJson, {
+  handler: async (ctx, args) => {
+    // Require authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated: Must be logged in to insert RAG content");
+    }
+
+    // Validate content length
+    if (args.content.length > MAX_RAG_CONTENT_LENGTH) {
+      throw new Error(`Content too long. Maximum length is ${MAX_RAG_CONTENT_LENGTH} characters.`);
+    }
+    if (args.content.trim().length === 0) {
+      throw new Error("Content cannot be empty.");
+    }
+
+    const result = await rag.add(ctx, {
       namespace: args.userId,
       text: args.content
     });
@@ -41,6 +60,20 @@ export const searchRAGText = action({
   },
   returns: vSearchRAGTextResult,
   handler: async (ctx, args) => {
+    // Require authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated: Must be logged in to search RAG content");
+    }
+
+    // Validate search query length
+    if (args.searchFor.length > MAX_SEARCH_QUERY_LENGTH) {
+      throw new Error(`Search query too long. Maximum length is ${MAX_SEARCH_QUERY_LENGTH} characters.`);
+    }
+    if (args.searchFor.trim().length === 0) {
+      throw new Error("Search query cannot be empty.");
+    }
+
     const result = await rag.search(ctx, {
       namespace: args.namespace,
       query: args.searchFor
@@ -57,6 +90,7 @@ const vRAGDocumentItem = v.object({
 
 /**
  * Insert multiple RAG documents from a JSON object.
+ * Requires authentication.
  * 
  * @param jsonInput - A JSON object where the top level is an array.
  *                    Each item in the array should have {name: string, body: string}
@@ -73,6 +107,11 @@ export const insertRAGDocuments = action({
     errors: v.array(v.string())
   }),
   handler: async (ctx, args) => {
+    // Require authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthenticated: Must be logged in to insert RAG documents");
+    }
     const UNIVERSAL_NAMESPACE = "universal";
     const errors: string[] = [];
     let added = 0;

@@ -1,6 +1,7 @@
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function ChatLayout() {
   const { isSignedIn, isLoaded } = useAuth();
@@ -11,7 +12,11 @@ export default function ChatLayout() {
 
     // If user is not signed in, redirect to sign-in
     if (!isSignedIn) {
-      router.replace('/(auth)/sign-in');
+      try {
+        router.replace('/(auth)/sign-in');
+      } catch (error) {
+        console.error('[ChatLayout] Navigation error:', error);
+      }
     }
   }, [isSignedIn, isLoaded, router]);
 
@@ -21,8 +26,10 @@ export default function ChatLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-    </Stack>
+    <ErrorBoundary context="ChatLayout">
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+      </Stack>
+    </ErrorBoundary>
   );
 }

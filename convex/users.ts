@@ -9,6 +9,7 @@ import { v } from "convex/values";
  */
 export const store = mutation({
   args: {},
+  returns: v.id("users"),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -65,6 +66,22 @@ export const store = mutation({
  */
 export const current = query({
   args: {},
+  returns: v.union(
+    v.object({
+      _id: v.id("users"),
+      _creationTime: v.number(),
+      tokenIdentifier: v.string(),
+      name: v.string(),
+      email: v.optional(v.string()),
+      imageUrl: v.optional(v.string()),
+      disclaimerAccepted: v.optional(v.boolean()),
+      feedbackGiven: v.optional(v.boolean()),
+      feedbackThreadCount: v.optional(v.number()),
+      feedbackDismissCount: v.optional(v.number()),
+      noPaywall: v.optional(v.boolean()),
+    }),
+    v.null()
+  ),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -89,6 +106,22 @@ export const getById = query({
   args: {
     userId: v.id("users"),
   },
+  returns: v.union(
+    v.object({
+      _id: v.id("users"),
+      _creationTime: v.number(),
+      tokenIdentifier: v.string(),
+      name: v.string(),
+      email: v.optional(v.string()),
+      imageUrl: v.optional(v.string()),
+      disclaimerAccepted: v.optional(v.boolean()),
+      feedbackGiven: v.optional(v.boolean()),
+      feedbackThreadCount: v.optional(v.number()),
+      feedbackDismissCount: v.optional(v.number()),
+      noPaywall: v.optional(v.boolean()),
+    }),
+    v.null()
+  ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.userId);
   },
@@ -99,6 +132,7 @@ export const getById = query({
  */
 export const acceptDisclaimer = mutation({
   args: {},
+  returns: v.id("users"),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -131,6 +165,7 @@ export const acceptDisclaimer = mutation({
  */
 export const hasAcceptedDisclaimer = query({
   args: {},
+  returns: v.boolean(),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {

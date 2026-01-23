@@ -94,6 +94,9 @@ export const list = query({
   },
 });
 
+// Maximum message length (10KB)
+const MAX_MESSAGE_LENGTH = 10240;
+
 // Send a message and get a response from the agent
 // Only allows sending to threads owned by the authenticated user
 export const send = action({
@@ -101,7 +104,18 @@ export const send = action({
     threadId: v.string(),
     content: v.string(),
   },
+  returns: v.object({
+    text: v.string(),
+    messageId: v.optional(v.string()),
+  }),
   handler: async (ctx, args) => {
+    // Validate input length
+    if (args.content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error(`Message too long. Maximum length is ${MAX_MESSAGE_LENGTH} characters.`);
+    }
+    if (args.content.trim().length === 0) {
+      throw new Error("Message cannot be empty.");
+    }
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Unauthenticated: Must be logged in to send messages");

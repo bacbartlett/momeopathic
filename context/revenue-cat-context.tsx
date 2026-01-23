@@ -80,6 +80,20 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   
   // Track current RevenueCat user ID to avoid unnecessary logIn calls
   const currentRevenueCatUserIdRef = useRef<string | null>(null);
+  
+  // Guard against concurrent sync operations
+  const isSyncingRef = useRef(false);
+  
+  // Track mounted state for cleanup
+  const mountedRef = useRef(true);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Check if user has active subscription
   // First check for the specific entitlement ID, then fall back to checking if ANY entitlement is active
@@ -323,6 +337,13 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     }
 
     const syncUserIdentity = async () => {
+      // Guard against concurrent sync operations
+      if (isSyncingRef.current) {
+        logRevenueCat('log', '⏸️ Skipping sync - already syncing');
+        return;
+      }
+      isSyncingRef.current = true;
+      
       logRevenueCat('log', '========== SYNC USER IDENTITY START ==========');
       try {
         const clerkUserId = user?.id ?? null;
@@ -341,7 +362,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           logRevenueCat('log', 'Clerk User ID:', clerkUserId);
           logRevenueCat('log', 'Previous RevenueCat User ID:', currentRevenueCatUserId);
           logRevenueCat('log', 'Setting isLoading=true');
-          setIsLoading(true);
+          if (mountedRef.current) setIsLoading(true);
           
           logRevenueCat('log', 'Calling Purchases.logIn()...');
           const loginStartTime = Date.now();
@@ -357,7 +378,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           logRevenueCat('log', 'Updating currentRevenueCatUserIdRef to:', clerkUserId);
           currentRevenueCatUserIdRef.current = clerkUserId;
           logRevenueCat('log', 'Updating customerInfo state');
-          setCustomerInfo(newInfo);
+          if (mountedRef.current) setCustomerInfo(newInfo);
           
           // Refresh offerings after login
           logRevenueCat('log', 'Refreshing offerings after login...');
@@ -374,7 +395,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
             })),
           });
           
-          if (offerings.current) {
+          if (offerings.current && mountedRef.current) {
             setCurrentOffering(offerings.current);
             logRevenueCat('log', 'Current offering state updated');
             
@@ -387,13 +408,15 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
               logRevenueCat('log', 'Re-checking intro eligibility after login for products:', subscriptionProductIds);
               const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(subscriptionProductIds);
               logRevenueCat('log', 'Eligibility results after login:', eligibility);
-              setIntroEligibility(eligibility);
+              if (mountedRef.current) setIntroEligibility(eligibility);
             }
           }
           
           logRevenueCat('log', 'Setting isLoading=false, error=null');
-          setIsLoading(false);
-          setError(null);
+          if (mountedRef.current) {
+            setIsLoading(false);
+            setError(null);
+          }
           logRevenueCat('log', '========== LOGIN SUCCESS ==========');
         }
         // User signed out: log out from RevenueCat
@@ -401,7 +424,7 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           logRevenueCat('log', '🚪 Logging out user from RevenueCat');
           logRevenueCat('log', 'Previous RevenueCat User ID:', currentRevenueCatUserId);
           logRevenueCat('log', 'Setting isLoading=true');
-          setIsLoading(true);
+          if (mountedRef.current) setIsLoading(true);
           
           logRevenueCat('log', 'Calling Purchases.logOut()...');
           const logoutStartTime = Date.now();
@@ -416,11 +439,13 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           logRevenueCat('log', 'Clearing currentRevenueCatUserIdRef');
           currentRevenueCatUserIdRef.current = null;
           logRevenueCat('log', 'Updating customerInfo state');
-          setCustomerInfo(newInfo);
+          if (mountedRef.current) setCustomerInfo(newInfo);
           
           logRevenueCat('log', 'Setting isLoading=false, error=null');
-          setIsLoading(false);
-          setError(null);
+          if (mountedRef.current) {
+            setIsLoading(false);
+            setError(null);
+          }
           logRevenueCat('log', '========== LOGOUT SUCCESS ==========');
         } else {
           logRevenueCat('log', 'ℹ️ No sync needed - user state unchanged');
@@ -437,9 +462,13 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         console.error('[RevenueCat] Error message:', errorMessage);
         console.error('[RevenueCat] Error details:', errorDetails);
         logRevenueCat('error', 'Setting error state and isLoading=false');
-        setError(errorMessage);
-        setIsLoading(false);
+        if (mountedRef.current) {
+          setError(errorMessage);
+          setIsLoading(false);
+        }
         logRevenueCat('error', '========== SYNC FAILED ==========');
+      } finally {
+        isSyncingRef.current = false;
       }
     };
 

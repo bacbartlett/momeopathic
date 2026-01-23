@@ -5,7 +5,9 @@ import React, {
     ReactNode,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
@@ -44,12 +46,16 @@ interface ChatContextType {
   isCreatingThread: boolean;
   isAuthenticated: boolean;
   sendError: string | null;
+  createThreadError: string | null;
+  deleteThreadError: string | null;
   createThread: () => Promise<void>;
   selectThread: (threadId: string) => void;
   deleteThread: (threadId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   retryLastMessage: () => Promise<void>;
   clearSendError: () => void;
+  clearCreateThreadError: () => void;
+  clearDeleteThreadError: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -59,8 +65,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isSending, setIsSending] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [createThreadError, setCreateThreadError] = useState<string | null>(null);
+  const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const { track, incrementUserProperty } = usePostHogAnalytics();
+  
+  // Use refs for race condition prevention
+  const isSendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  
+  // Track mounted state for cleanup
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Get auth state from Convex (not Clerk directly)
   // This ensures we only make authenticated requests when Convex has the JWT token
@@ -156,6 +176,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated]);
 
+  // Clear error states
+  const clearCreateThreadError = useCallback(() => {
+    setCreateThreadError(null);
+  }, []);
+
+  const clearDeleteThreadError = useCallback(() => {
+    setDeleteThreadError(null);
+  }, []);
+
   // Create new thread (no userId needed - server uses auth)
   const createThread = useCallback(async () => {
     if (!isAuthenticated) {
@@ -167,17 +196,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
     setIsCreatingThread(true);
+    setCreateThreadError(null);
     try {
       const result = await createThreadAction({
         title: 'New Chat',
       });
-      setActiveThreadId(result.threadId);
-      track('Thread Created', { thread_id: result.threadId });
-      incrementUserProperty('threads_created');
+      if (mountedRef.current) {
+        setActiveThreadId(result.threadId);
+        track('Thread Created', { thread_id: result.threadId });
+        incrementUserProperty('threads_created');
+      }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create thread';
       console.error('Failed to create thread:', error);
+      if (mountedRef.current) {
+        setCreateThreadError(errorMessage);
+      }
     } finally {
-      setIsCreatingThread(false);
+      if (mountedRef.current) {
+        setIsCreatingThread(false);
+      }
     }
   }, [isAuthenticated, isCreatingThread, createThreadAction, track, incrementUserProperty]);
 
@@ -192,15 +230,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('Cannot delete thread: User not authenticated');
       return;
     }
+    setDeleteThreadError(null);
     try {
       await deleteThreadAction({ threadId });
-      track('Thread Deleted', { thread_id: threadId });
-      if (activeThreadId === threadId) {
-        const remainingThreads = threads.filter(t => t.id !== threadId);
-        setActiveThreadId(remainingThreads[0]?.id ?? null);
+      if (mountedRef.current) {
+        track('Thread Deleted', { thread_id: threadId });
+        if (activeThreadId === threadId) {
+          const remainingThreads = threads.filter(t => t.id !== threadId);
+          setActiveThreadId(remainingThreads[0]?.id ?? null);
+        }
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete thread';
       console.error('Failed to delete thread:', error);
+      if (mountedRef.current) {
+        setDeleteThreadError(errorMessage);
+      }
     }
   }, [isAuthenticated, deleteThreadAction, activeThreadId, threads, track]);
 
@@ -212,12 +257,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Send message (no userId needed - server uses auth)
   const sendMessage = useCallback(async (content: string) => {
-    if (!activeThreadId || isSending) return;
+    // Use ref for race condition prevention - check and set atomically
+    if (!activeThreadId || isSendingRef.current) return;
     if (!isAuthenticated) {
       console.error('Cannot send message: User not authenticated');
       return;
     }
 
+    // Set ref immediately to prevent race conditions
+    isSendingRef.current = true;
     setIsSending(true);
     setSendError(null);
     try {
@@ -225,26 +273,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         threadId: activeThreadId,
         content,
       });
-      setLastFailedMessage(null);
-      track('Message Sent', { 
-        thread_id: activeThreadId, 
-        message_length: content.length 
-      });
-      incrementUserProperty('messages_sent');
-      // Increment feedback thread count for review prompt tracking
-      incrementFeedbackThreadCount().catch((err) => {
-        // Silent fail - feedback tracking is non-critical
-        console.debug('Failed to increment feedback thread count:', err);
-      });
+      if (mountedRef.current) {
+        setLastFailedMessage(null);
+        track('Message Sent', { 
+          thread_id: activeThreadId, 
+          message_length: content.length 
+        });
+        incrementUserProperty('messages_sent');
+        // Increment feedback thread count for review prompt tracking
+        incrementFeedbackThreadCount().catch((err) => {
+          // Silent fail - feedback tracking is non-critical
+          console.debug('Failed to increment feedback thread count:', err);
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
       console.error('Failed to send message:', error);
-      setSendError(errorMessage);
-      setLastFailedMessage(content);
+      if (mountedRef.current) {
+        setSendError(errorMessage);
+        setLastFailedMessage(content);
+      }
     } finally {
-      setIsSending(false);
+      isSendingRef.current = false;
+      if (mountedRef.current) {
+        setIsSending(false);
+      }
     }
-  }, [activeThreadId, isSending, isAuthenticated, sendMessageAction, track, incrementUserProperty, incrementFeedbackThreadCount]);
+  }, [activeThreadId, isAuthenticated, sendMessageAction, track, incrementUserProperty, incrementFeedbackThreadCount]);
 
   // Retry last failed message
   const retryLastMessage = useCallback(async () => {
@@ -263,12 +318,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isCreatingThread,
         isAuthenticated,
         sendError,
+        createThreadError,
+        deleteThreadError,
         createThread,
         selectThread,
         deleteThread,
         sendMessage,
         retryLastMessage,
         clearSendError,
+        clearCreateThreadError,
+        clearDeleteThreadError,
       }}
     >
       {children}

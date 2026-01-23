@@ -38,10 +38,16 @@ export default function DeleteAccountScreen() {
     setError('');
 
     try {
-      track('Account Deleted');
       await user.delete();
-      // Redirect to sign-in page
-      router.replace('/(auth)/sign-in');
+      // Track event only after successful deletion
+      track('Account Deleted');
+      // Redirect to sign-in page with error handling
+      try {
+        router.replace('/(auth)/sign-in');
+      } catch (navError) {
+        console.error('Navigation error after account deletion:', navError);
+        // Account is deleted, navigation failed - user should restart app
+      }
     } catch (err) {
       console.error('Error deleting account:', err);
       if (err instanceof Error) {

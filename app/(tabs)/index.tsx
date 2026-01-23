@@ -45,15 +45,20 @@ export default function ChatScreen() {
       return;
     }
 
+    let scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
       // Small delay to ensure layout is settled after keyboard animation
-      setTimeout(() => {
+      scrollTimeoutId = setTimeout(() => {
         messageListRef.current?.scrollToBottom();
       }, 100);
     });
 
     return () => {
       keyboardDidShowListener.remove();
+      if (scrollTimeoutId !== null) {
+        clearTimeout(scrollTimeoutId);
+      }
     };
   }, []);
 
@@ -77,7 +82,9 @@ export default function ChatScreen() {
   // Create initial thread if none exists and user is authenticated
   useEffect(() => {
     if (!isLoading && isAuthenticated && state.threads.length === 0 && !isCreatingThread) {
-      createThread();
+      createThread().catch((error) => {
+        console.error('[ChatScreen] Failed to create initial thread:', error);
+      });
     }
   }, [isLoading, isAuthenticated, state.threads.length, isCreatingThread, createThread]);
 
@@ -135,7 +142,11 @@ export default function ChatScreen() {
 
           <TouchableOpacity
             style={styles.newChatButton}
-            onPress={createThread}
+            onPress={() => {
+              createThread().catch((error) => {
+                console.error('[ChatScreen] Failed to create thread:', error);
+              });
+            }}
             activeOpacity={0.7}
             accessibilityLabel="New conversation"
             accessibilityRole="button"

@@ -16,6 +16,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+/**
+ * Simple email validation - checks for basic format.
+ * Returns true if email appears valid.
+ */
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+}
+
 export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const router = useRouter();
@@ -35,7 +44,14 @@ export default function SignUpScreen() {
     setIsLoading(true);
     setError('');
 
-    // Validation
+    // Email validation
+    if (!isValidEmail(emailAddress)) {
+      setError('Please enter a valid email address');
+      setIsLoading(false);
+      return;
+    }
+
+    // Password validation
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
@@ -51,7 +67,7 @@ export default function SignUpScreen() {
     try {
       // Start sign-up process using email and password provided
       await signUp.create({
-        emailAddress,
+        emailAddress: emailAddress.trim(),
         password,
       });
 
@@ -88,7 +104,12 @@ export default function SignUpScreen() {
       if (signUpAttempt.status === 'complete') {
         await setActive({ session: signUpAttempt.createdSessionId });
         track('Sign Up', { method: 'email' });
-        router.replace('/(tabs)');
+        setError(''); // Clear error on success
+        try {
+          router.replace('/(tabs)');
+        } catch (navError) {
+          console.error('[SignUp] Navigation error:', navError);
+        }
       } else {
         // If the status is not complete, user may need to complete further steps
         setError('Verification incomplete. Please try again.');
