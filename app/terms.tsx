@@ -1,17 +1,17 @@
-import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import { Colors, Fonts, Radius, Spacing, Typography } from "@/constants/theme";
+import { usePostHogAnalytics } from "@/context/posthog-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import Markdown from 'react-native-markdown-display';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import Markdown from "react-native-markdown-display";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const tandc = `# TERMS AND CONDITIONS
 
@@ -315,8 +315,7 @@ If you are a California resident, in accordance with Cal. Civ. Code § 1789.3, y
 
 ---
 
-**BY USING THE APP, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREE TO BE BOUND BY THESE TERMS AND CONDITIONS.**`
-
+**BY USING THE APP, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREE TO BE BOUND BY THESE TERMS AND CONDITIONS.**`;
 
 export default function TermsScreen() {
   const router = useRouter();
@@ -324,11 +323,11 @@ export default function TermsScreen() {
 
   // Track page view
   useEffect(() => {
-    track('Terms Viewed');
+    track("Terms Viewed");
   }, [track]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -348,9 +347,7 @@ export default function TermsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
-          <Markdown style={markdownStyles}>
-            {tandc}
-          </Markdown>
+          <Markdown style={markdownStyles}>{tandc}</Markdown>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -363,9 +360,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     backgroundColor: Colors.bgSurface,
@@ -376,13 +373,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
-    fontFamily: Fonts?.heading ?? 'System',
+    fontFamily: Fonts?.heading ?? "System",
     fontSize: Typography.xl,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   headerSpacer: {
@@ -392,7 +389,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Spacing['2xl'],
+    paddingBottom: Spacing["2xl"],
   },
   content: {
     padding: Spacing.md,
@@ -402,7 +399,7 @@ const styles = StyleSheet.create({
 // Markdown styles for terms page
 const markdownStyles = {
   body: {
-    fontFamily: Fonts?.body ?? 'System',
+    fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.base,
     lineHeight: Typography.base * Typography.relaxed,
     color: Colors.textPrimary,
@@ -415,15 +412,15 @@ const markdownStyles = {
     color: Colors.textPrimary,
   },
   heading1: {
-    fontFamily: Fonts?.heading ?? 'System',
-    fontSize: Typography['2xl'],
+    fontFamily: Fonts?.heading ?? "System",
+    fontSize: Typography["2xl"],
     fontWeight: Typography.bold,
     color: Colors.textPrimary,
     marginTop: Spacing.xl,
     marginBottom: Spacing.md,
   },
   heading2: {
-    fontFamily: Fonts?.heading ?? 'System',
+    fontFamily: Fonts?.heading ?? "System",
     fontSize: Typography.xl,
     fontWeight: Typography.semibold,
     color: Colors.textPrimary,
@@ -431,7 +428,7 @@ const markdownStyles = {
     marginBottom: Spacing.sm,
   },
   heading3: {
-    fontFamily: Fonts?.heading ?? 'System',
+    fontFamily: Fonts?.heading ?? "System",
     fontSize: Typography.lg,
     fontWeight: Typography.semibold,
     color: Colors.textPrimary,
@@ -443,12 +440,12 @@ const markdownStyles = {
     color: Colors.textPrimary,
   },
   em: {
-    fontStyle: 'italic' as const,
+    fontStyle: "italic" as const,
     color: Colors.textPrimary,
   },
   link: {
     color: Colors.primary,
-    textDecorationLine: 'underline' as const,
+    textDecorationLine: "underline" as const,
   },
   listItem: {
     color: Colors.textPrimary,
@@ -463,7 +460,7 @@ const markdownStyles = {
     marginBottom: Spacing.sm,
   },
   code_inline: {
-    fontFamily: Fonts?.mono ?? 'monospace',
+    fontFamily: Fonts?.mono ?? "monospace",
     fontSize: Typography.sm,
     backgroundColor: Colors.bgSecondary,
     color: Colors.textPrimary,
@@ -472,7 +469,7 @@ const markdownStyles = {
     borderRadius: Radius.sm,
   },
   fence: {
-    fontFamily: Fonts?.mono ?? 'monospace',
+    fontFamily: Fonts?.mono ?? "monospace",
     fontSize: Typography.sm,
     backgroundColor: Colors.bgSecondary,
     color: Colors.textPrimary,

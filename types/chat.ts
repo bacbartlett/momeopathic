@@ -1,9 +1,9 @@
 export interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: number;
-  status?: 'pending' | 'streaming' | 'complete' | 'failed';
+  status?: "pending" | "streaming" | "complete" | "failed";
 }
 
 export interface Thread {
@@ -18,4 +18,3 @@ export interface ChatState {
   threads: Thread[];
   activeThreadId: string | null;
 }
-
