@@ -50,7 +50,8 @@
         }
       ],
       "expo-font",
-      "expo-updates"
+      "expo-updates",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,

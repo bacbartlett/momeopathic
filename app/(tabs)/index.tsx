@@ -7,6 +7,7 @@ import { useChat } from '@/context/chat-context';
 import { useRevenueCat, useSubscription } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../convex/_generated/api';
 
 export default function ChatScreen() {
+  const router = useRouter();
   const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, isCreatingThread, createThread, sendMessage } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isInitialized } = useRevenueCat();
@@ -140,20 +142,32 @@ export default function ChatScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.newChatButton}
-            onPress={() => {
-              createThread().catch((error) => {
-                console.error('[ChatScreen] Failed to create thread:', error);
-              });
-            }}
-            activeOpacity={0.7}
-            accessibilityLabel="New conversation"
-            accessibilityRole="button"
-            accessibilityHint="Creates a new conversation thread"
-          >
-            <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={() => router.push('/materia-medica' as '/account')}
+              activeOpacity={0.7}
+              accessibilityLabel="Open Materia Medica"
+              accessibilityRole="button"
+              accessibilityHint="Opens the remedy reference library"
+            >
+              <Ionicons name="book-outline" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={() => {
+                createThread().catch((error) => {
+                  console.error('[ChatScreen] Failed to create thread:', error);
+                });
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel="New conversation"
+              accessibilityRole="button"
+              accessibilityHint="Creates a new conversation thread"
+            >
+              <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
         
       </View>
@@ -256,7 +270,12 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     maxWidth: 180,
   },
-  newChatButton: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  headerActionButton: {
     width: 44,
     height: 44,
     justifyContent: 'center',

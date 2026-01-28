@@ -2,7 +2,7 @@ import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
 import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
@@ -28,6 +28,7 @@ import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, use
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
+import { initializeDatabase } from '@/lib/db/init';
 import { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
 
 // Startup logging - logs in both dev and production for debugging black screen issues
@@ -96,6 +97,40 @@ function AppOpenedTracker({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Component that initializes the Materia Medica SQLite database.
+ * This seeds the database on first launch with all remedy data.
+ */
+function MateriaMedicaInitializer({ children }: { children: React.ReactNode }) {
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    const init = async () => {
+      console.log('[STARTUP] MateriaMedicaInitializer: Starting database initialization');
+      try {
+        const result = await initializeDatabase();
+        if (result.success) {
+          console.log('[STARTUP] MateriaMedicaInitializer: Database initialized successfully', {
+            isNewInstall: result.isNewInstall,
+          });
+        } else {
+          console.error('[STARTUP] MateriaMedicaInitializer: Database initialization failed:', result.error);
+        }
+      } catch (error) {
+        console.error('[STARTUP] MateriaMedicaInitializer: Unexpected error during initialization:', error);
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    init();
+  }, []);
+
+  // Don't block rendering - database init runs in background
+  // The materia medica screens will handle loading states if db isn't ready
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   console.log('[STARTUP] RootLayout: Component rendering');
   
@@ -134,76 +169,85 @@ export default function RootLayout() {
     );
   }
 
-  console.log('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
+  console.log('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
   return (
     <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
       <ClerkLoaded>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <StoreUserInDatabase>
-            <PostHogProviderWrapper>
-              <PostHogCrashReporter>
-                <PostHogErrorBoundary>
-                  <AppOpenedTracker>
-                    <RevenueCatProvider>
-                      <ThemeProvider value={NavigationTheme}>
-                        <ChatProvider>
-                          <Stack>
-                            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                            <Stack.Screen
-                              name="account"
-                              options={{
-                                headerShown: false,
-                                presentation: 'modal',
-                                animation: 'slide_from_bottom',
-                              }}
-                            />
-                            <Stack.Screen
-                              name="terms"
-                              options={{
-                                headerShown: false,
-                                presentation: 'modal',
-                                animation: 'slide_from_bottom',
-                              }}
-                            />
-                            <Stack.Screen
-                              name="privacy"
-                              options={{
-                                headerShown: false,
-                                presentation: 'modal',
-                                animation: 'slide_from_bottom',
-                              }}
-                            />
-                            <Stack.Screen
-                              name="delete-account"
-                              options={{
-                                headerShown: true,
-                                title: 'Delete Account',
-                                headerBackTitle: 'Back',
-                                presentation: 'modal',
-                                animation: 'slide_from_bottom',
-                                headerStyle: {
-                                  backgroundColor: Colors.bgSurface,
-                                },
-                                headerTintColor: Colors.textPrimary,
-                                headerTitleStyle: {
-                                  fontFamily: Fonts?.heading ?? 'System',
-                                  fontSize: Typography.lg,
-                                  fontWeight: Typography.semibold,
-                                },
-                              }}
-                            />
-                          </Stack>
-                          <StatusBar style="dark" />
-                          <DisclaimerManager />
-                          <FeedbackManager />
-                        </ChatProvider>
-                      </ThemeProvider>
-                    </RevenueCatProvider>
-                  </AppOpenedTracker>
-                </PostHogErrorBoundary>
-              </PostHogCrashReporter>
-            </PostHogProviderWrapper>
+            <MateriaMedicaInitializer>
+              <PostHogProviderWrapper>
+                <PostHogCrashReporter>
+                  <PostHogErrorBoundary>
+                    <AppOpenedTracker>
+                      <RevenueCatProvider>
+                        <ThemeProvider value={NavigationTheme}>
+                          <ChatProvider>
+                            <Stack>
+                              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                              <Stack.Screen
+                                name="materia-medica"
+                                options={{
+                                  headerShown: false,
+                                  animation: 'slide_from_right',
+                                }}
+                              />
+                              <Stack.Screen
+                                name="account"
+                                options={{
+                                  headerShown: false,
+                                  presentation: 'modal',
+                                  animation: 'slide_from_bottom',
+                                }}
+                              />
+                              <Stack.Screen
+                                name="terms"
+                                options={{
+                                  headerShown: false,
+                                  presentation: 'modal',
+                                  animation: 'slide_from_bottom',
+                                }}
+                              />
+                              <Stack.Screen
+                                name="privacy"
+                                options={{
+                                  headerShown: false,
+                                  presentation: 'modal',
+                                  animation: 'slide_from_bottom',
+                                }}
+                              />
+                              <Stack.Screen
+                                name="delete-account"
+                                options={{
+                                  headerShown: true,
+                                  title: 'Delete Account',
+                                  headerBackTitle: 'Back',
+                                  presentation: 'modal',
+                                  animation: 'slide_from_bottom',
+                                  headerStyle: {
+                                    backgroundColor: Colors.bgSurface,
+                                  },
+                                  headerTintColor: Colors.textPrimary,
+                                  headerTitleStyle: {
+                                    fontFamily: Fonts?.heading ?? 'System',
+                                    fontSize: Typography.lg,
+                                    fontWeight: Typography.semibold,
+                                  },
+                                }}
+                              />
+                            </Stack>
+                            <StatusBar style="dark" />
+                            <DisclaimerManager />
+                            <FeedbackManager />
+                          </ChatProvider>
+                        </ThemeProvider>
+                      </RevenueCatProvider>
+                    </AppOpenedTracker>
+                  </PostHogErrorBoundary>
+                </PostHogCrashReporter>
+              </PostHogProviderWrapper>
+            </MateriaMedicaInitializer>
           </StoreUserInDatabase>
         </ConvexProviderWithClerk>
       </ClerkLoaded>

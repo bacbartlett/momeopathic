@@ -1,8 +1,19 @@
-import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { Message } from '@/types/chat';
-import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
-import React, { useCallback, useEffect, useRef } from 'react';
+import {
+  ChatColors,
+  Colors,
+  Fonts,
+  Radius,
+  Shadows,
+  Spacing,
+  Typography,
+} from "@/constants/theme";
+import { useMateriaMedica } from "@/hooks/useMateriaMedica";
+import { Message } from "@/types/chat";
+import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import * as Linking from "expo-linking";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   ActionSheetIOS,
   Alert,
@@ -13,8 +24,8 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import Markdown from 'react-native-markdown-display';
+} from "react-native";
+import Markdown from "react-native-markdown-display";
 
 interface MessageBubbleProps {
   message: Message;
@@ -24,59 +35,66 @@ interface MessageBubbleProps {
 const fixRepeatText = (text: string): string => {
   const trimmed = text.trim();
   if (trimmed.length === 0) return text;
-  
+
   const midPoint = Math.floor(trimmed.length / 2);
-  
+
   // Check for exact split in the middle (no separator)
   const firstHalf = trimmed.substring(0, midPoint);
   const secondHalf = trimmed.substring(midPoint);
   if (firstHalf === secondHalf) {
     return firstHalf;
   }
-  
+
   // Check for repetition with whitespace separator
   // Look for a split point where both parts are identical
   // Search around the middle point (±20% of length)
   const searchRange = Math.floor(trimmed.length * 0.2);
   const startSearch = Math.max(1, midPoint - searchRange);
   const endSearch = Math.min(trimmed.length - 1, midPoint + searchRange);
-  
+
   for (let i = startSearch; i <= endSearch; i++) {
     const part1 = trimmed.substring(0, i).trim();
     const part2 = trimmed.substring(i).trim();
-    
+
     // If parts match exactly, return first part
     if (part1 === part2 && part1.length > 0) {
       return part1;
     }
   }
-  
+
   // No exact repetition found, return original text
   return text;
-}
+};
 
 const filterBrokenLinks = (text: string): string => {
   // Regex to match markdown links: [text](url)
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  
+
   // Check if there are any links
   const hasLinks = linkRegex.test(text);
   if (!hasLinks) {
     return text;
   }
-  
+
   // Reset regex lastIndex
   linkRegex.lastIndex = 0;
-  
+
   // Find all links and check which are broken
-  const matches: Array<{ fullMatch: string; url: string; startIndex: number; endIndex: number }> = [];
+  const matches: Array<{
+    fullMatch: string;
+    url: string;
+    startIndex: number;
+    endIndex: number;
+  }> = [];
   let match;
-  
+
   while ((match = linkRegex.exec(text)) !== null) {
     const url = match[2];
     // Check if URL is valid (basic validation: starts with http:// or https://, or has valid domain structure)
-    const isValidUrl = /^https?:\/\/.+/.test(url) || /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}/.test(url);
-    
+    const isValidUrl =
+      /^https?:\/\/.+/.test(url) ||
+      /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}/.test(url);
+
     if (!isValidUrl) {
       matches.push({
         fullMatch: match[0],
@@ -86,81 +104,98 @@ const filterBrokenLinks = (text: string): string => {
       });
     }
   }
-  
+
   // If no broken links, return original text
   if (matches.length === 0) {
     return text;
   }
-  
+
   // Process broken links from end to start to maintain indices
   let result = text;
-  
+
   // Process each broken link URL
   for (let i = matches.length - 1; i >= 0; i--) {
     const brokenUrl = matches[i].url;
-    
+
     // Find this broken link in the current result string
     // Escape special regex characters in the URL
-    const escapedUrl = brokenUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const linkPattern = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
-    
+    const escapedUrl = brokenUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const linkPattern = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, "g");
+
     // Find the last occurrence (since we're processing backwards)
     let linkMatch: RegExpExecArray | null = null;
     let lastMatch: RegExpExecArray | null = null;
     linkPattern.lastIndex = 0;
-    
+
     while ((linkMatch = linkPattern.exec(result)) !== null) {
       lastMatch = linkMatch;
     }
-    
+
     if (!lastMatch) {
       // Link already removed, skip
       continue;
     }
-    
+
     const brokenLinkStart = lastMatch.index;
     const brokenLinkEnd = brokenLinkStart + lastMatch[0].length;
-    
+
     // Check if this broken link is part of the specific "Would you like to know more" section
-    const sectionPattern = /Would you like to know more about it\? You can ask me questions or read \[the full Materia Medica entry here\]\([^)]+\)\.?/i;
+    const sectionPattern =
+      /Would you like to know more about it\? You can ask me questions or read \[the full Materia Medica entry here\]\([^)]+\)\.?/i;
     const sectionMatch = result.match(sectionPattern);
-    
-    if (sectionMatch && sectionMatch.index !== undefined && 
-        brokenLinkStart >= sectionMatch.index && 
-        brokenLinkEnd <= sectionMatch.index + sectionMatch[0].length) {
+
+    if (
+      sectionMatch &&
+      sectionMatch.index !== undefined &&
+      brokenLinkStart >= sectionMatch.index &&
+      brokenLinkEnd <= sectionMatch.index + sectionMatch[0].length
+    ) {
       // Remove the entire section
       const sectionStart = sectionMatch.index;
       const sectionEnd = sectionStart + sectionMatch[0].length;
-      
+
       // Remove the section, but preserve newlines that precede it
       // Only remove trailing spaces/tabs (not newlines) from beforeSection
-      const beforeSection = result.substring(0, sectionStart).replace(/[ \t]+$/, '');
-      const afterSection = result.substring(sectionEnd).replace(/^\s+/, '');
-      
+      const beforeSection = result
+        .substring(0, sectionStart)
+        .replace(/[ \t]+$/, "");
+      const afterSection = result.substring(sectionEnd).replace(/^\s+/, "");
+
       // Add a period if the section before ended without punctuation
-      const needsPeriod = beforeSection.length > 0 && !/[.!?]$/.test(beforeSection.trim());
-      result = beforeSection + (needsPeriod ? '.' : '') + (afterSection ? ' ' + afterSection : '');
+      const needsPeriod =
+        beforeSection.length > 0 && !/[.!?]$/.test(beforeSection.trim());
+      result =
+        beforeSection +
+        (needsPeriod ? "." : "") +
+        (afterSection ? " " + afterSection : "");
     } else {
       // Find the sentence containing the broken link
       const beforeLink = result.substring(0, brokenLinkStart);
       const afterLink = result.substring(brokenLinkEnd);
-      
+
       // Find the start of the sentence (last sentence boundary before the link)
       // Look for the last occurrence of . ! or ? followed by whitespace
       let sentenceStart = 0;
       const lastBoundaryMatch = beforeLink.match(/[.!?]\s+[^.!?]*$/);
       if (lastBoundaryMatch) {
-        sentenceStart = beforeLink.lastIndexOf(lastBoundaryMatch[0]) + lastBoundaryMatch[0].length;
+        sentenceStart =
+          beforeLink.lastIndexOf(lastBoundaryMatch[0]) +
+          lastBoundaryMatch[0].length;
       } else {
         // If no boundary found, check if there's whitespace or start of string
         const whitespaceMatch = beforeLink.match(/\s+[^\s]*$/);
         if (whitespaceMatch) {
           const leadingWhitespace = whitespaceMatch[0].match(/^\s+/)?.[0];
-          const whitespaceLength = leadingWhitespace ? leadingWhitespace.length : 0;
-          sentenceStart = beforeLink.lastIndexOf(whitespaceMatch[0]) + whitespaceMatch[0].length - whitespaceLength;
+          const whitespaceLength = leadingWhitespace
+            ? leadingWhitespace.length
+            : 0;
+          sentenceStart =
+            beforeLink.lastIndexOf(whitespaceMatch[0]) +
+            whitespaceMatch[0].length -
+            whitespaceLength;
         }
       }
-      
+
       // Find the end of the sentence (first sentence boundary after the link)
       let sentenceEnd = result.length;
       const firstBoundaryMatch = afterLink.match(/^[^.!?]*[.!?]/);
@@ -173,34 +208,167 @@ const filterBrokenLinks = (text: string): string => {
           sentenceEnd = brokenLinkEnd + lineEndMatch[0].length;
         }
       }
-      
+
       // Remove the sentence
       const beforeSentence = result.substring(0, sentenceStart).trim();
       const afterSentence = result.substring(sentenceEnd).trim();
-      
+
       // Combine, ensuring proper spacing
-      result = beforeSentence + (beforeSentence && afterSentence ? ' ' : '') + afterSentence;
+      result =
+        beforeSentence +
+        (beforeSentence && afterSentence ? " " : "") +
+        afterSentence;
     }
   }
-  
+
   return result.trim();
-}
+};
 
 export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   if (__DEV__) {
-    console.log('[MessageBubble] Content:', message.content);
+    console.log("[MessageBubble] Content:", message.content);
   }
-  const isUser = message.role === 'user';
-  const isLoading = !isUser && (message.status === 'pending' || message.status === 'streaming');
-  const isFailed = message.status === 'failed';
-  const filteredContent = message.content ? fixRepeatText(filterBrokenLinks(message.content)) : '';
+  const router = useRouter();
+  const { getRemedyByName } = useMateriaMedica();
+
+  const isUser = message.role === "user";
+  const isLoading =
+    !isUser && (message.status === "pending" || message.status === "streaming");
+  const isFailed = message.status === "failed";
+  const filteredContent = message.content
+    ? // ? fixRepeatText(filterBrokenLinks(message.content))
+      fixRepeatText(message.content)
+    : "";
   const hasContent = filteredContent && filteredContent.trim().length > 0;
+
+  /**
+   * Try to extract a remedy name from a URL segment and find it locally
+   */
+  const tryNavigateToLocalRemedy = useCallback(
+    (remedyNameCandidate: string): boolean => {
+      if (!remedyNameCandidate) return false;
+
+      // Normalize the name: replace hyphens/underscores with spaces, uppercase
+      const normalizedName = remedyNameCandidate
+        .replace(/[-_]/g, " ")
+        .toUpperCase()
+        .trim();
+
+      if (normalizedName.length < 3) return false;
+
+      // Try to find the remedy locally
+      const remedy = getRemedyByName(normalizedName);
+
+      if (remedy) {
+        // Remedy found locally - navigate to detail screen
+        router.push({
+          pathname: "/materia-medica/[id]" as "/account",
+          params: { id: remedy.id, name: remedy.remedy_name },
+        });
+        return true;
+      }
+
+      return false;
+    },
+    [getRemedyByName, router],
+  );
+
+  /**
+   * Handle link presses - intercepts remedy URLs for internal navigation
+   * Handles both mymateria:// URLs and attempts to extract remedy names from other URLs
+   *
+   * Returns false to prevent default Linking.openURL behavior, true to allow it
+   */
+  const handleLinkPress = useCallback(
+    (url: string): boolean => {
+      console.log("[MessageBubble] Link pressed:", url);
+
+      // Check if this is our internal mymateria:// link
+      if (url.startsWith("mymateria://materia-medica")) {
+        try {
+          const urlObj = new URL(url);
+          const remedyName = urlObj.searchParams.get("name");
+          const fallbackUrl = urlObj.searchParams.get("fallback");
+
+          if (remedyName) {
+            const decoded = decodeURIComponent(remedyName);
+            if (tryNavigateToLocalRemedy(decoded)) {
+              // Prevent default link handling - we've handled it internally
+              // Return false so the library doesn't call Linking.openURL with mymateria://
+              return false;
+            }
+          }
+
+          // Remedy not found locally - use fallback URL
+          if (fallbackUrl) {
+            Linking.openURL(decodeURIComponent(fallbackUrl)).catch((err) => {
+              console.error(
+                "[MessageBubble] Failed to open fallback URL:",
+                err,
+              );
+            });
+            // Prevent default - we've already opened the fallback URL
+            return false;
+          }
+
+          // If we get here, we couldn't handle the link, but still prevent default
+          // to avoid Android trying to open the mymateria:// URL (which isn't registered)
+          return false;
+        } catch (err) {
+          console.error("[MessageBubble] Error parsing mymateria:// URL:", err);
+          // Prevent default even on error to avoid Android deep link error
+          return false;
+        }
+      }
+
+      // Check if this looks like a remedy URL (contains remedy-like paths)
+      // This catches AI-hallucinated URLs like https://local.materia-medica.app/remedies/arnica-montana
+      try {
+        const urlObj = new URL(url);
+        const pathname = urlObj.pathname;
+
+        // Try to extract remedy name from the URL path
+        // Common patterns: /remedies/arnica-montana, /remedy/arnica_montana, /materia-medica/arnica-montana
+        const pathSegments = pathname.split("/").filter(Boolean);
+
+        // Look for the last meaningful segment (often the remedy name)
+        for (let i = pathSegments.length - 1; i >= 0; i--) {
+          const segment = pathSegments[i];
+          // Skip common route names
+          if (
+            [
+              "remedies",
+              "remedy",
+              "materia-medica",
+              "en",
+              "william-boericke",
+            ].includes(segment.toLowerCase())
+          ) {
+            continue;
+          }
+
+          // Try this segment as a remedy name
+          if (tryNavigateToLocalRemedy(segment)) {
+            // Prevent default - we handled it internally
+            return false;
+          }
+        }
+      } catch {
+        // Not a valid URL, ignore
+      }
+
+      // For all other URLs, allow default behavior (library will call Linking.openURL)
+      // Return true to let the library handle it normally
+      return true;
+    },
+    [tryNavigateToLocalRemedy],
+  );
 
   const handleCopy = useCallback(async () => {
     if (filteredContent) {
       await Clipboard.setStringAsync(filteredContent);
-      if (Platform.OS === 'android') {
-        Alert.alert('Copied', 'Message copied to clipboard');
+      if (Platform.OS === "android") {
+        Alert.alert("Copied", "Message copied to clipboard");
       }
     }
   }, [filteredContent]);
@@ -213,7 +381,7 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         });
       } catch (error) {
         if (__DEV__) {
-          console.log('[MessageBubble] Share error:', error);
+          console.log("[MessageBubble] Share error:", error);
         }
       }
     }
@@ -222,10 +390,10 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   const handleLongPress = useCallback(() => {
     if (!hasContent) return;
 
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ['Cancel', 'Copy', 'Share'],
+          options: ["Cancel", "Copy", "Share"],
           cancelButtonIndex: 0,
         },
         (buttonIndex) => {
@@ -234,30 +402,33 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
           } else if (buttonIndex === 2) {
             handleShare();
           }
-        }
+        },
       );
     } else {
       // Android - use Alert as a simple menu
       Alert.alert(
-        'Message Options',
+        "Message Options",
         undefined,
         [
-          { text: 'Copy', onPress: handleCopy },
-          { text: 'Share', onPress: handleShare },
-          { text: 'Cancel', style: 'cancel' },
+          { text: "Copy", onPress: handleCopy },
+          { text: "Share", onPress: handleShare },
+          { text: "Cancel", style: "cancel" },
         ],
-        { cancelable: true }
+        { cancelable: true },
       );
     }
   }, [hasContent, handleCopy, handleShare]);
 
   return (
     <TouchableOpacity
-      style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}
+      style={[
+        styles.container,
+        isUser ? styles.userContainer : styles.assistantContainer,
+      ]}
       onLongPress={handleLongPress}
       activeOpacity={0.9}
       delayLongPress={300}
-      accessibilityLabel={`${isUser ? 'Your' : 'Assistant'} message: ${filteredContent?.slice(0, 100) || 'Loading...'}`}
+      accessibilityLabel={`${isUser ? "Your" : "Assistant"} message: ${filteredContent?.slice(0, 100) || "Loading..."}`}
       accessibilityRole="text"
       accessibilityHint="Long press to copy or share"
     >
@@ -269,13 +440,15 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
           </View>
         </View>
       )}
-      
+
       <View style={styles.bubbleWrapper}>
-        <View style={[
-          styles.bubble, 
-          isUser ? styles.userBubble : styles.assistantBubble,
-          isFailed && styles.failedBubble,
-        ]}>
+        <View
+          style={[
+            styles.bubble,
+            isUser ? styles.userBubble : styles.assistantBubble,
+            isFailed && styles.failedBubble,
+          ]}
+        >
           {isLoading && !hasContent ? (
             <TypingIndicator />
           ) : (
@@ -283,7 +456,10 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
               {hasContent && (
                 <View style={styles.markdownWrapper}>
                   <Markdown
-                    style={isUser ? markdownStyles.user : markdownStyles.assistant}
+                    style={
+                      isUser ? markdownStyles.user : markdownStyles.assistant
+                    }
+                    onLinkPress={handleLinkPress}
                   >
                     {filteredContent}
                   </Markdown>
@@ -297,7 +473,7 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
             </>
           )}
         </View>
-        
+
         {/* Error state with retry button */}
         {isFailed && (
           <View style={styles.errorContainer}>
@@ -316,9 +492,14 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
             )}
           </View>
         )}
-        
+
         {!isLoading && !isFailed && (
-          <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.assistantTimestamp]}>
+          <Text
+            style={[
+              styles.timestamp,
+              isUser ? styles.userTimestamp : styles.assistantTimestamp,
+            ]}
+          >
             {formatTime(message.timestamp)}
           </Text>
         )}
@@ -347,7 +528,7 @@ function TypingIndicator() {
             duration: 400,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       );
     };
 
@@ -357,10 +538,10 @@ function TypingIndicator() {
       createAnimation(dot3, 300),
     ];
 
-    animations.forEach(anim => anim.start());
+    animations.forEach((anim) => anim.start());
 
     return () => {
-      animations.forEach(anim => anim.stop());
+      animations.forEach((anim) => anim.stop());
     };
   }, [dot1, dot2, dot3]);
 
@@ -429,22 +610,22 @@ function TypingIndicator() {
 
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: Spacing.sm,
   },
   userContainer: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   assistantContainer: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   avatarContainer: {
     marginBottom: Spacing.lg,
@@ -454,12 +635,12 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: Radius.full,
     backgroundColor: Colors.primaryAlpha20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     ...Shadows.sm,
   },
   bubbleWrapper: {
-    maxWidth: '80%',
+    maxWidth: "80%",
     flexShrink: 1,
     minWidth: 0,
   },
@@ -479,7 +660,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: Shadows.glow,
       android: {
-        shadowColor: '#3D3935',
+        shadowColor: "#3D3935",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
         shadowRadius: 16,
@@ -498,20 +679,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.error,
   },
   errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.xs,
     marginTop: Spacing.xs,
     paddingHorizontal: Spacing.xs,
   },
   errorText: {
-    fontFamily: Fonts?.body ?? 'System',
+    fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.xs,
     color: Colors.error,
   },
   retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginLeft: Spacing.sm,
     paddingHorizontal: Spacing.sm,
@@ -520,23 +701,23 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   retryText: {
-    fontFamily: Fonts?.body ?? 'System',
+    fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.xs,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.primary,
   },
   timestamp: {
-    fontFamily: Fonts?.body ?? 'System',
+    fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.xs,
     marginTop: Spacing.xs,
     opacity: 0.7,
   },
   userTimestamp: {
-    textAlign: 'right',
+    textAlign: "right",
     color: Colors.textMuted,
   },
   assistantTimestamp: {
-    textAlign: 'left',
+    textAlign: "left",
     color: Colors.textMuted,
   },
   loadingIndicatorContainer: {
@@ -546,8 +727,8 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.borderLight,
   },
   typingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.xs,
     paddingVertical: Spacing.xs,
   },
@@ -560,7 +741,7 @@ const styles = StyleSheet.create({
   markdownWrapper: {
     flexShrink: 1,
     minWidth: 0,
-    width: '100%',
+    width: "100%",
   },
 });
 
@@ -568,7 +749,7 @@ const styles = StyleSheet.create({
 const markdownStyles = {
   user: {
     body: {
-      fontFamily: Fonts?.body ?? 'System',
+      fontFamily: Fonts?.body ?? "System",
       fontSize: Typography.base,
       lineHeight: Typography.base * Typography.relaxed,
       color: Colors.textInverse,
@@ -583,7 +764,7 @@ const markdownStyles = {
       flexShrink: 1,
     },
     heading1: {
-      fontFamily: Fonts?.heading ?? 'System',
+      fontFamily: Fonts?.heading ?? "System",
       fontSize: Typography.xl,
       fontWeight: Typography.semibold,
       color: Colors.textInverse,
@@ -591,7 +772,7 @@ const markdownStyles = {
       marginBottom: Spacing.sm,
     },
     heading2: {
-      fontFamily: Fonts?.heading ?? 'System',
+      fontFamily: Fonts?.heading ?? "System",
       fontSize: Typography.lg,
       fontWeight: Typography.semibold,
       color: Colors.textInverse,
@@ -599,7 +780,7 @@ const markdownStyles = {
       marginBottom: Spacing.sm,
     },
     heading3: {
-      fontFamily: Fonts?.heading ?? 'System',
+      fontFamily: Fonts?.heading ?? "System",
       fontSize: Typography.base,
       fontWeight: Typography.semibold,
       color: Colors.textInverse,
@@ -611,12 +792,12 @@ const markdownStyles = {
       color: Colors.textInverse,
     },
     em: {
-      fontStyle: 'italic' as const,
+      fontStyle: "italic" as const,
       color: Colors.textInverse,
     },
     link: {
       color: Colors.textInverse,
-      textDecorationLine: 'underline' as const,
+      textDecorationLine: "underline" as const,
       opacity: 0.9,
     },
     listItem: {
@@ -632,18 +813,18 @@ const markdownStyles = {
       marginBottom: Spacing.xs,
     },
     code_inline: {
-      fontFamily: Fonts?.mono ?? 'monospace',
+      fontFamily: Fonts?.mono ?? "monospace",
       fontSize: Typography.sm,
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
       color: Colors.textInverse,
       paddingHorizontal: Spacing.xs,
       paddingVertical: 2,
       borderRadius: Radius.sm,
     },
     fence: {
-      fontFamily: Fonts?.mono ?? 'monospace',
+      fontFamily: Fonts?.mono ?? "monospace",
       fontSize: Typography.sm,
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      backgroundColor: "rgba(255, 255, 255, 0.15)",
       color: Colors.textInverse,
       padding: Spacing.md,
       borderRadius: Radius.md,
@@ -652,7 +833,7 @@ const markdownStyles = {
     },
     blockquote: {
       borderLeftWidth: 3,
-      borderLeftColor: 'rgba(255, 255, 255, 0.5)',
+      borderLeftColor: "rgba(255, 255, 255, 0.5)",
       paddingLeft: Spacing.md,
       marginLeft: 0,
       marginTop: Spacing.sm,
@@ -661,7 +842,7 @@ const markdownStyles = {
       opacity: 0.9,
     },
     hr: {
-      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+      backgroundColor: "rgba(255, 255, 255, 0.3)",
       height: 1,
       marginTop: Spacing.md,
       marginBottom: Spacing.md,
@@ -669,7 +850,7 @@ const markdownStyles = {
   },
   assistant: {
     body: {
-      fontFamily: Fonts?.body ?? 'System',
+      fontFamily: Fonts?.body ?? "System",
       fontSize: Typography.base,
       lineHeight: Typography.base * Typography.relaxed,
       color: Colors.textPrimary,
@@ -684,7 +865,7 @@ const markdownStyles = {
       flexShrink: 1,
     },
     heading1: {
-      fontFamily: Fonts?.heading ?? 'System',
+      fontFamily: Fonts?.heading ?? "System",
       fontSize: Typography.xl,
       fontWeight: Typography.semibold,
       color: Colors.textPrimary,
@@ -692,7 +873,7 @@ const markdownStyles = {
       marginBottom: Spacing.sm,
     },
     heading2: {
-      fontFamily: Fonts?.heading ?? 'System',
+      fontFamily: Fonts?.heading ?? "System",
       fontSize: Typography.lg,
       fontWeight: Typography.semibold,
       color: Colors.textPrimary,
@@ -700,7 +881,7 @@ const markdownStyles = {
       marginBottom: Spacing.sm,
     },
     heading3: {
-      fontFamily: Fonts?.heading ?? 'System',
+      fontFamily: Fonts?.heading ?? "System",
       fontSize: Typography.base,
       fontWeight: Typography.semibold,
       color: Colors.textPrimary,
@@ -712,12 +893,12 @@ const markdownStyles = {
       color: Colors.textPrimary,
     },
     em: {
-      fontStyle: 'italic' as const,
+      fontStyle: "italic" as const,
       color: Colors.textPrimary,
     },
     link: {
       color: Colors.primary,
-      textDecorationLine: 'underline' as const,
+      textDecorationLine: "underline" as const,
     },
     listItem: {
       color: Colors.textPrimary,
@@ -732,7 +913,7 @@ const markdownStyles = {
       marginBottom: Spacing.xs,
     },
     code_inline: {
-      fontFamily: Fonts?.mono ?? 'monospace',
+      fontFamily: Fonts?.mono ?? "monospace",
       fontSize: Typography.sm,
       backgroundColor: Colors.bgSecondary,
       color: Colors.textPrimary,
@@ -741,7 +922,7 @@ const markdownStyles = {
       borderRadius: Radius.sm,
     },
     fence: {
-      fontFamily: Fonts?.mono ?? 'monospace',
+      fontFamily: Fonts?.mono ?? "monospace",
       fontSize: Typography.sm,
       backgroundColor: Colors.bgSecondary,
       color: Colors.textPrimary,

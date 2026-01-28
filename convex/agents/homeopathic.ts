@@ -174,13 +174,25 @@ const searchMateriaMedica = createTool({
 })
 
 const getLearnMoreLink = createTool({
-  description: 'Generate Link to Learn More',
+  description: 'Generate a link to learn more about a remedy. Returns an internal app link to view the remedy in the local Materia Medica. If the remedy is not found locally, the app will fall back to the external web link.',
   args: z.object({
-    nameOfRemedy: z.string()
+    nameOfRemedy: z.string().describe('The name of the homeopathic remedy to link to')
   }),
   handler: async (__, args): Promise<string> => {
+    // Normalize the remedy name to match local database format (UPPERCASE with spaces)
+    const normalizedName = args.nameOfRemedy.toUpperCase().trim();
+    
+    // Generate the external fallback URL
     const urlName = args.nameOfRemedy.toLowerCase().replace(/ /g, '-');
-    return `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`
+    const externalUrl = `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`;
+    
+    // Return internal app link with fallback encoded
+    // Format: mymateria://materia-medica?name=REMEDY_NAME&fallback=ENCODED_URL
+    // The app will try to find the remedy locally first, then use the fallback if not found
+    const encodedName = encodeURIComponent(normalizedName);
+    const encodedFallback = encodeURIComponent(externalUrl);
+    
+    return `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
   }
 })
 
