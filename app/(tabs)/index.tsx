@@ -29,6 +29,7 @@ export default function ChatScreen() {
   const { isInitialized } = useRevenueCat();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
   const composerRef = useRef<ComposerHandle>(null);
 
@@ -49,6 +50,23 @@ export default function ChatScreen() {
       composerRef.current?.blur();
     }
   }, [isDrawerOpen]);
+
+  // Handle keyboard dismiss on Android to reset KeyboardAvoidingView
+  // This prevents the padding bug where extra space appears after keyboard dismisses
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      // Increment key to force KeyboardAvoidingView remount and clear its padding state
+      setKeyboardKey(prev => prev + 1);
+    });
+
+    return () => {
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   // Show loading while checking auth or subscription status
   if (isLoading || isSubscriptionLoading || (isAuthenticated && currentUser === undefined)) {
@@ -144,6 +162,7 @@ export default function ChatScreen() {
         </KeyboardAvoidingView>
       ) : Platform.OS === 'android' ? (
         <KeyboardAvoidingView
+          key={keyboardKey}
           style={styles.keyboardAvoidingView}
           behavior="height"
         >
