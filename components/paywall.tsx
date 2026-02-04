@@ -1,15 +1,20 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
+import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useMutation } from 'convex/react';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -144,11 +149,17 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
     isEligibleForIntro,
   } = useRevenueCat();
   const { track, setUserProperties } = usePostHogAnalytics();
-  
+  const redeemOfferCode = useMutation(api.offerCodes.redeem);
+
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Offer code state
+  const [showOfferCodeInput, setShowOfferCodeInput] = useState(false);
+  const [offerCode, setOfferCode] = useState('');
+  const [isRedeemingCode, setIsRedeemingCode] = useState(false);
 
   // Show a limited paywall if RevenueCat is not initialized (e.g., dev mode without API key)
   // This still allows users to see the UI and dismiss the modal with the close button
@@ -221,7 +232,7 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
   const handleRestore = async () => {
     setIsRestoring(true);
     setLocalError(null);
-    
+
     try {
       const success = await restorePurchases();
       if (!success) {
@@ -231,6 +242,51 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
       setLocalError('Failed to restore purchases. Please try again.');
     } finally {
       setIsRestoring(false);
+    }
+  };
+
+  const handleRedeemOfferCode = async () => {
+    if (!offerCode.trim()) {
+      Alert.alert('Invalid Code', 'Please enter an offer code');
+      return;
+    }
+
+    setIsRedeemingCode(true);
+    setLocalError(null);
+    Keyboard.dismiss();
+
+    try {
+      const result = await redeemOfferCode({ code: offerCode });
+
+      if (result.success) {
+        track('Offer Code Redeemed', { code: offerCode.trim().toUpperCase() });
+        Alert.alert(
+          'Success!',
+          result.message,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Close the paywall modal on success
+                if (onClose) {
+                  onClose();
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        setLocalError(result.message);
+        track('Offer Code Failed', {
+          code: offerCode.trim().toUpperCase(),
+          reason: result.message,
+        });
+      }
+    } catch (error) {
+      console.error('Error redeeming offer code:', error);
+      setLocalError('An error occurred. Please try again.');
+    } finally {
+      setIsRedeemingCode(false);
     }
   };
 
@@ -401,6 +457,60 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
             <Text style={styles.restoreButtonText}>Restore Purchases</Text>
           )}
         </TouchableOpacity>
+
+        {/* Offer Code Section */}
+        <View style={styles.offerCodeSection}>
+          <TouchableOpacity
+            style={styles.offerCodeToggle}
+            onPress={() => setShowOfferCodeInput(!showOfferCodeInput)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="gift-outline"
+              size={18}
+              color={Colors.primary}
+              style={styles.offerCodeIcon}
+            />
+            <Text style={styles.offerCodeToggleText}>Have an offer code?</Text>
+            <Ionicons
+              name={showOfferCodeInput ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {showOfferCodeInput && (
+            <View style={styles.offerCodeInputContainer}>
+              <View style={styles.offerCodeInputWrapper}>
+                <TextInput
+                  style={styles.offerCodeInput}
+                  placeholder="Enter code"
+                  placeholderTextColor={Colors.textMuted}
+                  value={offerCode}
+                  onChangeText={setOfferCode}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={!isRedeemingCode}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.redeemButton,
+                    (!offerCode.trim() || isRedeemingCode) && styles.redeemButtonDisabled,
+                  ]}
+                  onPress={handleRedeemOfferCode}
+                  disabled={!offerCode.trim() || isRedeemingCode}
+                  activeOpacity={0.8}
+                >
+                  {isRedeemingCode ? (
+                    <ActivityIndicator color={Colors.textInverse} size="small" />
+                  ) : (
+                    <Text style={styles.redeemButtonText}>Redeem</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* Terms */}
         <Text style={styles.termsText}>
@@ -731,6 +841,65 @@ const styles = StyleSheet.create({
     fontSize: Typography.sm,
     color: Colors.primary,
     textDecorationLine: 'underline',
+  },
+  offerCodeSection: {
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.lg,
+  },
+  offerCodeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  offerCodeIcon: {
+    marginRight: 2,
+  },
+  offerCodeToggleText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  offerCodeInputContainer: {
+    marginTop: Spacing.md,
+  },
+  offerCodeInputWrapper: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    alignItems: 'stretch',
+  },
+  offerCodeInput: {
+    flex: 1,
+    backgroundColor: Colors.bgSurface,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  redeemButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm + 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 90,
+  },
+  redeemButtonDisabled: {
+    backgroundColor: Colors.border,
+    opacity: 0.6,
+  },
+  redeemButtonText: {
+    fontFamily: Fonts?.headingBold ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '700',
+    color: Colors.textInverse,
   },
   termsText: {
     fontFamily: Fonts?.body ?? 'System',

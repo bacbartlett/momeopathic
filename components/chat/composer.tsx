@@ -13,14 +13,13 @@ import {
 interface ComposerProps {
   onSend: (message: string) => void;
   disabled?: boolean;
-  onFocus?: () => void;
 }
 
 export interface ComposerHandle {
   blur: () => void;
 }
 
-export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, disabled = false, onFocus }, ref) => {
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, disabled = false }, ref) => {
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -40,8 +39,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, dis
 
   const handleFocus = useCallback(() => {
     setIsFocused(true);
-    onFocus?.();
-  }, [onFocus]);
+  }, []);
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
@@ -112,7 +110,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, dis
         </TouchableOpacity>
       </View>
       
-      {/* Disclaimer text */}
+      {/* Disclaimer text - Fixed size to prevent layout issues */}
       <View style={[
         styles.disclaimerContainer,
         { paddingBottom: isFocused ? Spacing.xs : Spacing.md }
@@ -181,7 +179,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.xs,
+    fontSize: 12, // Fixed size - does not scale with accessibility settings to prevent layout issues
     color: Colors.textMuted,
   },
 });

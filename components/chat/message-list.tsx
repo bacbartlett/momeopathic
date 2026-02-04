@@ -2,8 +2,8 @@ import { ChatColors, Colors, Fonts, Radius, Spacing, Typography } from '@/consta
 import { useChat } from '@/context/chat-context';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Animated, FlatList, NativeScrollEvent, NativeSyntheticEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
 
 interface MessageListProps {
@@ -81,164 +81,46 @@ function MessageListSkeleton() {
   );
 }
 
-// Threshold in pixels for considering user "at bottom" of the list
-const SCROLL_THRESHOLD = 50;
-
+/**
+ * Best practice for chat scrolling based on React Native community recommendations:
+ * - Use inverted FlatList (renders messages bottom-to-top like iMessage/WhatsApp)
+ * - Use maintainVisibleContentPosition to prevent scroll jumping
+ * - Auto-scroll only when user is at bottom (viewing latest messages)
+ *
+ * Sources:
+ * - https://reactnative.dev/docs/flatlist
+ * - https://github.com/FaridSafi/react-native-gifted-chat
+ * - https://getstream.io/blog/react-native-how-to-build-bidirectional-infinite-scroll/
+ */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   function MessageList({ messages, isLoading = false }, ref) {
   const flatListRef = useRef<FlatList<Message>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
 
-  // Autoscroll state - simple: follow new content unless user scrolls up
-  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  const lastSeenMessageIdRef = useRef<string | null>(null);
-  const lastContentLengthRef = useRef(0);
-  const lastMessageTopYRef = useRef(0);
-  const wasLoadingRef = useRef(isLoading);
-  const pendingScrollToBottomRef = useRef(false);
-  
-  // Layout tracking
-  const contentHeightRef = useRef(0);
-  const scrollOffsetRef = useRef(0);
-  const viewportHeightRef = useRef(0);
-
-  // Detect thread change: when isLoading goes from true -> false, we need to scroll to bottom
-  useEffect(() => {
-    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
-    
-    if (wasLoadingRef.current && !isLoading) {
-      // Just finished loading messages for a new thread - scroll to bottom
-      // Reset autoscroll state for new thread
-      setIsAutoScrollEnabled(true);
-      lastSeenMessageIdRef.current = null;
-      lastContentLengthRef.current = 0;
-      lastMessageTopYRef.current = 0;
-      pendingScrollToBottomRef.current = true;
-      
-      // Scroll to bottom with multiple attempts to handle rendering delays
-      const scrollToBottom = () => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      };
-      
-      // Immediate + delayed attempts to ensure we catch the render
-      scrollToBottom();
-      timeoutIds.push(setTimeout(scrollToBottom, 50));
-      timeoutIds.push(setTimeout(scrollToBottom, 150));
-      timeoutIds.push(setTimeout(() => {
-        scrollToBottom();
-        pendingScrollToBottomRef.current = false;
-      }, 300));
-    }
-    wasLoadingRef.current = isLoading;
-    
-    return () => {
-      timeoutIds.forEach(clearTimeout);
-    };
-  }, [isLoading]);
-
-  // Handle scroll events - disable autoscroll when user scrolls up
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const prevOffset = scrollOffsetRef.current;
-    
-    scrollOffsetRef.current = contentOffset.y;
-    contentHeightRef.current = contentSize.height;
-    viewportHeightRef.current = layoutMeasurement.height;
-
-    // If user scrolled UP, disable autoscroll
-    if (contentOffset.y < prevOffset - 10) {
-      setIsAutoScrollEnabled(false);
-    }
-    
-    // If user scrolled to bottom, re-enable autoscroll
-    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    if (distanceFromBottom < SCROLL_THRESHOLD) {
-      setIsAutoScrollEnabled(true);
-    }
-  }, []);
-
-  // Track content size changes and handle pending scroll-to-bottom
-  const handleContentSizeChange = useCallback((_width: number, height: number) => {
-    contentHeightRef.current = height;
-    
-    // If we have a pending scroll from thread change, keep scrolling to bottom
-    if (pendingScrollToBottomRef.current && height > 0 && viewportHeightRef.current > 0) {
-      flatListRef.current?.scrollToEnd({ animated: false });
-    }
-  }, []);
-
-  // Track layout changes
-  const handleLayout = useCallback((event: { nativeEvent: { layout: { height: number } } }) => {
-    viewportHeightRef.current = event.nativeEvent.layout.height;
-  }, []);
-
+  /**
+   * Expose scroll method to parent
+   */
   useImperativeHandle(ref, () => ({
     scrollToBottom: (animated = true) => {
       if (messages.length > 0 && flatListRef.current) {
-        flatListRef.current.scrollToEnd({ animated });
+        // For inverted list, scrollToOffset with offset 0 = bottom
+        flatListRef.current.scrollToOffset({ offset: 0, animated });
       }
     },
-  }));
+  }), [messages.length]);
 
-  // Simple autoscroll: show new content, but don't scroll past message top
-  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-  const lastMessageId = lastMessage?.id ?? null;
-
+  /**
+   * Scroll to bottom when messages first load (thread switch)
+   */
   useEffect(() => {
-    if (!lastMessage || messages.length === 0) return;
-
-    let scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
-    
-    const contentLength = lastMessage.content.length;
-    const isNewMessage = lastMessageId !== lastSeenMessageIdRef.current;
-    const contentGrew = contentLength > lastContentLengthRef.current;
-    
-    // Detect special cases that should scroll to bottom
-    const isUserMessage = lastMessage.role === 'user';
-    const isThinkingAnimation = lastMessage.role === 'assistant' && contentLength === 0;
-
-    // When new message arrives, record its top position
-    if (isNewMessage) {
-      lastMessageTopYRef.current = contentHeightRef.current;
-      lastSeenMessageIdRef.current = lastMessageId;
-      setIsAutoScrollEnabled(true);
-      
-      // Scroll to bottom for: user messages OR assistant thinking animation
-      if (isUserMessage || isThinkingAnimation) {
-        scrollTimeoutId = setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-        lastContentLengthRef.current = contentLength;
-        return () => {
-          if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-        };
-      }
+    if (!isLoading && messages.length > 0) {
+      // Small delay to let layout settle
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      }, 100);
+      return () => clearTimeout(timer);
     }
-
-    // Update tracking
-    lastContentLengthRef.current = contentLength;
-
-    // Only scroll if autoscroll is on AND there's new content to show
-    if (!isAutoScrollEnabled || (!isNewMessage && !contentGrew)) return;
-
-    // Calculate scroll target:
-    // - We want to show new content (scroll toward end)
-    // - But never scroll past where the message top would leave the viewport
-    const scrollToEndPosition = contentHeightRef.current - viewportHeightRef.current;
-    const maxScrollToKeepTopVisible = lastMessageTopYRef.current;
-    const targetScroll = Math.min(scrollToEndPosition, maxScrollToKeepTopVisible);
-
-    scrollTimeoutId = setTimeout(() => {
-      flatListRef.current?.scrollToOffset({
-        offset: Math.max(0, targetScroll),
-        animated: true,
-      });
-    }, 100);
-    
-    return () => {
-      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-    };
-  }, [lastMessageId, lastMessage?.content.length, isAutoScrollEnabled, messages.length]);
+  }, [isLoading]);
 
   // Show skeleton while loading messages for a thread switch
   if (isLoading) {
@@ -288,6 +170,10 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     );
   }
 
+  // For inverted FlatList, we need messages in reverse order (newest first)
+  // so that when inverted, newest appears at bottom of screen
+  const reversedMessages = [...messages].reverse();
+
   return (
     <View style={styles.listWrapper}>
       {/* Error banner */}
@@ -319,24 +205,28 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
           </View>
         </View>
       )}
-      
+
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={reversedMessages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <MessageBubble 
-            message={item} 
+          <MessageBubble
+            message={item}
             onRetry={item.status === 'failed' ? retryLastMessage : undefined}
           />
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        onScroll={handleScroll}
-        onContentSizeChange={handleContentSizeChange}
-        onLayout={handleLayout}
-        scrollEventThrottle={16}
+        // CRITICAL: Inverted list for chat (newest at bottom)
+        inverted
+        // CRITICAL: Prevents scroll jumping when new messages arrive
+        // This keeps the user's scroll position stable when content is added
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10,
+        }}
         // Performance optimizations
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}

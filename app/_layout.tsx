@@ -22,6 +22,7 @@ import { ConvexProviderWithClerk } from 'convex/react-clerk';
 
 import { DisclaimerManager } from '@/components/disclaimer-modal';
 import { FeedbackManager } from '@/components/feedback-modal';
+import { SessionManager } from '@/components/session-manager';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
 import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
@@ -171,8 +172,12 @@ export default function RootLayout() {
 
   console.log('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
+    <ClerkProvider
+      publishableKey={clerkPublishableKey}
+      tokenCache={tokenCache}
+    >
       <ClerkLoaded>
+        <SessionManager />
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
           <StoreUserInDatabase>
             <MateriaMedicaInitializer>

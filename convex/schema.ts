@@ -26,4 +26,35 @@ export default defineSchema({
     feedbackGiven: v.optional(v.boolean()),
   })
     .index("by_token", ["tokenIdentifier"]),
+
+  // Offer codes table - stores promotional codes that grant free access
+  offerCodes: defineTable({
+    // The actual code string (case-insensitive)
+    code: v.string(),
+    // Optional description of what this code is for
+    description: v.optional(v.string()),
+    // Maximum number of times this code can be used (null = unlimited)
+    maxUses: v.optional(v.number()),
+    // Number of times this code has been used
+    usedCount: v.number(),
+    // Whether this code is currently active
+    isActive: v.boolean(),
+    // Optional expiration date (timestamp in milliseconds)
+    expiresAt: v.optional(v.number()),
+  })
+    .index("by_code", ["code"])
+    .index("by_active", ["isActive"]),
+
+  // Offer code redemptions - tracks which users have redeemed which codes
+  offerCodeRedemptions: defineTable({
+    // Reference to the offer code
+    codeId: v.id("offerCodes"),
+    // Reference to the user who redeemed it
+    userId: v.id("users"),
+    // The actual code string (for reference)
+    codeString: v.string(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_code", ["codeId"])
+    .index("by_user_and_code", ["userId", "codeId"]),
 });

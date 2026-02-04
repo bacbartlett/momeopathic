@@ -1,12 +1,12 @@
 /**
  * Homeopathy Chatbot Theme
- * 
+ *
  * Design Philosophy: Warm, nurturing, natural, and trustworthy
  * Target audience: Moms learning about homeopathy for their families
  */
 
 import { DefaultTheme } from '@react-navigation/native';
-import { Platform } from 'react-native';
+import { Platform, PixelRatio } from 'react-native';
 
 // =============================================================================
 // COLOR PALETTE
@@ -173,11 +173,13 @@ export const Shadows = {
 };
 
 // =============================================================================
-// TYPOGRAPHY
+// TYPOGRAPHY - With Accessibility Support
 // =============================================================================
 
-export const Typography = {
-  // Font sizes - Generous for readability
+/**
+ * Base font sizes (before accessibility scaling)
+ */
+const BaseFontSizes = {
   xs: 12,
   sm: 14,
   base: 16,
@@ -185,6 +187,30 @@ export const Typography = {
   xl: 20,
   '2xl': 24,
   '3xl': 30,
+};
+
+/**
+ * Get the user's font scale from accessibility settings.
+ * Capped at 2.0x to prevent extreme scaling that breaks layouts.
+ */
+function getFontScale(): number {
+  const fontScale = PixelRatio.getFontScale();
+  return Math.min(fontScale, 2.0);
+}
+
+/**
+ * Typography with dynamic font scaling based on user accessibility settings.
+ * Font sizes automatically adjust to the user's system preferences.
+ */
+export const Typography = {
+  // Font sizes - Scaled based on user's accessibility settings
+  get xs() { return Math.round(BaseFontSizes.xs * getFontScale()); },
+  get sm() { return Math.round(BaseFontSizes.sm * getFontScale()); },
+  get base() { return Math.round(BaseFontSizes.base * getFontScale()); },
+  get lg() { return Math.round(BaseFontSizes.lg * getFontScale()); },
+  get xl() { return Math.round(BaseFontSizes.xl * getFontScale()); },
+  get '2xl'() { return Math.round(BaseFontSizes['2xl'] * getFontScale()); },
+  get '3xl'() { return Math.round(BaseFontSizes['3xl'] * getFontScale()); },
 
   // Font weights
   normal: '400' as const,

@@ -29,57 +29,10 @@ export default function ChatScreen() {
   const { isInitialized } = useRevenueCat();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
   const composerRef = useRef<ComposerHandle>(null);
 
-  const handleComposerFocus = useCallback(() => {
-    // On Android, scroll immediately (current working behavior)
-    // On iOS, let the keyboardDidShow listener handle the scroll after animation completes
-    if (Platform.OS === 'android') {
-      messageListRef.current?.scrollToBottom();
-    }
-  }, []);
 
-  // Listen for keyboard events on iOS to scroll after keyboard animation completes
-  useEffect(() => {
-    if (Platform.OS !== 'ios') {
-      return;
-    }
-
-    let scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
-      // Small delay to ensure layout is settled after keyboard animation
-      scrollTimeoutId = setTimeout(() => {
-        messageListRef.current?.scrollToBottom();
-      }, 100);
-    });
-
-    return () => {
-      keyboardDidShowListener.remove();
-      if (scrollTimeoutId !== null) {
-        clearTimeout(scrollTimeoutId);
-      }
-    };
-  }, []);
-
-  // Handle keyboard dismiss on Android to reset KeyboardAvoidingView
-  // Reset immediately when keyboard hides (no delay to avoid visual glitch)
-  useEffect(() => {
-    if (Platform.OS !== 'android') {
-      return;
-    }
-
-    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-      // Reset immediately - keyboardDidHide already fires after keyboard is dismissed
-      setKeyboardKey(prev => prev + 1);
-    });
-
-    return () => {
-      keyboardDidHideListener.remove();
-    };
-  }, []);
 
   // Create initial thread if none exists and user is authenticated
   useEffect(() => {
@@ -176,7 +129,7 @@ export default function ChatScreen() {
         <MessageList ref={messageListRef} messages={activeThread?.messages ?? []} isLoading={isMessagesLoading} />
       </View>
 
-      <Composer ref={composerRef} onSend={sendMessage} disabled={!activeThread} onFocus={handleComposerFocus} />
+      <Composer ref={composerRef} onSend={sendMessage} disabled={!activeThread} />
     </>
   );
 
@@ -191,7 +144,6 @@ export default function ChatScreen() {
         </KeyboardAvoidingView>
       ) : Platform.OS === 'android' ? (
         <KeyboardAvoidingView
-          key={keyboardKey}
           style={styles.keyboardAvoidingView}
           behavior="height"
         >

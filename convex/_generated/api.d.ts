@@ -13,6 +13,7 @@ import type * as agents_titleGenerator from "../agents/titleGenerator.js";
 import type * as feedback from "../feedback.js";
 import type * as feedbackEmail from "../feedbackEmail.js";
 import type * as messages from "../messages.js";
+import type * as offerCodes from "../offerCodes.js";
 import type * as rag from "../rag.js";
 import type * as threads from "../threads.js";
 import type * as users from "../users.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   feedback: typeof feedback;
   feedbackEmail: typeof feedbackEmail;
   messages: typeof messages;
+  offerCodes: typeof offerCodes;
   rag: typeof rag;
   threads: typeof threads;
   users: typeof users;
