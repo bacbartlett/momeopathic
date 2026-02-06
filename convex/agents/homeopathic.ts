@@ -7,12 +7,14 @@ import { SearchRAGTextResult } from "../rag";
 const baseMasterPrompt = `You are an expert homeopathic practitioner conducting a case-taking interview. Your goal is to gather symptoms systematically and identify the most appropriate remedy from the materia medica.
 
 CRITICAL - Tool Calling Behavior:
-- When using tools (searchMateriaMedica, getLearnMoreLink), do NOT narrate what you're about to do
+- Emit ZERO text before or alongside any tool call. When you call a tool, the message must contain ONLY the tool call, no text.
 - NEVER say things like "Let me search for that...", "I'll look that up...", "Searching now...", "Let me check the materia medica..."
-- Call tools SILENTLY without any preamble or announcement text
-- Only provide your response AFTER you have received all tool results
-- Never repeat or rephrase information you already stated before a tool call
-- Your visible response to the user should be ONE cohesive message, not fragmented thoughts
+- Call tools SILENTLY without any preamble, narration, or partial response text
+- When making a recommendation that needs a link: call getLearnMoreLink FIRST with no text, wait for the URL, THEN write your complete recommendation including the link
+- Only provide your response AFTER you have received ALL tool results
+- Never split your response across multiple steps. Write ONE complete message after all tools have returned.
+- Never repeat or rephrase information you already stated earlier in the same turn
+- Your visible response to the user must be ONE cohesive message, not fragmented across tool calls
 
 Core Principles
 
@@ -57,7 +59,7 @@ Look for strange, rare, or peculiar symptoms that stand out.
 "Does anything else happen along with this symptom?"
 
 Using RAG Results
-After EVERY user response, use the searchMateriaMedia tool to gather information. Use these to:
+Use the searchMateriaMedia tool to gather information. Use these to:
 
 Guide your next question - If results show strong matches, ask questions to confirm or differentiate between top remedies
 Look for gaps - If results are weak, ask about areas not yet covered
@@ -68,6 +70,8 @@ RAG Results: Pulsatilla (87%), Sepia (76%), Natrum Mur (71%)
 User mentioned: "I cry easily, feel better outside"
 Your next question: "Do you feel worse in warm rooms?"
 (Because Pulsatilla is worse from warmth, this would confirm)
+
+*Note that calling this tool takes time/increases latency. Use your best judgement to balance time-to-response with the highest quality answer. This is a premium experience--experience and quality matter
 Making a Recommendation
 Recommend a remedy when:
 
@@ -169,7 +173,10 @@ const searchMateriaMedica = createTool({
     query: z.string(),
   }),
   handler: async (ctx, args): Promise<SearchRAGTextResult> => {
-    return await ctx.runAction(api.rag.searchRAGText, {namespace: 'universal', searchFor: args.query})
+    console.log("[TOOL CALL] searchMateriaMedica invoked with query:", args.query);
+    const result = await ctx.runAction(api.rag.searchRAGText, {namespace: 'universal', searchFor: args.query});
+    console.log("[TOOL CALL] searchMateriaMedica result count:", Array.isArray(result) ? result.length : "non-array");
+    return result;
   }
 })
 
@@ -179,20 +186,23 @@ const getLearnMoreLink = createTool({
     nameOfRemedy: z.string().describe('The name of the homeopathic remedy to link to')
   }),
   handler: async (__, args): Promise<string> => {
+    console.log("[TOOL CALL] getLearnMoreLink invoked with nameOfRemedy:", args.nameOfRemedy);
     // Normalize the remedy name to match local database format (UPPERCASE with spaces)
     const normalizedName = args.nameOfRemedy.toUpperCase().trim();
-    
+
     // Generate the external fallback URL
     const urlName = args.nameOfRemedy.toLowerCase().replace(/ /g, '-');
     const externalUrl = `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`;
-    
+
     // Return internal app link with fallback encoded
     // Format: mymateria://materia-medica?name=REMEDY_NAME&fallback=ENCODED_URL
     // The app will try to find the remedy locally first, then use the fallback if not found
     const encodedName = encodeURIComponent(normalizedName);
     const encodedFallback = encodeURIComponent(externalUrl);
-    
-    return `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
+
+    const link = `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
+    console.log("[TOOL CALL] getLearnMoreLink result:", link);
+    return link;
   }
 })
 
@@ -200,8 +210,18 @@ const tools = {searchMateriaMedica, getLearnMoreLink};
 
 export const homeopathicAgent = new Agent(components.agent, {
   name: "Homeopathic Assistant",
-  languageModel: openrouter.chat("anthropic/claude-haiku-4.5"),
+  languageModel: openrouter.chat("anthropic/claude-sonnet-4.5"),
   instructions: baseMasterPrompt,
   maxSteps: 20,
-  tools
+  tools,
+  usageHandler: async (_ctx, { userId, threadId, agentName, usage, model, provider }) => {
+    console.log("[USAGE]", JSON.stringify({
+      userId,
+      threadId,
+      agentName,
+      model,
+      provider,
+      ...(usage as any),
+    }));
+  },
 });
