@@ -2,7 +2,7 @@
   "expo": {
     "name": "My Materia",
     "slug": "homeopathicnative",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Homeopathy reference guide powered by Boericke's Materia Medica. Search remedies, symptoms, and get personalized homeopathic recommendations through an AI-powered chat interface.",
     "primaryColor": "#E6F4FE",
     "orientation": "portrait",
