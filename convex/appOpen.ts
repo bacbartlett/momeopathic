@@ -77,6 +77,13 @@ async function resolveUserFromQuery(
  * - greeting: the greeting message (if any)
  * - tier: the inactivity tier that triggered this
  */
+// Return type for handleAppOpen
+interface HandleAppOpenResult {
+  action: string;
+  greeting?: string;
+  tier?: string;
+}
+
 export const handleAppOpen = action({
   args: {
     threadId: v.string(),
@@ -87,13 +94,13 @@ export const handleAppOpen = action({
     greeting: v.optional(v.string()),
     tier: v.optional(v.string()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<HandleAppOpenResult> => {
     const user = await resolveUserFromAction(ctx, args.guestId);
 
     // Check inactivity tier
-    const tier = await ctx.runQuery(internal.greetings.checkInactivityTier, {
+    const tier: string | null = await ctx.runQuery(internal.greetings.checkInactivityTier, {
       userId: user._id,
-    });
+    }) as string | null;
 
     if (!tier) {
       // No significant inactivity, nothing to do
@@ -103,7 +110,7 @@ export const handleAppOpen = action({
     // Try to get cached greeting
     const cached = await ctx.runMutation(internal.greetings.consumeGreeting, {
       userId: user._id,
-    });
+    }) as { greeting: string; tier: string } | null;
 
     if (!cached) {
       // No cached greeting available - generate one on-demand
@@ -123,7 +130,7 @@ export const handleAppOpen = action({
     });
 
     // Determine if we should show a divider (4hour+ gap)
-    const showDivider = tier === "4hour" || tier === "1week";
+    const showDivider: boolean = tier === "4hour" || tier === "1week";
 
     return {
       action: showDivider ? "greeting_with_divider" : "greeting",
@@ -133,6 +140,15 @@ export const handleAppOpen = action({
   },
 });
 
+// Return type for getAppOpenInfo
+interface GetAppOpenInfoResult {
+  needsGreeting: boolean;
+  showDivider: boolean;
+  tier: string | null;
+  hasGreeting: boolean;
+  greeting: string | null;
+}
+
 /**
  * Get app open info without pushing greeting.
  * Use this to check what action is needed before committing.
@@ -141,7 +157,7 @@ export const getAppOpenInfo = query({
   args: {
     guestId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<GetAppOpenInfoResult> => {
     const user = await resolveUserFromQuery(ctx, args.guestId);
 
     if (!user) {
@@ -155,9 +171,9 @@ export const getAppOpenInfo = query({
     }
 
     // Check inactivity tier
-    const tier = await ctx.runQuery(internal.greetings.checkInactivityTier, {
+    const tier: string | null = await ctx.runQuery(internal.greetings.checkInactivityTier, {
       userId: user._id,
-    });
+    }) as string | null;
 
     if (!tier) {
       return {
@@ -172,7 +188,7 @@ export const getAppOpenInfo = query({
     // Check if greeting is cached
     const cached = await ctx.runQuery(internal.greetings.getGreeting, {
       userId: user._id,
-    });
+    }) as { greeting: string; tier: string } | null;
 
     return {
       needsGreeting: tier !== null,

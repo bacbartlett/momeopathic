@@ -117,7 +117,7 @@ const getNotes = createTool({
     }
 
     if (notes.lessonsLearned && notes.lessonsLearned.length > 0) {
-      result += `## Lessons Learned\n${notes.lessonsLearned.map((l) => `- ${l}`).join("\n")}\n`;
+      result += `## Lessons Learned\n${notes.lessonsLearned.map((l: string) => `- ${l}`).join("\n")}\n`;
     }
 
     console.log("[TOOL CALL] getNotes - returning notes, length:", result.length);
@@ -154,7 +154,7 @@ const getCaseHistory = createTool({
     }
 
     const formatted = history
-      .map((h) => {
+      .map((h: { createdAt: number; entry: string }) => {
         const date = new Date(h.createdAt).toLocaleDateString();
         return `[${date}] ${h.entry}`;
       })

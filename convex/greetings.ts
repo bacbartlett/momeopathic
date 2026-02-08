@@ -642,6 +642,13 @@ export const generateGreeting = internalAction({
 // PUBLIC API
 // ============================================
 
+// Return type for getGreetingOnOpen
+interface GreetingOnOpenResult {
+  greeting: string;
+  tier: string;
+  showDivider: boolean;
+}
+
 /**
  * Called on app open - returns cached greeting with time prefix
  * Returns null if no greeting is needed (user was recently active)
@@ -650,7 +657,7 @@ export const getGreetingOnOpen = query({
   args: {
     guestId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<GreetingOnOpenResult | null> => {
     // Resolve user
     const identity = await ctx.auth.getUserIdentity();
     let user = null;
@@ -676,10 +683,10 @@ export const getGreetingOnOpen = query({
       return null; // No greeting needed
     }
 
-    // Get cached greeting
+    // Get cached greeting (explicit cast to avoid circular type inference)
     const cached = await ctx.runQuery(internal.greetings.getCachedGreeting, {
       userId: user._id,
-    });
+    }) as { greeting: string; tier: string; generatedAt: number; expiresAt: number } | null;
 
     if (!cached) {
       // No cached greeting - return a simple fallback
