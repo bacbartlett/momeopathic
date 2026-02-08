@@ -6,7 +6,7 @@ import { SearchRAGTextResult } from "../rag";
 import { buildSkillsCatalog, skills } from "../skills";
 import { systemPrompt } from "./systemprompt";
 
-const baseMasterPrompt = systemPrompt
+const baseMasterPrompt = systemPrompt;
 
 // Create OpenAI-compatible client pointing to OpenRouter
 // OpenRouter provides full OpenAI API compatibility
@@ -15,52 +15,57 @@ const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
+// ============================================
+// MATERIA MEDICA TOOLS
+// ============================================
+
 const searchMateriaMedica = createTool({
-  description: `Search a Materia Medica`,
+  description: `Search the Materia Medica for remedies matching symptoms, conditions, or remedy names. Use this to find and confirm remedy recommendations.`,
   args: z.object({
-    query: z.string(),
+    query: z.string().describe("The symptom picture, condition, or remedy name to search for"),
   }),
   handler: async (ctx, args): Promise<SearchRAGTextResult> => {
     console.log("[TOOL CALL] searchMateriaMedica invoked with query:", args.query);
-    const result = await ctx.runAction(api.rag.searchRAGText, {namespace: 'universal', searchFor: args.query});
-    console.log("[TOOL CALL] searchMateriaMedica result count:", Array.isArray(result) ? result.length : "non-array");
+    const result = await ctx.runAction(api.rag.searchRAGText, {
+      namespace: "universal",
+      searchFor: args.query,
+    });
+    console.log(
+      "[TOOL CALL] searchMateriaMedica result count:",
+      Array.isArray(result) ? result.length : "non-array"
+    );
     return result;
-  }
-})
+  },
+});
 
 const getLearnMoreLink = createTool({
-  description: 'Generate a link to learn more about a remedy. Returns an internal app link to view the remedy in the local Materia Medica. If the remedy is not found locally, the app will fall back to the external web link.',
+  description:
+    "Generate a link to learn more about a remedy. Returns an internal app link to view the remedy in the local Materia Medica. Call this when making a remedy recommendation.",
   args: z.object({
-    nameOfRemedy: z.string().describe('The name of the homeopathic remedy to link to')
+    nameOfRemedy: z.string().describe("The name of the homeopathic remedy to link to"),
   }),
   handler: async (__, args): Promise<string> => {
     console.log("[TOOL CALL] getLearnMoreLink invoked with nameOfRemedy:", args.nameOfRemedy);
-    // Normalize the remedy name to match local database format (UPPERCASE with spaces)
     const normalizedName = args.nameOfRemedy.toUpperCase().trim();
-
-    // Generate the external fallback URL
-    const urlName = args.nameOfRemedy.toLowerCase().replace(/ /g, '-');
+    const urlName = args.nameOfRemedy.toLowerCase().replace(/ /g, "-");
     const externalUrl = `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`;
-
-    // Return internal app link with fallback encoded
-    // Format: mymateria://materia-medica?name=REMEDY_NAME&fallback=ENCODED_URL
-    // The app will try to find the remedy locally first, then use the fallback if not found
     const encodedName = encodeURIComponent(normalizedName);
     const encodedFallback = encodeURIComponent(externalUrl);
-
     const link = `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
     console.log("[TOOL CALL] getLearnMoreLink result:", link);
     return link;
-  }
-})
+  },
+});
+
+// ============================================
+// SKILLS TOOL
+// ============================================
 
 const loadSkill = createTool({
   description:
     "Load a specialized knowledge skill into context. Call this BEFORE answering questions about dosing, potency, administration, or other skill topics. The skill content will guide your detailed responses.",
   args: z.object({
-    skillName: z
-      .string()
-      .describe("The name of the skill to load (e.g., 'dosing')"),
+    skillName: z.string().describe("The name of the skill to load (e.g., 'dosing')"),
   }),
   handler: async (_ctx, args): Promise<string> => {
     console.log("[TOOL CALL] loadSkill invoked with skillName:", args.skillName);
@@ -69,45 +74,22 @@ const loadSkill = createTool({
       console.log("[TOOL CALL] loadSkill - skill not found:", args.skillName);
       return `Skill "${args.skillName}" not found. Available skills: ${Object.keys(skills).join(", ")}`;
     }
-    console.log(
-      "[TOOL CALL] loadSkill - loaded skill:",
-      args.skillName,
-      "length:",
-      skill.content.length
-    );
+    console.log("[TOOL CALL] loadSkill - loaded skill:", args.skillName, "length:", skill.content.length);
     return skill.content;
   },
 });
 
-const saveNote = createTool({
-  description:
-    "Save or update your notes about this user. Use this to remember family details, children's names and ages, active cases, remedy history, preferences, and anything that helps you give better care across conversations. Each call replaces the full note, so include all prior content plus updates.",
-  args: z.object({
-    content: z
-      .string()
-      .describe(
-        "The complete note content. Include everything worth remembering — family info, active cases, past remedies, preferences. This replaces the previous note entirely."
-      ),
-  }),
-  handler: async (ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] saveNote invoked, content length:", args.content.length);
-    const userId = ctx.userId;
-    if (!userId) {
-      console.log("[TOOL CALL] saveNote - no userId available");
-      return "Could not save note: no user context available.";
-    }
-    await ctx.runMutation(internal.notes.upsert, {
-      userId,
-      content: args.content,
-    });
-    console.log("[TOOL CALL] saveNote - saved for userId:", userId);
-    return "Note saved successfully.";
-  },
-});
+// ============================================
+// NOTES TOOLS - Memory System
+// ============================================
 
+/**
+ * Get all essential notes at conversation start.
+ * Returns profile, active cases, and lessons learned.
+ */
 const getNotes = createTool({
   description:
-    "Retrieve your saved notes about this user. Call this at the start of a conversation to remember who they are, their family, active cases, and past interactions. If no notes exist, you'll get an empty result.",
+    "Retrieve all essential notes about this user. CALL THIS AT THE START OF EVERY CONVERSATION. Returns their profile (family info, preferences), active cases (current issues), and lessons learned (what works for them).",
   args: z.object({}),
   handler: async (ctx): Promise<string> => {
     console.log("[TOOL CALL] getNotes invoked");
@@ -116,17 +98,204 @@ const getNotes = createTool({
       console.log("[TOOL CALL] getNotes - no userId available");
       return "No user context available.";
     }
-    const note = await ctx.runQuery(internal.notes.getByUserId, { userId });
-    if (!note) {
+
+    const notes = await ctx.runQuery(internal.notes.getNotes, { userId });
+
+    if (!notes.profile && !notes.activeCases && !notes.lessonsLearned) {
       console.log("[TOOL CALL] getNotes - no notes found for userId:", userId);
-      return "No notes saved for this user yet.";
+      return "No notes saved for this user yet. This appears to be a new user.";
     }
-    console.log("[TOOL CALL] getNotes - found note, length:", note.content.length);
-    return note.content;
+
+    let result = "";
+
+    if (notes.profile) {
+      result += `## Profile\n${notes.profile}\n\n`;
+    }
+
+    if (notes.activeCases) {
+      result += `## Active Cases\n${notes.activeCases}\n\n`;
+    }
+
+    if (notes.lessonsLearned && notes.lessonsLearned.length > 0) {
+      result += `## Lessons Learned\n${notes.lessonsLearned.map((l) => `- ${l}`).join("\n")}\n`;
+    }
+
+    console.log("[TOOL CALL] getNotes - returning notes, length:", result.length);
+    return result || "No notes saved for this user yet.";
   },
 });
 
-const tools = { searchMateriaMedica, getLearnMoreLink, loadSkill, saveNote, getNotes };
+/**
+ * Get case history for pattern matching and recommendations.
+ */
+const getCaseHistory = createTool({
+  description:
+    "Retrieve past case history for this user. Use this when looking for patterns, checking what remedies have worked before, or making recommendations based on history. Returns cases with most recent first.",
+  args: z.object({
+    limit: z
+      .number()
+      .optional()
+      .describe("Maximum number of cases to retrieve. Defaults to all."),
+  }),
+  handler: async (ctx, args): Promise<string> => {
+    console.log("[TOOL CALL] getCaseHistory invoked, limit:", args.limit);
+    const userId = ctx.userId;
+    if (!userId) {
+      return "No user context available.";
+    }
+
+    const history = await ctx.runQuery(internal.notes.getCaseHistory, {
+      userId,
+      limit: args.limit,
+    });
+
+    if (history.length === 0) {
+      return "No case history found for this user.";
+    }
+
+    const formatted = history
+      .map((h) => {
+        const date = new Date(h.createdAt).toLocaleDateString();
+        return `[${date}] ${h.entry}`;
+      })
+      .join("\n");
+
+    console.log("[TOOL CALL] getCaseHistory - returning", history.length, "cases");
+    return formatted;
+  },
+});
+
+/**
+ * Save or update user profile.
+ */
+const saveProfile = createTool({
+  description:
+    "Save or update the user's profile. Use this to remember family details (names, ages), chronic conditions, preferences (pellets vs water, where they buy remedies), and experience level. Overwrites the existing profile.",
+  args: z.object({
+    content: z.string().describe(
+      "The complete profile content. Include: children's names and ages, chronic conditions, preferences, experience level with homeopathy."
+    ),
+  }),
+  handler: async (ctx, args): Promise<string> => {
+    console.log("[TOOL CALL] saveProfile invoked, length:", args.content.length);
+    const userId = ctx.userId;
+    if (!userId) {
+      return "Could not save: no user context available.";
+    }
+
+    await ctx.runMutation(internal.notes.saveProfile, {
+      userId,
+      content: args.content,
+    });
+
+    console.log("[TOOL CALL] saveProfile - saved for userId:", userId);
+    return "Profile saved.";
+  },
+});
+
+/**
+ * Save or update active cases.
+ */
+const saveActiveCases = createTool({
+  description:
+    "Save or update active cases. Use this to track current issues being worked on, including: who has what, last remedy given, when, and what follow-up is needed. Overwrites existing active cases.",
+  args: z.object({
+    content: z.string().describe(
+      "The current active cases. Format: 'Name (age) - issue, remedy given, date, follow-up needed'. Include all active cases, or write 'No active cases' if resolved."
+    ),
+  }),
+  handler: async (ctx, args): Promise<string> => {
+    console.log("[TOOL CALL] saveActiveCases invoked, length:", args.content.length);
+    const userId = ctx.userId;
+    if (!userId) {
+      return "Could not save: no user context available.";
+    }
+
+    await ctx.runMutation(internal.notes.saveActiveCases, {
+      userId,
+      content: args.content,
+    });
+
+    console.log("[TOOL CALL] saveActiveCases - saved for userId:", userId);
+    return "Active cases saved.";
+  },
+});
+
+/**
+ * Append to case history.
+ */
+const appendCaseHistory = createTool({
+  description:
+    "Log a case to history. Call this when a case resolves or reaches a meaningful conclusion. This is an append-only log — entries are never overwritten. Include: who, what issue, what remedy, outcome.",
+  args: z.object({
+    entry: z.string().describe(
+      "The case entry to log. Format: 'Name - issue - remedy - outcome'. Example: 'Timmy - fever - Belladonna 30C - resolved after 2 doses'"
+    ),
+  }),
+  handler: async (ctx, args): Promise<string> => {
+    console.log("[TOOL CALL] appendCaseHistory invoked:", args.entry);
+    const userId = ctx.userId;
+    if (!userId) {
+      return "Could not save: no user context available.";
+    }
+
+    await ctx.runMutation(internal.notes.appendCaseHistory, {
+      userId,
+      entry: args.entry,
+    });
+
+    console.log("[TOOL CALL] appendCaseHistory - appended for userId:", userId);
+    return "Case logged to history.";
+  },
+});
+
+/**
+ * Save a lesson learned.
+ */
+const saveLesson = createTool({
+  description:
+    "Save a lesson learned about this family. Use this when you discover a pattern: a remedy that works particularly well for someone, a sensitivity to note, or an insight worth remembering. Lessons accumulate over time.",
+  args: z.object({
+    lesson: z.string().describe(
+      "The lesson to remember. Example: 'Timmy responds better to Pulsatilla than Chamomilla for teething' or 'Mom prefers water dosing for the baby'"
+    ),
+  }),
+  handler: async (ctx, args): Promise<string> => {
+    console.log("[TOOL CALL] saveLesson invoked:", args.lesson);
+    const userId = ctx.userId;
+    if (!userId) {
+      return "Could not save: no user context available.";
+    }
+
+    await ctx.runMutation(internal.notes.saveLesson, {
+      userId,
+      lesson: args.lesson,
+    });
+
+    console.log("[TOOL CALL] saveLesson - saved for userId:", userId);
+    return "Lesson saved.";
+  },
+});
+
+// ============================================
+// AGENT DEFINITION
+// ============================================
+
+const tools = {
+  // Materia Medica
+  searchMateriaMedica,
+  getLearnMoreLink,
+  // Skills
+  loadSkill,
+  // Notes - Reading
+  getNotes,
+  getCaseHistory,
+  // Notes - Writing
+  saveProfile,
+  saveActiveCases,
+  appendCaseHistory,
+  saveLesson,
+};
 
 export const homeopathicAgent = new Agent(components.agent, {
   name: "Homeopathic Assistant",
@@ -135,13 +304,16 @@ export const homeopathicAgent = new Agent(components.agent, {
   maxSteps: 20,
   tools,
   usageHandler: async (_ctx, { userId, threadId, agentName, usage, model, provider }) => {
-    console.log("[USAGE]", JSON.stringify({
-      userId,
-      threadId,
-      agentName,
-      model,
-      provider,
-      ...(usage as any),
-    }));
+    console.log(
+      "[USAGE]",
+      JSON.stringify({
+        userId,
+        threadId,
+        agentName,
+        model,
+        provider,
+        ...(usage as any),
+      })
+    );
   },
 });

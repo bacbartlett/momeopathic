@@ -32,17 +32,53 @@ export default defineSchema({
     .index("by_token", ["tokenIdentifier"])
     .index("by_guestId", ["guestId"]),
 
-  // Notes table - stores per-user notes from the AI agent across conversations
-  // Used by the homeopathic agent to remember family details, active cases, etc.
-  notes: defineTable({
-    // The user this note belongs to (users._id as string, matching agent userId)
+  // ============================================
+  // NOTES SYSTEM - 4 types of persistent memory
+  // ============================================
+
+  // Profile - family info, preferences, rarely changes
+  userProfiles: defineTable({
     userId: v.string(),
-    // The note content (free-form text from the agent)
     content: v.string(),
-    // Last updated timestamp
     updatedAt: v.number(),
-  })
-    .index("by_userId", ["userId"]),
+  }).index("by_userId", ["userId"]),
+
+  // Active Cases - current issues being worked on, updates frequently
+  activeCases: defineTable({
+    userId: v.string(),
+    content: v.string(),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  // Case History - append-only log of past cases
+  caseHistory: defineTable({
+    userId: v.string(),
+    entry: v.string(),
+    // When the case was logged (not when it happened)
+    createdAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  // Lessons Learned - patterns, what works for whom
+  lessonsLearned: defineTable({
+    userId: v.string(),
+    lesson: v.string(),
+    createdAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  // ============================================
+  // LEGACY - keeping for migration, will deprecate
+  // ============================================
+
+  // Notes table - OLD single-note system (deprecated, migrate to new system)
+  notes: defineTable({
+    userId: v.string(),
+    content: v.string(),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  // ============================================
+  // OTHER TABLES
+  // ============================================
 
   // Offer codes table - stores promotional codes that grant free access
   offerCodes: defineTable({
