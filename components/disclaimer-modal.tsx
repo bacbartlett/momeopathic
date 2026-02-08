@@ -1,4 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -101,25 +102,24 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
 
   const handleAgree = async () => {
     try {
-      // Save to AsyncStorage as fallback
+      // Save to AsyncStorage (works for both guests and authenticated users)
       await AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, 'true');
-      
-      // Save to database if user is authenticated
+
+      // Save to database if user is authenticated (skip for guests)
       try {
         await acceptDisclaimer();
       } catch (dbError) {
-        // If user is not authenticated, that's okay - AsyncStorage will handle it
-        // Only log if it's not an auth error
+        // If user is not authenticated (guest), that's okay - AsyncStorage handles it
         if (dbError instanceof Error && !dbError.message.includes('authentication')) {
           console.error('Failed to save disclaimer to database:', dbError);
         }
       }
-      
+
       // Track disclaimer accepted (only when user clicks agree, not dismiss)
       if (!allowDismiss) {
         track('Disclaimer Accepted');
       }
-      
+
       onAgree();
     } catch (error) {
       console.error('Failed to save disclaimer agreement:', error);
@@ -172,7 +172,7 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
         />
         <View style={styles.modalContainer}>
           <View style={styles.header}>
-      
+
             <MaskedView
               maskElement={
                 <Text style={styles.title}>Welcome</Text>
@@ -244,10 +244,12 @@ export async function hasAgreedToDisclaimer(): Promise<boolean> {
 
 /**
  * Hook to check if the user has accepted the disclaimer.
- * Checks both the database (if authenticated) and AsyncStorage.
- * For authenticated users, database status takes priority to ensure new accounts always see the disclaimer.
+ * For authenticated users: checks database (source of truth) synced with AsyncStorage.
+ * For guests: checks AsyncStorage only.
  */
 export function useHasAcceptedDisclaimer() {
+  const { isAuthenticated } = useConvexAuth();
+  const { isGuest } = useGuest();
   const dbAccepted = useQuery(api.users.hasAcceptedDisclaimer);
   const [localAccepted, setLocalAccepted] = useState<boolean | null>(null);
 
@@ -272,47 +274,44 @@ export function useHasAcceptedDisclaimer() {
     }
   }, [dbAccepted, localAccepted]);
 
-  // If database query has completed (not undefined), prioritize database status
-  // This ensures new accounts always see the disclaimer even if local storage says accepted
+  // For guest users, use AsyncStorage only
+  if (isGuest && !isAuthenticated) {
+    return localAccepted;
+  }
+
+  // For authenticated users, database is source of truth
   if (dbAccepted !== undefined) {
-    // Database says accepted
     if (dbAccepted === true) {
       return true;
     }
-    // Database says not accepted (false) or user is new (null becomes false)
-    // For authenticated users, we must show disclaimer if DB says false
     return false;
   }
-  
-  // Database query is still loading - return null to indicate loading state
-  // This prevents the modal from briefly flashing while waiting for DB response
-  // The DB is the source of truth for authenticated users
+
+  // Database query is still loading
   return null;
 }
 
 /**
- * Component that manages the disclaimer modal visibility based on database and local storage.
- * Should be rendered inside ConvexProviderWithClerk.
- * Only shows the disclaimer if the user is authenticated (logged in).
+ * Component that manages the disclaimer modal visibility.
+ * Shows for both authenticated users and guests.
  * Does not show on terms or privacy policy pages.
  */
 export function DisclaimerManager() {
-  // Use Convex auth instead of Clerk auth to ensure auth state is synchronized with queries
-  // This prevents race conditions where Clerk says "signed in" but Convex queries haven't caught up
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+  const { isGuest, isGuestLoading } = useGuest();
   const hasAccepted = useHasAcceptedDisclaimer();
   const pathname = usePathname();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Wait for Convex auth to be ready
-    if (isAuthLoading) {
+    // Wait for auth and guest state to be ready
+    if (isAuthLoading || isGuestLoading) {
       return;
     }
 
-    // If user is not authenticated, don't show disclaimer
-    if (!isAuthenticated) {
+    // If user is not authenticated and not a guest, don't show disclaimer
+    if (!isAuthenticated && !isGuest) {
       setShowDisclaimer(false);
       setInitialized(true);
       return;
@@ -325,18 +324,16 @@ export function DisclaimerManager() {
       return;
     }
 
-    // User is authenticated and not on terms/privacy pages - check if they've accepted
-    // Only show modal when we have a definitive answer (hasAccepted is not null)
+    // User is authenticated or guest - check if they've accepted
     if (hasAccepted === null) {
       // Still loading disclaimer status - keep modal hidden
       setShowDisclaimer(false);
       return;
     }
 
-    // We have a definitive answer - show modal only if user hasn't accepted
     setShowDisclaimer(!hasAccepted);
     setInitialized(true);
-  }, [isAuthenticated, isAuthLoading, hasAccepted, pathname]);
+  }, [isAuthenticated, isAuthLoading, isGuest, isGuestLoading, hasAccepted, pathname]);
 
   const handleAgree = () => {
     setShowDisclaimer(false);

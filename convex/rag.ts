@@ -60,11 +60,7 @@ export const searchRAGText = action({
   },
   returns: vSearchRAGTextResult,
   handler: async (ctx, args) => {
-    // Require authentication
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Unauthenticated: Must be logged in to search RAG content");
-    }
+    // No auth required - RAG searches the universal namespace (public materia medica data)
 
     // Validate search query length
     if (args.searchFor.length > MAX_SEARCH_QUERY_LENGTH) {

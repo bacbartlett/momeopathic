@@ -9,12 +9,15 @@
  */
 
 import type * as agents_homeopathic from "../agents/homeopathic.js";
+import type * as agents_systemprompt from "../agents/systemprompt.js";
 import type * as agents_titleGenerator from "../agents/titleGenerator.js";
 import type * as feedback from "../feedback.js";
 import type * as feedbackEmail from "../feedbackEmail.js";
 import type * as messages from "../messages.js";
+import type * as notes from "../notes.js";
 import type * as offerCodes from "../offerCodes.js";
 import type * as rag from "../rag.js";
+import type * as skills_index from "../skills/index.js";
 import type * as threads from "../threads.js";
 import type * as users from "../users.js";
 
@@ -26,12 +29,15 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "agents/homeopathic": typeof agents_homeopathic;
+  "agents/systemprompt": typeof agents_systemprompt;
   "agents/titleGenerator": typeof agents_titleGenerator;
   feedback: typeof feedback;
   feedbackEmail: typeof feedbackEmail;
   messages: typeof messages;
+  notes: typeof notes;
   offerCodes: typeof offerCodes;
   rag: typeof rag;
+  "skills/index": typeof skills_index;
   threads: typeof threads;
   users: typeof users;
 }>;

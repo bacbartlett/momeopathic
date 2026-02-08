@@ -1,7 +1,10 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
+import { api } from '@/convex/_generated/api';
 import { useSignUp } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
+import { useAction } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -29,6 +32,19 @@ export default function SignUpScreen() {
   const { signUp, setActive, isLoaded } = useSignUp();
   const router = useRouter();
   const { track } = usePostHogAnalytics();
+  const { guestId, clearGuestSession } = useGuest();
+  const claimGuestAccount = useAction(api.users.claimGuestAccount);
+
+  const claimGuestIfNeeded = async () => {
+    if (guestId) {
+      try {
+        await claimGuestAccount({ guestId });
+        await clearGuestSession();
+      } catch (err) {
+        console.error('[SignUp] Failed to claim guest account:', err);
+      }
+    }
+  };
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -104,6 +120,7 @@ export default function SignUpScreen() {
       if (signUpAttempt.status === 'complete') {
         await setActive({ session: signUpAttempt.createdSessionId });
         track('Sign Up', { method: 'email' });
+        await claimGuestIfNeeded();
         setError(''); // Clear error on success
         try {
           router.replace('/(tabs)');

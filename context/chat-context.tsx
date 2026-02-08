@@ -11,13 +11,13 @@ import React, {
     useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
+import { useGuest } from './guest-context';
 import { usePostHogAnalytics } from './posthog-context';
 
 // Re-export types for consumers who import from context
 export type { ChatState, Message, Thread } from '@/types/chat';
 
 // UIMessage shape from the actual Convex agent response
-// Using 'key' instead of '_id' as per the actual type
 interface AgentUIMessage {
   key: string;
   role: "user" | "assistant" | "system";
@@ -45,6 +45,8 @@ interface ChatContextType {
   isSending: boolean;
   isCreatingThread: boolean;
   isAuthenticated: boolean;
+  isGuest: boolean;
+  guestLimitReached: boolean;
   sendError: string | null;
   createThreadError: string | null;
   deleteThreadError: string | null;
@@ -56,6 +58,7 @@ interface ChatContextType {
   clearSendError: () => void;
   clearCreateThreadError: () => void;
   clearDeleteThreadError: () => void;
+  clearGuestLimitReached: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -68,12 +71,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [createThreadError, setCreateThreadError] = useState<string | null>(null);
   const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
+  const [guestLimitReached, setGuestLimitReached] = useState(false);
   const { track, incrementUserProperty } = usePostHogAnalytics();
-  
+
   // Use refs for race condition prevention
   const isSendingRef = useRef(false);
   const mountedRef = useRef(true);
-  
+
   // Track mounted state for cleanup
   useEffect(() => {
     mountedRef.current = true;
@@ -83,20 +87,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Get auth state from Convex (not Clerk directly)
-  // This ensures we only make authenticated requests when Convex has the JWT token
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
-  // Fetch threads from Convex (no userId needed - server uses auth)
-  // Skip the query if not authenticated
+  // Get guest state
+  const { guestId, isGuest, isGuestLoading } = useGuest();
+
+  // Determine if we can make queries
+  const canQuery = isAuthenticated || isGuest;
+
+  // Fetch threads from Convex
   const threadsResult = useQuery(
     api.threads.list,
-    isAuthenticated ? {} : "skip"
+    canQuery
+      ? isAuthenticated
+        ? {}
+        : { guestId: guestId! }
+      : "skip"
   );
-  
+
   // Fetch messages for active thread
   const messagesResult = useQuery(
     api.messages.list,
-    activeThreadId && isAuthenticated ? { threadId: activeThreadId } : "skip"
+    activeThreadId && canQuery
+      ? isAuthenticated
+        ? { threadId: activeThreadId }
+        : { threadId: activeThreadId, guestId: guestId! }
+      : "skip"
   );
 
   // Mutations and actions
@@ -108,11 +124,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Transform Convex threads to UI threads
   const threads = useMemo((): Thread[] => {
     if (!threadsResult?.page) return [];
-    
+
     return threadsResult.page.map((thread: ConvexThread) => ({
       id: thread._id,
       title: thread.title || 'New Chat',
-      messages: [], // Messages are loaded separately for the active thread
+      messages: [],
       createdAt: thread._creationTime,
       updatedAt: thread._creationTime,
     }));
@@ -121,7 +137,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Transform messages for active thread
   const activeThreadMessages = useMemo((): Message[] => {
     if (!messagesResult?.page) return [];
-    
+
     return (messagesResult.page as AgentUIMessage[])
       .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
       .map((msg) => ({
@@ -136,10 +152,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Build complete active thread with messages
   const activeThread = useMemo((): Thread | null => {
     if (!activeThreadId) return null;
-    
+
     const thread = threads.find(t => t.id === activeThreadId);
     if (!thread) return null;
-    
+
     return {
       ...thread,
       messages: activeThreadMessages,
@@ -148,19 +164,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Build state object
   const state = useMemo((): ChatState => ({
-    threads: threads.map(t => 
-      t.id === activeThreadId 
+    threads: threads.map(t =>
+      t.id === activeThreadId
         ? { ...t, messages: activeThreadMessages }
         : t
     ),
     activeThreadId,
   }), [threads, activeThreadId, activeThreadMessages]);
 
-  // Loading state - include auth loading
-  const isLoading = isAuthLoading || (isAuthenticated && threadsResult === undefined);
+  // Loading state - include auth loading and guest loading
+  const isLoading = isAuthLoading || isGuestLoading || (canQuery && threadsResult === undefined);
 
-  // Messages loading state - true when we have an active thread but messages haven't loaded yet
-  const isMessagesLoading = Boolean(activeThreadId && isAuthenticated && messagesResult === undefined);
+  // Messages loading state
+  const isMessagesLoading = Boolean(activeThreadId && canQuery && messagesResult === undefined);
 
   // Auto-select first thread if none selected
   React.useEffect(() => {
@@ -169,12 +185,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isLoading, threads, activeThreadId]);
 
-  // Clear active thread when user signs out
+  // Clear active thread when user signs out (and is not a guest)
   React.useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !isGuest) {
       setActiveThreadId(null);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isGuest]);
 
   // Clear error states
   const clearCreateThreadError = useCallback(() => {
@@ -185,39 +201,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setDeleteThreadError(null);
   }, []);
 
-  // Create new thread (no userId needed - server uses auth)
+  const clearGuestLimitReached = useCallback(() => {
+    setGuestLimitReached(false);
+  }, []);
+
+  // Create new thread
   const createThread = useCallback(async () => {
-    if (!isAuthenticated) {
-      console.error('Cannot create thread: User not authenticated');
+    if (!canQuery) {
+      console.error('Cannot create thread: User not authenticated or guest');
       return;
     }
     if (isCreatingThread) {
-      // Prevent concurrent thread creation
       return;
     }
     setIsCreatingThread(true);
     setCreateThreadError(null);
     try {
-      const result = await createThreadAction({
-        title: 'New Chat',
-      });
+      const actionArgs = isAuthenticated
+        ? { title: 'New Chat' }
+        : { title: 'New Chat', guestId: guestId! };
+      const result = await createThreadAction(actionArgs);
       if (mountedRef.current) {
         setActiveThreadId(result.threadId);
-        track('Thread Created', { thread_id: result.threadId });
+        track('Thread Created', { thread_id: result.threadId, is_guest: isGuest });
         incrementUserProperty('threads_created');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create thread';
       console.error('Failed to create thread:', error);
       if (mountedRef.current) {
-        setCreateThreadError(errorMessage);
+        if (errorMessage === 'GUEST_LIMIT_REACHED') {
+          setGuestLimitReached(true);
+        } else {
+          setCreateThreadError(errorMessage);
+        }
       }
     } finally {
       if (mountedRef.current) {
         setIsCreatingThread(false);
       }
     }
-  }, [isAuthenticated, isCreatingThread, createThreadAction, track, incrementUserProperty]);
+  }, [canQuery, isAuthenticated, isGuest, guestId, isCreatingThread, createThreadAction, track, incrementUserProperty]);
 
   // Select thread
   const selectThread = useCallback((threadId: string) => {
@@ -226,15 +250,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Delete thread
   const deleteThread = useCallback(async (threadId: string) => {
-    if (!isAuthenticated) {
-      console.error('Cannot delete thread: User not authenticated');
+    if (!canQuery) {
+      console.error('Cannot delete thread: User not authenticated or guest');
       return;
     }
     setDeleteThreadError(null);
     try {
-      await deleteThreadAction({ threadId });
+      const actionArgs = isAuthenticated
+        ? { threadId }
+        : { threadId, guestId: guestId! };
+      await deleteThreadAction(actionArgs);
       if (mountedRef.current) {
-        track('Thread Deleted', { thread_id: threadId });
+        track('Thread Deleted', { thread_id: threadId, is_guest: isGuest });
         if (activeThreadId === threadId) {
           const remainingThreads = threads.filter(t => t.id !== threadId);
           setActiveThreadId(remainingThreads[0]?.id ?? null);
@@ -247,7 +274,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setDeleteThreadError(errorMessage);
       }
     }
-  }, [isAuthenticated, deleteThreadAction, activeThreadId, threads, track]);
+  }, [canQuery, isAuthenticated, isGuest, guestId, deleteThreadAction, activeThreadId, threads, track]);
 
   // Clear send error
   const clearSendError = useCallback(() => {
@@ -255,36 +282,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setLastFailedMessage(null);
   }, []);
 
-  // Send message (no userId needed - server uses auth)
+  // Send message
   const sendMessage = useCallback(async (content: string) => {
-    // Use ref for race condition prevention - check and set atomically
     if (!activeThreadId || isSendingRef.current) return;
-    if (!isAuthenticated) {
-      console.error('Cannot send message: User not authenticated');
+    if (!canQuery) {
+      console.error('Cannot send message: User not authenticated or guest');
       return;
     }
 
-    // Set ref immediately to prevent race conditions
     isSendingRef.current = true;
     setIsSending(true);
     setSendError(null);
     try {
-      await sendMessageAction({
-        threadId: activeThreadId,
-        content,
-      });
+      const actionArgs = isAuthenticated
+        ? { threadId: activeThreadId, content }
+        : { threadId: activeThreadId, content, guestId: guestId! };
+      await sendMessageAction(actionArgs);
       if (mountedRef.current) {
         setLastFailedMessage(null);
-        track('Message Sent', { 
-          thread_id: activeThreadId, 
-          message_length: content.length 
+        track('Message Sent', {
+          thread_id: activeThreadId,
+          message_length: content.length,
+          is_guest: isGuest,
         });
         incrementUserProperty('messages_sent');
-        // Increment feedback thread count for review prompt tracking
-        incrementFeedbackThreadCount().catch((err) => {
-          // Silent fail - feedback tracking is non-critical
-          console.debug('Failed to increment feedback thread count:', err);
-        });
+        // Increment feedback thread count for review prompt tracking (only for authenticated users)
+        if (isAuthenticated) {
+          incrementFeedbackThreadCount().catch((err) => {
+            console.debug('Failed to increment feedback thread count:', err);
+          });
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
@@ -299,7 +326,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsSending(false);
       }
     }
-  }, [activeThreadId, isAuthenticated, sendMessageAction, track, incrementUserProperty, incrementFeedbackThreadCount]);
+  }, [activeThreadId, canQuery, isAuthenticated, isGuest, guestId, sendMessageAction, track, incrementUserProperty, incrementFeedbackThreadCount]);
 
   // Retry last failed message
   const retryLastMessage = useCallback(async () => {
@@ -317,6 +344,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isSending,
         isCreatingThread,
         isAuthenticated,
+        isGuest,
+        guestLimitReached,
         sendError,
         createThreadError,
         deleteThreadError,
@@ -328,6 +357,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearSendError,
         clearCreateThreadError,
         clearDeleteThreadError,
+        clearGuestLimitReached,
       }}
     >
       {children}

@@ -24,8 +24,25 @@ export default defineSchema({
     feedbackDismissCount: v.optional(v.number()),
     // Whether the user has given feedback (happy or submitted negative feedback)
     feedbackGiven: v.optional(v.boolean()),
+    // Guest user support
+    isGuest: v.optional(v.boolean()),
+    guestId: v.optional(v.string()),
+    guestThreadCount: v.optional(v.number()),
   })
-    .index("by_token", ["tokenIdentifier"]),
+    .index("by_token", ["tokenIdentifier"])
+    .index("by_guestId", ["guestId"]),
+
+  // Notes table - stores per-user notes from the AI agent across conversations
+  // Used by the homeopathic agent to remember family details, active cases, etc.
+  notes: defineTable({
+    // The user this note belongs to (users._id as string, matching agent userId)
+    userId: v.string(),
+    // The note content (free-form text from the agent)
+    content: v.string(),
+    // Last updated timestamp
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
 
   // Offer codes table - stores promotional codes that grant free access
   offerCodes: defineTable({

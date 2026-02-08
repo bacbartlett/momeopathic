@@ -1,6 +1,7 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat, Thread } from '@/context/chat-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import {
   Alert,
@@ -33,7 +34,8 @@ interface ThreadDrawerProps {
 }
 
 export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
-  const { state, activeThread, createThread, selectThread, deleteThread } = useChat();
+  const { state, activeThread, isGuest, createThread, selectThread, deleteThread } = useChat();
+  const router = useRouter();
   const translateX = useSharedValue(-DRAWER_WIDTH);
   const overlayOpacity = useSharedValue(0);
   const [isVisible, setIsVisible] = React.useState(false);
@@ -191,9 +193,31 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
             })}
           />
 
-          {/* Account badge */}
+          {/* Account badge or guest sign-up */}
           <View style={styles.footer}>
-            <AccountBadge onClose={onClose} isDrawerOpen={isOpen} />
+            {isGuest ? (
+              <TouchableOpacity
+                style={styles.guestSignUpButton}
+                onPress={() => {
+                  onClose();
+                  setTimeout(() => router.push('/(auth)/sign-up'), 100);
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Sign up for an account"
+                accessibilityRole="button"
+              >
+                <View style={styles.guestSignUpIcon}>
+                  <Ionicons name="person-add-outline" size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.guestSignUpTextContainer}>
+                  <Text style={styles.guestSignUpTitle}>Create Account</Text>
+                  <Text style={styles.guestSignUpSubtitle}>Save your conversations</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            ) : (
+              <AccountBadge onClose={onClose} isDrawerOpen={isOpen} />
+            )}
           </View>
         </SafeAreaView>
         </View>
@@ -331,5 +355,39 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
+  },
+  guestSignUpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.primaryAlpha10,
+    borderWidth: 1,
+    borderColor: Colors.primaryAlpha20,
+    gap: Spacing.md,
+  },
+  guestSignUpIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryAlpha20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  guestSignUpTextContainer: {
+    flex: 1,
+  },
+  guestSignUpTitle: {
+    fontFamily: Fonts?.heading ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginBottom: 2,
+  },
+  guestSignUpSubtitle: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
   },
 });

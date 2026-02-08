@@ -25,6 +25,7 @@ import { FeedbackManager } from '@/components/feedback-modal';
 import { SessionManager } from '@/components/session-manager';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
+import { GuestProvider } from '@/context/guest-context';
 import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { api } from '@/convex/_generated/api';
@@ -179,6 +180,7 @@ export default function RootLayout() {
       <ClerkLoaded>
         <SessionManager />
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+          <GuestProvider>
           <StoreUserInDatabase>
             <MateriaMedicaInitializer>
               <PostHogProviderWrapper>
@@ -254,6 +256,7 @@ export default function RootLayout() {
               </PostHogProviderWrapper>
             </MateriaMedicaInitializer>
           </StoreUserInDatabase>
+          </GuestProvider>
         </ConvexProviderWithClerk>
       </ClerkLoaded>
     </ClerkProvider>

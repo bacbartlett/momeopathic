@@ -1,6 +1,7 @@
 import { Composer, ComposerHandle } from '@/components/chat/composer';
 import { MessageList, MessageListHandle } from '@/components/chat/message-list';
 import { ThreadDrawer } from '@/components/chat/thread-drawer';
+import { GuestSignUpModal } from '@/components/guest-signup-modal';
 import { Paywall } from '@/components/paywall';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
@@ -8,7 +9,7 @@ import { useRevenueCat, useSubscription } from '@/context/revenue-cat-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -24,7 +25,19 @@ import { api } from '../../convex/_generated/api';
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { state, activeThread, isLoading, isMessagesLoading, isAuthenticated, isCreatingThread, createThread, sendMessage } = useChat();
+  const {
+    state,
+    activeThread,
+    isLoading,
+    isMessagesLoading,
+    isAuthenticated,
+    isGuest,
+    isCreatingThread,
+    guestLimitReached,
+    clearGuestLimitReached,
+    createThread,
+    sendMessage,
+  } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isInitialized } = useRevenueCat();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
@@ -33,16 +46,14 @@ export default function ChatScreen() {
   const messageListRef = useRef<MessageListHandle>(null);
   const composerRef = useRef<ComposerHandle>(null);
 
-
-
-  // Create initial thread if none exists and user is authenticated
+  // Create initial thread if none exists and user is authenticated or guest
   useEffect(() => {
-    if (!isLoading && isAuthenticated && state.threads.length === 0 && !isCreatingThread) {
+    if (!isLoading && (isAuthenticated || isGuest) && state.threads.length === 0 && !isCreatingThread) {
       createThread().catch((error) => {
         console.error('[ChatScreen] Failed to create initial thread:', error);
       });
     }
-  }, [isLoading, isAuthenticated, state.threads.length, isCreatingThread, createThread]);
+  }, [isLoading, isAuthenticated, isGuest, state.threads.length, isCreatingThread, createThread]);
 
   // Blur composer when drawer opens to collapse keyboard
   useEffect(() => {
@@ -51,15 +62,13 @@ export default function ChatScreen() {
     }
   }, [isDrawerOpen]);
 
-  // Handle keyboard dismiss on Android to reset KeyboardAvoidingView
-  // This prevents the padding bug where extra space appears after keyboard dismisses
+  // Handle keyboard dismiss on Android
   useEffect(() => {
     if (Platform.OS !== 'android') {
       return;
     }
 
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-      // Increment key to force KeyboardAvoidingView remount and clear its padding state
       setKeyboardKey(prev => prev + 1);
     });
 
@@ -69,7 +78,8 @@ export default function ChatScreen() {
   }, []);
 
   // Show loading while checking auth or subscription status
-  if (isLoading || isSubscriptionLoading || (isAuthenticated && currentUser === undefined)) {
+  // For guests, skip the currentUser and subscription checks
+  if (isLoading || (!isGuest && (isSubscriptionLoading || (isAuthenticated && currentUser === undefined)))) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -81,10 +91,8 @@ export default function ChatScreen() {
   // Check if user has noPaywall flag set to true
   const hasNoPaywall = currentUser?.noPaywall === true;
 
-  // Show paywall only if user is authenticated but not subscribed and doesn't have noPaywall flag
-  // Non-authenticated users will be handled by the auth flow
-  // Don't show paywall if RevenueCat is not initialized (e.g., dev mode without API key)
-  if (isAuthenticated && !isSubscribed && isInitialized && !hasNoPaywall) {
+  // Show paywall only for authenticated (non-guest) users who are not subscribed
+  if (isAuthenticated && !isGuest && !isSubscribed && isInitialized && !hasNoPaywall) {
     return <Paywall />;
   }
 
@@ -103,7 +111,7 @@ export default function ChatScreen() {
           >
             <Ionicons name="menu" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
-          
+
           <View style={styles.headerTitleContainer}>
             <View style={styles.logoContainer}>
               <Ionicons name="leaf" size={20} color={Colors.primary} />
@@ -140,7 +148,21 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        
+
+        {/* Guest banner */}
+        {isGuest && (
+          <TouchableOpacity
+            style={styles.guestBanner}
+            onPress={() => router.push('/(auth)/sign-up')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-add-outline" size={14} color={Colors.primary} />
+            <Text style={styles.guestBannerText}>
+              Sign up to save your conversations
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.messagesContainer}>
@@ -173,6 +195,12 @@ export default function ChatScreen() {
       )}
 
       <ThreadDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
+
+      {/* Guest sign-up modal when thread limit reached */}
+      <GuestSignUpModal
+        visible={guestLimitReached}
+        onDismiss={clearGuestLimitReached}
+      />
     </SafeAreaView>
   );
 }
@@ -252,6 +280,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.md,
+  },
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.xs,
+    backgroundColor: Colors.primaryAlpha10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.primaryAlpha20,
+  },
+  guestBannerText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.primary,
   },
   trustBanner: {
     paddingVertical: Spacing.sm,
