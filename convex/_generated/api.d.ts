@@ -11,8 +11,10 @@
 import type * as agents_homeopathic from "../agents/homeopathic.js";
 import type * as agents_systemprompt from "../agents/systemprompt.js";
 import type * as agents_titleGenerator from "../agents/titleGenerator.js";
+import type * as appOpen from "../appOpen.js";
 import type * as feedback from "../feedback.js";
 import type * as feedbackEmail from "../feedbackEmail.js";
+import type * as greetings from "../greetings.js";
 import type * as messages from "../messages.js";
 import type * as notes from "../notes.js";
 import type * as offerCodes from "../offerCodes.js";
@@ -31,8 +33,10 @@ declare const fullApi: ApiFromModules<{
   "agents/homeopathic": typeof agents_homeopathic;
   "agents/systemprompt": typeof agents_systemprompt;
   "agents/titleGenerator": typeof agents_titleGenerator;
+  appOpen: typeof appOpen;
   feedback: typeof feedback;
   feedbackEmail: typeof feedbackEmail;
+  greetings: typeof greetings;
   messages: typeof messages;
   notes: typeof notes;
   offerCodes: typeof offerCodes;
