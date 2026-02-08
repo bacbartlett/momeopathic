@@ -1,77 +1,78 @@
 import { v } from "convex/values";
-import {
-  action,
-  internalAction,
-  internalMutation,
-  internalQuery,
-  mutation,
-  query,
-} from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { homeopathicAgent } from "./agents/homeopathic";
 
 // ============================================
-// TIME PREFIXES - Variety to avoid feeling canned
+// TIME BUCKETS & PREFIXES
 // ============================================
 
-const TIME_PREFIXES = {
+// Time buckets for greeting prefixes (user's local time)
+const TIME_BUCKETS = {
+  lateNight: { start: 22, end: 4 },   // 10pm-4am
+  earlyMorning: { start: 4, end: 7 }, // 4am-7am
+  morning: { start: 7, end: 12 },     // 7am-12pm
+  afternoon: { start: 12, end: 17 },  // 12pm-5pm
+  evening: { start: 17, end: 22 },    // 5pm-10pm
+} as const;
+
+// Prefix variations per time bucket (variety so they don't feel canned)
+const TIME_PREFIXES: Record<string, string[]> = {
   lateNight: [
-    // 10pm - 4am
-    "Up late! ",
-    "Burning the midnight oil? ",
-    "Late night, huh? ",
-    "Can't sleep? ",
-    "",
+    "Burning the midnight oil?",
+    "Late night check-in —",
+    "Quiet hours, I know —",
+    "Can't sleep?",
+    "Night owl mode activated —",
   ],
   earlyMorning: [
-    // 4am - 7am
-    "Early start! ",
-    "You're up early! ",
-    "Good morning! ",
-    "Early bird! ",
-    "",
+    "Early bird!",
+    "Up before the sun —",
+    "Early start today?",
+    "Dawn patrol —",
   ],
   morning: [
-    // 7am - 12pm
-    "Good morning! ",
-    "Morning! ",
-    "Hey! ",
-    "Hi there! ",
-    "",
+    "Good morning!",
+    "Morning!",
+    "Hope your morning's off to a good start —",
   ],
   afternoon: [
-    // 12pm - 5pm
-    "Hey! ",
-    "Good afternoon! ",
-    "Hi there! ",
-    "Hello! ",
-    "",
+    "Good afternoon!",
+    "Afternoon check-in —",
+    "Hope your day's going well —",
   ],
   evening: [
-    // 5pm - 10pm
-    "Hey! ",
-    "Good evening! ",
-    "Evening! ",
-    "Hi! ",
-    "",
+    "Good evening!",
+    "Evening!",
+    "Winding down?",
+    "Hope your evening is going smoothly —",
   ],
 };
 
-// Inactivity thresholds in milliseconds
-const THRESHOLDS = {
+// Inactivity tiers (in milliseconds)
+const INACTIVITY_TIERS = {
   "30min": 30 * 60 * 1000,
   "4hour": 4 * 60 * 60 * 1000,
   "1week": 7 * 24 * 60 * 60 * 1000,
-};
+} as const;
+
+// How long each cached greeting is valid before regeneration
+const CACHE_TTL = {
+  "30min": 4 * 60 * 60 * 1000,  // 4 hours
+  "4hour": 24 * 60 * 60 * 1000, // 1 day
+  "1week": 7 * 24 * 60 * 60 * 1000, // 1 week
+} as const;
 
 // ============================================
-// HELPER FUNCTIONS
+// HELPERS
 // ============================================
 
 /**
- * Get the time bucket for a given hour (0-23)
+ * Get the time bucket for a given hour (0-23) in user's local time
  */
-function getTimeBucket(hour: number): keyof typeof TIME_PREFIXES {
+function getTimeBucket(hour: number): keyof typeof TIME_BUCKETS {
+  // lateNight wraps around midnight
   if (hour >= 22 || hour < 4) return "lateNight";
   if (hour >= 4 && hour < 7) return "earlyMorning";
   if (hour >= 7 && hour < 12) return "morning";
@@ -80,45 +81,446 @@ function getTimeBucket(hour: number): keyof typeof TIME_PREFIXES {
 }
 
 /**
- * Get a random time-aware prefix
+ * Get a random prefix for a time bucket
  */
-function getTimePrefix(hour: number): string {
-  const bucket = getTimeBucket(hour);
+function getRandomPrefix(bucket: keyof typeof TIME_BUCKETS): string {
   const prefixes = TIME_PREFIXES[bucket];
   return prefixes[Math.floor(Math.random() * prefixes.length)];
 }
 
 /**
- * Get current hour in user's timezone (or UTC if not set)
+ * Get the user's local hour from their timezone
  */
-function getCurrentHour(timezone?: string): number {
-  const now = new Date();
-  if (timezone) {
-    try {
-      const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        hour: "numeric",
-        hour12: false,
-      });
-      return parseInt(formatter.format(now), 10);
-    } catch {
-      // Invalid timezone, fall back to UTC
-    }
+function getUserLocalHour(timezone?: string): number {
+  try {
+    const tz = timezone || "America/New_York"; // Default to Eastern
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const hourPart = parts.find(p => p.type === "hour");
+    return hourPart ? parseInt(hourPart.value, 10) : 12;
+  } catch {
+    return 12; // Default to noon if timezone parsing fails
   }
-  return now.getUTCHours();
 }
 
 // ============================================
-// ACTIVITY TRACKING
+// INTERNAL QUERIES
 // ============================================
 
 /**
- * Update user's last activity timestamp and schedule greeting generation.
- * Call this whenever a message is sent.
+ * Get user's notes context for greeting generation
+ */
+export const getUserContext = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Get profile
+    const profile = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .unique();
+
+    // Get active cases
+    const activeCases = await ctx.db
+      .query("activeCases")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .unique();
+
+    // Get recent case history (last 5 entries)
+    const caseHistory = await ctx.db
+      .query("caseHistory")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .order("desc")
+      .take(5);
+
+    // Get lessons learned (last 5)
+    const lessons = await ctx.db
+      .query("lessonsLearned")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .order("desc")
+      .take(5);
+
+    return {
+      profile: profile?.content,
+      activeCases: activeCases?.content,
+      recentHistory: caseHistory.map(h => h.entry),
+      lessons: lessons.map(l => l.lesson),
+    };
+  },
+});
+
+/**
+ * Get user by ID (for actions)
+ */
+export const getUserById = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.userId);
+  },
+});
+
+/**
+ * Get cached greeting for a user
+ */
+export const getCachedGreeting = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    
+    // Get all cached greetings for user, ordered by tier priority
+    const cached = await ctx.db
+      .query("greetingCache")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+
+    // Filter valid (non-expired) greetings
+    const valid = cached.filter(g => g.expiresAt > now);
+    
+    if (valid.length === 0) return null;
+
+    // Return the most appropriate one (longest tier = most personalized)
+    // Priority: 1week > 4hour > 30min
+    const tierOrder = ["1week", "4hour", "30min"];
+    for (const tier of tierOrder) {
+      const match = valid.find(g => g.tier === tier);
+      if (match) return match;
+    }
+
+    return valid[0];
+  },
+});
+
+/**
+ * Get pending scheduled greetings for a user
+ */
+export const getPendingSchedules = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("greetingSchedule")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+  },
+});
+
+/**
+ * Check which inactivity tier the user is in
+ * Returns null if recently active (<30min), otherwise "30min", "4hour", or "1week"
+ */
+export const checkInactivityTier = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args): Promise<string | null> => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    const now = Date.now();
+    const lastActivity = user.lastActivityAt || 0;
+    const gap = now - lastActivity;
+
+    if (gap >= INACTIVITY_TIERS["1week"]) return "1week";
+    if (gap >= INACTIVITY_TIERS["4hour"]) return "4hour";
+    if (gap >= INACTIVITY_TIERS["30min"]) return "30min";
+    return null;
+  },
+});
+
+/**
+ * Get a cached greeting without consuming it
+ */
+export const getGreeting = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    const now = Date.now();
+    
+    // Get all cached greetings for user
+    const cached = await ctx.db
+      .query("greetingCache")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+
+    // Filter valid (non-expired) greetings
+    const valid = cached.filter(g => g.expiresAt > now);
+    
+    if (valid.length === 0) return null;
+
+    // Return the most appropriate one (longest tier = most personalized)
+    const tierOrder = ["1week", "4hour", "30min"];
+    for (const tier of tierOrder) {
+      const match = valid.find(g => g.tier === tier);
+      if (match) {
+        // Add time prefix
+        const hour = getUserLocalHour(user.timezone);
+        const bucket = getTimeBucket(hour);
+        const prefix = getRandomPrefix(bucket);
+        return {
+          greeting: `${prefix} ${match.greeting}`,
+          tier: match.tier,
+        };
+      }
+    }
+
+    return null;
+  },
+});
+
+/**
+ * Consume a cached greeting (get and delete it)
+ */
+export const consumeGreeting = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    const now = Date.now();
+    
+    // Get all cached greetings for user
+    const cached = await ctx.db
+      .query("greetingCache")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+
+    // Filter valid (non-expired) greetings
+    const valid = cached.filter(g => g.expiresAt > now);
+    
+    if (valid.length === 0) return null;
+
+    // Find the best one (longest tier = most personalized)
+    const tierOrder = ["1week", "4hour", "30min"];
+    let bestMatch = null;
+    for (const tier of tierOrder) {
+      const match = valid.find(g => g.tier === tier);
+      if (match) {
+        bestMatch = match;
+        break;
+      }
+    }
+
+    if (!bestMatch) return null;
+
+    // Delete it (consume)
+    await ctx.db.delete(bestMatch._id);
+
+    // Add time prefix
+    const hour = getUserLocalHour(user.timezone);
+    const bucket = getTimeBucket(hour);
+    const prefix = getRandomPrefix(bucket);
+
+    return {
+      greeting: `${prefix} ${bestMatch.greeting}`,
+      tier: bestMatch.tier,
+    };
+  },
+});
+
+/**
+ * Get greeting info for thread opening (called from threads.getOrCreate)
+ * Returns greeting with time prefix and divider flag
+ */
+export const getGreetingForThread = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    const now = Date.now();
+    const lastActivity = user.lastActivityAt || 0;
+    
+    // If user was recently active (within 30min), no greeting needed
+    if (now - lastActivity < INACTIVITY_TIERS["30min"]) {
+      return null;
+    }
+
+    // Get cached greeting
+    const cached = await ctx.db
+      .query("greetingCache")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+
+    // Filter valid (non-expired) greetings
+    const validCached = cached.filter(g => g.expiresAt > now);
+    
+    // Get the best tier (longest inactivity = most personalized)
+    const tierOrder = ["1week", "4hour", "30min"];
+    let bestCached = null;
+    for (const tier of tierOrder) {
+      const match = validCached.find(g => g.tier === tier);
+      if (match) {
+        bestCached = match;
+        break;
+      }
+    }
+
+    // Build greeting with time prefix
+    const hour = getUserLocalHour(user.timezone);
+    const bucket = getTimeBucket(hour);
+    const prefix = getRandomPrefix(bucket);
+
+    if (bestCached) {
+      return {
+        greeting: `${prefix} ${bestCached.greeting}`,
+        tier: bestCached.tier,
+        showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
+      };
+    }
+
+    // Fallback greeting
+    return {
+      greeting: `${prefix} How can I help you today?`,
+      tier: "fallback",
+      showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
+    };
+  },
+});
+
+// ============================================
+// INTERNAL MUTATIONS
+// ============================================
+
+/**
+ * Save a generated greeting to cache
+ */
+export const saveGreetingToCache = internalMutation({
+  args: {
+    userId: v.id("users"),
+    greeting: v.string(),
+    tier: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const ttl = CACHE_TTL[args.tier as keyof typeof CACHE_TTL] || CACHE_TTL["30min"];
+
+    // Delete any existing greeting for this tier
+    const existing = await ctx.db
+      .query("greetingCache")
+      .withIndex("by_userId_tier", q => 
+        q.eq("userId", args.userId).eq("tier", args.tier)
+      )
+      .unique();
+    
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    // Save new greeting
+    await ctx.db.insert("greetingCache", {
+      userId: args.userId,
+      greeting: args.greeting,
+      tier: args.tier,
+      generatedAt: now,
+      expiresAt: now + ttl,
+    });
+  },
+});
+
+/**
+ * Schedule a greeting generation job
+ */
+export const scheduleGreetingJob = internalMutation({
+  args: {
+    userId: v.id("users"),
+    tier: v.string(),
+    scheduledFor: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Delete any existing schedule for this tier
+    const existing = await ctx.db
+      .query("greetingSchedule")
+      .withIndex("by_userId_tier", q => 
+        q.eq("userId", args.userId).eq("tier", args.tier)
+      )
+      .unique();
+    
+    if (existing) {
+      // Cancel the scheduled function
+      try {
+        await ctx.scheduler.cancel(existing.scheduledId);
+      } catch {
+        // Ignore if already executed
+      }
+      await ctx.db.delete(existing._id);
+    }
+
+    // Schedule the greeting generation
+    const scheduledId = await ctx.scheduler.runAt(
+      args.scheduledFor,
+      internal.greetings.generateGreeting,
+      { userId: args.userId, tier: args.tier }
+    );
+
+    // Save the schedule reference
+    await ctx.db.insert("greetingSchedule", {
+      userId: args.userId,
+      tier: args.tier,
+      scheduledId,
+      scheduledFor: args.scheduledFor,
+    });
+  },
+});
+
+/**
+ * Cancel all pending greeting schedules for a user
+ */
+export const cancelPendingGreetings = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const pending = await ctx.db
+      .query("greetingSchedule")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+
+    for (const schedule of pending) {
+      try {
+        await ctx.scheduler.cancel(schedule.scheduledId);
+      } catch {
+        // Ignore if already executed
+      }
+      await ctx.db.delete(schedule._id);
+    }
+  },
+});
+
+/**
+ * Clear greeting cache for a user (when they return)
+ */
+export const clearGreetingCache = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const cached = await ctx.db
+      .query("greetingCache")
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .collect();
+
+    for (const greeting of cached) {
+      await ctx.db.delete(greeting._id);
+    }
+  },
+});
+
+/**
+ * Update user's last activity timestamp
+ */
+export const updateLastActivity = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, {
+      lastActivityAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Record user activity - called from messages.send action
+ * Updates lastActivityAt, cancels pending schedules, clears cache, schedules new greetings
  */
 export const recordActivity = internalMutation({
   args: { userId: v.id("users") },
-  returns: v.null(),
   handler: async (ctx, args) => {
     const now = Date.now();
 
@@ -126,36 +528,36 @@ export const recordActivity = internalMutation({
     await ctx.db.patch(args.userId, { lastActivityAt: now });
 
     // Cancel any pending greeting schedules
-    const existingSchedules = await ctx.db
+    const pending = await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
       .collect();
 
-    for (const schedule of existingSchedules) {
+    for (const schedule of pending) {
       try {
         await ctx.scheduler.cancel(schedule.scheduledId);
       } catch {
-        // Scheduled function may have already run
+        // Ignore if already executed
       }
       await ctx.db.delete(schedule._id);
     }
 
-    // Clear any cached greetings (they're now stale)
-    const existingCache = await ctx.db
+    // Clear any cached greetings (they're stale now)
+    const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .withIndex("by_userId", q => q.eq("userId", args.userId))
       .collect();
 
-    for (const cached of existingCache) {
-      await ctx.db.delete(cached._id);
+    for (const greeting of cached) {
+      await ctx.db.delete(greeting._id);
     }
 
-    // Schedule new greeting generation at each threshold
-    const tiers = ["30min", "4hour", "1week"] as const;
-    for (const tier of tiers) {
-      const delay = THRESHOLDS[tier];
-      const scheduledId = await ctx.scheduler.runAfter(
-        delay,
+    // Schedule new greeting generations
+    for (const [tier, delay] of Object.entries(INACTIVITY_TIERS)) {
+      const scheduledFor = now + delay;
+      
+      const scheduledId = await ctx.scheduler.runAt(
+        scheduledFor,
         internal.greetings.generateGreeting,
         { userId: args.userId, tier }
       );
@@ -164,21 +566,18 @@ export const recordActivity = internalMutation({
         userId: args.userId,
         tier,
         scheduledId,
-        scheduledFor: now + delay,
+        scheduledFor,
       });
     }
-
-    return null;
   },
 });
 
 // ============================================
-// GREETING GENERATION
+// INTERNAL ACTIONS
 // ============================================
 
 /**
- * Generate a greeting for a user at a specific inactivity tier.
- * Called by scheduled job after inactivity threshold.
+ * Generate a greeting using the AI agent
  */
 export const generateGreeting = internalAction({
   args: {
@@ -186,275 +585,199 @@ export const generateGreeting = internalAction({
     tier: v.string(),
   },
   handler: async (ctx, args) => {
-    // Get user info
-    const user = await ctx.runQuery(internal.greetings.getUser, {
-      userId: args.userId,
-    });
+    // Get user and their context
+    const user = await ctx.runQuery(internal.greetings.getUserById, { userId: args.userId });
     if (!user) return;
 
-    // Get notes for context
-    const notes = await ctx.runQuery(internal.notes.getNotes, {
-      userId: args.userId,
+    const context = await ctx.runQuery(internal.greetings.getUserContext, { userId: args.userId });
+
+    // Build the generation prompt
+    let prompt = `Generate a warm, personalized greeting for a returning user. `;
+    prompt += `They've been away for ${args.tier === "1week" ? "about a week" : args.tier === "4hour" ? "a few hours" : "a little while"}. `;
+    
+    if (context.activeCases) {
+      prompt += `\n\nTheir active cases: ${context.activeCases}`;
+    }
+    if (context.recentHistory.length > 0) {
+      prompt += `\n\nRecent case history: ${context.recentHistory.slice(0, 2).join("; ")}`;
+    }
+    if (context.profile) {
+      prompt += `\n\nFamily profile: ${context.profile}`;
+    }
+
+    prompt += `\n\nGenerate ONLY the greeting body (1-2 sentences). Do NOT include a time-based prefix like "Good morning" - that will be added separately. `;
+    prompt += `Be warm and reference relevant context if available. If they had active cases, ask a natural follow-up about how things are going.`;
+
+    try {
+      // Use a lightweight approach - create temp thread, generate, cleanup
+      const { threadId } = await homeopathicAgent.createThread(ctx, {
+        userId: args.userId,
+      });
+
+      const result = await homeopathicAgent.generateText(
+        ctx,
+        { threadId, userId: args.userId },
+        { prompt }
+      );
+
+      const greeting = result.text.trim();
+
+      // Save to cache
+      await ctx.runMutation(internal.greetings.saveGreetingToCache, {
+        userId: args.userId,
+        greeting,
+        tier: args.tier,
+      });
+
+      // Clean up the temporary thread
+      await homeopathicAgent.deleteThreadSync(ctx, { threadId });
+
+    } catch (error) {
+      console.error(`Failed to generate greeting for user ${args.userId}:`, error);
+    }
+  },
+});
+
+// ============================================
+// PUBLIC API
+// ============================================
+
+/**
+ * Called on app open - returns cached greeting with time prefix
+ * Returns null if no greeting is needed (user was recently active)
+ */
+export const getGreetingOnOpen = query({
+  args: {
+    guestId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Resolve user
+    const identity = await ctx.auth.getUserIdentity();
+    let user = null;
+
+    if (identity) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_token", q => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+    } else if (args.guestId) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_guestId", q => q.eq("guestId", args.guestId))
+        .unique();
+    }
+
+    if (!user) return null;
+
+    // Check if user was recently active (within 30min)
+    const now = Date.now();
+    const lastActivity = user.lastActivityAt || 0;
+    if (now - lastActivity < INACTIVITY_TIERS["30min"]) {
+      return null; // No greeting needed
+    }
+
+    // Get cached greeting
+    const cached = await ctx.runQuery(internal.greetings.getCachedGreeting, {
+      userId: user._id,
     });
 
-    // Generate greeting based on context
-    const greeting = await generateGreetingText(notes, args.tier);
+    if (!cached) {
+      // No cached greeting - return a simple fallback
+      const hour = getUserLocalHour(user.timezone);
+      const bucket = getTimeBucket(hour);
+      const prefix = getRandomPrefix(bucket);
+      return {
+        greeting: `${prefix} How can I help you today?`,
+        tier: "fallback",
+        showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
+      };
+    }
 
-    // Cache the greeting
-    await ctx.runMutation(internal.greetings.cacheGreeting, {
-      userId: args.userId,
-      tier: args.tier,
-      greeting,
-    });
+    // Build the full greeting with time prefix
+    const hour = getUserLocalHour(user.timezone);
+    const bucket = getTimeBucket(hour);
+    const prefix = getRandomPrefix(bucket);
 
-    // Clean up the schedule entry
-    await ctx.runMutation(internal.greetings.clearSchedule, {
-      userId: args.userId,
-      tier: args.tier,
-    });
+    return {
+      greeting: `${prefix} ${cached.greeting}`,
+      tier: cached.tier,
+      showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
+    };
   },
 });
 
 /**
- * Generate greeting text based on notes and tier.
- * This is the core greeting logic.
+ * Called when user sends a message - reschedule greeting generation
  */
-async function generateGreetingText(
-  notes: { profile: string | null; activeCases: string | null; lessonsLearned: string[] | null },
-  tier: string
-): Promise<string> {
-  // If there's an active case, follow up on it
-  if (notes.activeCases && notes.activeCases.trim() !== "" && notes.activeCases !== "No active cases") {
-    // Parse active cases to find the most recent/relevant
-    // For now, just reference that there's an active case
-    // The greeting should be specific based on the content
-
-    // Simple parsing: look for names and issues
-    const caseText = notes.activeCases;
-
-    // Check for common patterns
-    if (caseText.toLowerCase().includes("fever")) {
-      return "How's that fever doing? Any change?";
-    }
-    if (caseText.toLowerCase().includes("teething")) {
-      return "How's the teething going? Any better?";
-    }
-    if (caseText.toLowerCase().includes("earache") || caseText.toLowerCase().includes("ear")) {
-      return "How's that ear doing? Still bothering them?";
-    }
-    if (caseText.toLowerCase().includes("cough")) {
-      return "How's that cough? Any change?";
-    }
-    if (caseText.toLowerCase().includes("stomach") || caseText.toLowerCase().includes("tummy")) {
-      return "How's their tummy? Feeling any better?";
-    }
-    if (caseText.toLowerCase().includes("headache")) {
-      return "Did that headache clear up?";
-    }
-
-    // Generic active case follow-up
-    return "How's everyone doing? Any updates since we last talked?";
-  }
-
-  // No active case - greeting based on tier
-  if (tier === "1week") {
-    // Long time, be friendly but not presumptuous
-    if (notes.profile) {
-      return "Hey! It's been a while. How's everyone doing?";
-    }
-    return "Hey! How are you doing?";
-  }
-
-  if (tier === "4hour") {
-    // Medium gap
-    if (notes.profile) {
-      return "Hey! How's everyone doing?";
-    }
-    return "Hey! How can I help today?";
-  }
-
-  // 30min gap - short, casual
-  return "Hey! What can I help with?";
-}
-
-// ============================================
-// CACHE MANAGEMENT
-// ============================================
-
-export const cacheGreeting = internalMutation({
+export const onUserActivity = mutation({
   args: {
-    userId: v.id("users"),
-    tier: v.string(),
-    greeting: v.string(),
+    guestId: v.optional(v.string()),
   },
-  returns: v.null(),
   handler: async (ctx, args) => {
+    // Resolve user
+    const identity = await ctx.auth.getUserIdentity();
+    let user = null;
+
+    if (identity) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_token", q => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .unique();
+    } else if (args.guestId) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_guestId", q => q.eq("guestId", args.guestId))
+        .unique();
+    }
+
+    if (!user) return;
+
     const now = Date.now();
 
-    // Remove old cache for this tier
-    const existing = await ctx.db
-      .query("greetingCache")
-      .withIndex("by_userId_tier", (q) =>
-        q.eq("userId", args.userId).eq("tier", args.tier)
-      )
-      .unique();
+    // Update last activity
+    await ctx.db.patch(user._id, { lastActivityAt: now });
 
-    if (existing) {
-      await ctx.db.delete(existing._id);
-    }
-
-    // Calculate expiry based on tier
-    let expiresAt = now + 24 * 60 * 60 * 1000; // Default 24 hours
-    if (args.tier === "30min") {
-      expiresAt = now + 4 * 60 * 60 * 1000; // Expires when 4hour tier kicks in
-    } else if (args.tier === "4hour") {
-      expiresAt = now + 7 * 24 * 60 * 60 * 1000; // Expires when 1week tier kicks in
-    }
-
-    await ctx.db.insert("greetingCache", {
-      userId: args.userId,
-      greeting: args.greeting,
-      tier: args.tier,
-      generatedAt: now,
-      expiresAt,
-    });
-
-    return null;
-  },
-});
-
-export const clearSchedule = internalMutation({
-  args: {
-    userId: v.id("users"),
-    tier: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const schedule = await ctx.db
+    // Cancel any pending greeting schedules
+    const pending = await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId_tier", (q) =>
-        q.eq("userId", args.userId).eq("tier", args.tier)
-      )
-      .unique();
+      .withIndex("by_userId", q => q.eq("userId", user._id))
+      .collect();
 
-    if (schedule) {
+    for (const schedule of pending) {
+      try {
+        await ctx.scheduler.cancel(schedule.scheduledId);
+      } catch {
+        // Ignore if already executed
+      }
       await ctx.db.delete(schedule._id);
     }
 
-    return null;
-  },
-});
-
-// ============================================
-// GREETING RETRIEVAL (called on app open)
-// ============================================
-
-/**
- * Get the cached greeting for a user on app open.
- * Returns the greeting with time-aware prefix, or null if no greeting cached.
- */
-export const getGreeting = internalQuery({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return null;
-
-    // Check for cached greeting
+    // Clear any cached greetings (they're stale now)
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
+      .withIndex("by_userId", q => q.eq("userId", user._id))
+      .collect();
 
-    if (!cached) return null;
-
-    // Check if expired
-    if (cached.expiresAt < Date.now()) {
-      return null;
+    for (const greeting of cached) {
+      await ctx.db.delete(greeting._id);
     }
 
-    // Add time-aware prefix
-    const hour = getCurrentHour(user.timezone ?? undefined);
-    const prefix = getTimePrefix(hour);
+    // Schedule new greeting generations
+    for (const [tier, delay] of Object.entries(INACTIVITY_TIERS)) {
+      const scheduledFor = now + delay;
+      
+      const scheduledId = await ctx.scheduler.runAt(
+        scheduledFor,
+        internal.greetings.generateGreeting,
+        { userId: user._id, tier }
+      );
 
-    return {
-      greeting: prefix + cached.greeting,
-      tier: cached.tier,
-      generatedAt: cached.generatedAt,
-    };
-  },
-});
-
-/**
- * Get and consume the cached greeting (marks it as used).
- * Call this when pushing the greeting to the thread.
- */
-export const consumeGreeting = internalMutation({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) return null;
-
-    // Get and delete cached greeting
-    const cached = await ctx.db
-      .query("greetingCache")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
-
-    if (!cached || cached.expiresAt < Date.now()) {
-      return null;
+      await ctx.db.insert("greetingSchedule", {
+        userId: user._id,
+        tier,
+        scheduledId,
+        scheduledFor,
+      });
     }
-
-    // Delete the cached greeting
-    await ctx.db.delete(cached._id);
-
-    // Add time-aware prefix
-    const hour = getCurrentHour(user.timezone ?? undefined);
-    const prefix = getTimePrefix(hour);
-
-    return {
-      greeting: prefix + cached.greeting,
-      tier: cached.tier,
-    };
-  },
-});
-
-// ============================================
-// HELPER QUERIES
-// ============================================
-
-export const getUser = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.userId);
-  },
-});
-
-/**
- * Check if user should receive a greeting based on inactivity.
- * Returns the appropriate tier or null if too recent.
- * Internal version that accepts userId directly.
- */
-export const checkInactivityTier = internalQuery({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-
-    if (!user || !user.lastActivityAt) return null;
-
-    const elapsed = Date.now() - user.lastActivityAt;
-
-    if (elapsed >= THRESHOLDS["1week"]) return "1week";
-    if (elapsed >= THRESHOLDS["4hour"]) return "4hour";
-    if (elapsed >= THRESHOLDS["30min"]) return "30min";
-
-    return null;
   },
 });

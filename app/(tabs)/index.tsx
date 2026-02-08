@@ -1,6 +1,5 @@
 import { Composer, ComposerHandle } from '@/components/chat/composer';
 import { MessageList, MessageListHandle } from '@/components/chat/message-list';
-import { ThreadDrawer } from '@/components/chat/thread-drawer';
 import { GuestSignUpModal } from '@/components/guest-signup-modal';
 import { Paywall } from '@/components/paywall';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -26,41 +25,23 @@ import { api } from '../../convex/_generated/api';
 export default function ChatScreen() {
   const router = useRouter();
   const {
-    state,
     activeThread,
     isLoading,
     isMessagesLoading,
     isAuthenticated,
     isGuest,
-    isCreatingThread,
     guestLimitReached,
     clearGuestLimitReached,
-    createThread,
     sendMessage,
   } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isInitialized } = useRevenueCat();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [keyboardKey, setKeyboardKey] = useState(0);
   const messageListRef = useRef<MessageListHandle>(null);
   const composerRef = useRef<ComposerHandle>(null);
 
-  // Create initial thread if none exists and user is authenticated or guest
-  useEffect(() => {
-    if (!isLoading && (isAuthenticated || isGuest) && state.threads.length === 0 && !isCreatingThread) {
-      createThread().catch((error) => {
-        console.error('[ChatScreen] Failed to create initial thread:', error);
-      });
-    }
-  }, [isLoading, isAuthenticated, isGuest, state.threads.length, isCreatingThread, createThread]);
-
-  // Blur composer when drawer opens to collapse keyboard
-  useEffect(() => {
-    if (isDrawerOpen) {
-      composerRef.current?.blur();
-    }
-  }, [isDrawerOpen]);
+  // Thread initialization is now handled by chat-context via getOrCreate
 
   // Handle keyboard dismiss on Android
   useEffect(() => {
@@ -98,55 +79,39 @@ export default function ChatScreen() {
 
   const content = (
     <>
-      {/* Header with gradient accent */}
+      {/* Simplified header for single-thread mode */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
+          {/* Account button (left) */}
           <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => setIsDrawerOpen(true)}
+            style={styles.headerActionButton}
+            onPress={() => router.push('/account')}
             activeOpacity={0.7}
-            accessibilityLabel="Open menu"
+            accessibilityLabel="Account settings"
             accessibilityRole="button"
-            accessibilityHint="Opens the conversation drawer"
           >
-            <Ionicons name="menu" size={24} color={Colors.textPrimary} />
+            <Ionicons name="person-circle-outline" size={26} color={Colors.textSecondary} />
           </TouchableOpacity>
 
+          {/* App title (center) */}
           <View style={styles.headerTitleContainer}>
             <View style={styles.logoContainer}>
               <Ionicons name="leaf" size={20} color={Colors.primary} />
             </View>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {activeThread?.title ?? 'New Conversation'}
-            </Text>
+            <Text style={styles.headerTitle}>My Materia</Text>
           </View>
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.headerActionButton}
-              onPress={() => router.push('/materia-medica' as '/account')}
-              activeOpacity={0.7}
-              accessibilityLabel="Open Materia Medica"
-              accessibilityRole="button"
-              accessibilityHint="Opens the remedy reference library"
-            >
-              <Ionicons name="book-outline" size={24} color={Colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.headerActionButton}
-              onPress={() => {
-                createThread().catch((error) => {
-                  console.error('[ChatScreen] Failed to create thread:', error);
-                });
-              }}
-              activeOpacity={0.7}
-              accessibilityLabel="New conversation"
-              accessibilityRole="button"
-              accessibilityHint="Creates a new conversation thread"
-            >
-              <Ionicons name="add-circle-outline" size={26} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
+          {/* Materia Medica button (right) */}
+          <TouchableOpacity
+            style={styles.headerActionButton}
+            onPress={() => router.push('/materia-medica' as '/account')}
+            activeOpacity={0.7}
+            accessibilityLabel="Open Materia Medica"
+            accessibilityRole="button"
+            accessibilityHint="Opens the remedy reference library"
+          >
+            <Ionicons name="book-outline" size={24} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
 
         {/* Guest banner */}
@@ -194,8 +159,6 @@ export default function ChatScreen() {
         <View style={styles.keyboardAvoidingView}>{content}</View>
       )}
 
-      <ThreadDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
-
       {/* Guest sign-up modal when thread limit reached */}
       <GuestSignUpModal
         visible={guestLimitReached}
@@ -237,14 +200,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.md,
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: Colors.primaryAlpha10,
   },
   headerTitleContainer: {
     flex: 1,

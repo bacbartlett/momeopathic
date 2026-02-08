@@ -2,9 +2,53 @@ import { ChatColors, Colors, Fonts, Radius, Spacing, Typography } from '@/consta
 import { useChat } from '@/context/chat-context';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
+
+// 4 hours in milliseconds - threshold for showing time dividers
+const TIME_DIVIDER_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+
+// Time divider component
+function TimeDivider({ timestamp }: { timestamp: number }) {
+  const formatDividerDate = (ts: number) => {
+    const date = new Date(ts);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    if (isToday) {
+      return `Today at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    } else if (isYesterday) {
+      return `Yesterday at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    } else {
+      return date.toLocaleDateString([], { 
+        month: 'short', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+  };
+
+  return (
+    <View style={dividerStyles.container}>
+      <View style={dividerStyles.line} />
+      <View style={dividerStyles.labelContainer}>
+        <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
+        <Text style={dividerStyles.label}>{formatDividerDate(timestamp)}</Text>
+      </View>
+      <View style={dividerStyles.line} />
+    </View>
+  );
+}
+
+// Item type for FlatList - either a message or a divider
+type ListItem = 
+  | { type: 'message'; message: Message }
+  | { type: 'divider'; timestamp: number; key: string };
 
 interface MessageListProps {
   messages: Message[];
@@ -94,7 +138,7 @@ function MessageListSkeleton() {
  */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   function MessageList({ messages, isLoading = false }, ref) {
-  const flatListRef = useRef<FlatList<Message>>(null);
+  const flatListRef = useRef<FlatList<ListItem>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
 
   /**
@@ -170,9 +214,49 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     );
   }
 
-  // For inverted FlatList, we need messages in reverse order (newest first)
-  // so that when inverted, newest appears at bottom of screen
-  const reversedMessages = [...messages].reverse();
+  // Build list items with dividers inserted for 4h+ gaps
+  // Process in chronological order, then reverse for inverted list
+  const listItems = useMemo((): ListItem[] => {
+    const items: ListItem[] = [];
+    
+    // Sort messages chronologically (oldest first)
+    const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
+    
+    for (let i = 0; i < sorted.length; i++) {
+      const msg = sorted[i];
+      const prevMsg = i > 0 ? sorted[i - 1] : null;
+      
+      // Check if we need a divider before this message
+      if (prevMsg && msg.timestamp - prevMsg.timestamp >= TIME_DIVIDER_THRESHOLD_MS) {
+        items.push({
+          type: 'divider',
+          timestamp: msg.timestamp,
+          key: `divider-${msg.id}`,
+        });
+      }
+      
+      items.push({ type: 'message', message: msg });
+    }
+    
+    // Reverse for inverted FlatList (newest first)
+    return items.reverse();
+  }, [messages]);
+
+  const renderItem = useCallback(({ item }: { item: ListItem }) => {
+    if (item.type === 'divider') {
+      return <TimeDivider timestamp={item.timestamp} />;
+    }
+    return (
+      <MessageBubble
+        message={item.message}
+        onRetry={item.message.status === 'failed' ? retryLastMessage : undefined}
+      />
+    );
+  }, [retryLastMessage]);
+
+  const keyExtractor = useCallback((item: ListItem) => {
+    return item.type === 'divider' ? item.key : item.message.id;
+  }, []);
 
   return (
     <View style={styles.listWrapper}>
@@ -208,14 +292,9 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
 
       <FlatList
         ref={flatListRef}
-        data={reversedMessages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <MessageBubble
-            message={item}
-            onRetry={item.status === 'failed' ? retryLastMessage : undefined}
-          />
-        )}
+        data={listItems}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -440,5 +519,37 @@ const skeletonStyles = StyleSheet.create({
     height: 24,
     borderRadius: Radius.lg,
     backgroundColor: Colors.secondary,
+  },
+});
+
+// Time divider styles
+const dividerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    marginVertical: Spacing.sm,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    backgroundColor: Colors.bgSurface,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  label: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
   },
 });

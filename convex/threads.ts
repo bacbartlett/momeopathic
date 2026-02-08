@@ -316,6 +316,106 @@ export const create = action({
   },
 });
 
+// ============================================================
+// Single-Thread Model: Get or Create
+// ============================================================
+
+// Type for greeting info from internal query
+interface GreetingInfo {
+  greeting: string;
+  tier: string;
+  showDivider: boolean;
+}
+
+// Return type for getOrCreate
+interface GetOrCreateResult {
+  threadId: string;
+  isNew: boolean;
+  greeting: string | null;
+  showDivider: boolean;
+}
+
+/**
+ * Get the user's single thread, or create one if none exists.
+ * This is the main entry point for the single-thread chat model.
+ * 
+ * Returns:
+ * - threadId: The thread to use
+ * - isNew: Whether this is a brand new thread (no prior messages)
+ * - greeting: Optional AI greeting to display on session resume
+ * - showDivider: Whether to show a visual divider (4h+ gap)
+ */
+export const getOrCreate = action({
+  args: {
+    guestId: v.optional(v.string()),
+  },
+  returns: v.object({
+    threadId: v.string(),
+    isNew: v.boolean(),
+    greeting: v.union(v.string(), v.null()),
+    showDivider: v.boolean(),
+  }),
+  handler: async (ctx, args): Promise<GetOrCreateResult> => {
+    const user = await resolveUserFromAction(ctx, args.guestId);
+
+    // Try to get existing thread
+    const threadsResult = await ctx.runQuery(
+      components.agent.threads.listThreadsByUserId,
+      {
+        userId: user._id,
+        paginationOpts: { cursor: null, numItems: 1 },
+      }
+    );
+
+    // If user has a thread, return it with greeting info
+    if (threadsResult.page.length > 0) {
+      const thread = threadsResult.page[0];
+      
+      // Get greeting info (explicit cast to avoid circular type inference)
+      const greetingInfo = await ctx.runQuery(internal.greetings.getGreetingForThread, {
+        userId: user._id,
+      }) as GreetingInfo | null;
+
+      return {
+        threadId: thread._id as string,
+        isNew: false,
+        greeting: greetingInfo?.greeting ?? null,
+        showDivider: greetingInfo?.showDivider ?? false,
+      };
+    }
+
+    // No existing thread - create one
+    const { threadId } = await homeopathicAgent.createThread(ctx, {
+      userId: user._id,
+      title: "Chat",
+    });
+
+    // Add initial greeting message
+    await saveMessage(ctx, components.agent, {
+      threadId,
+      userId: user._id,
+      message: {
+        role: "assistant",
+        content: "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?",
+      },
+    });
+
+    // Increment guest thread count if applicable
+    if (user.isGuest) {
+      await ctx.runMutation(internal.threads.incrementGuestThreadCount, {
+        userId: user._id,
+      });
+    }
+
+    return {
+      threadId,
+      isNew: true,
+      greeting: null, // Initial greeting already added as message
+      showDivider: false,
+    };
+  },
+});
+
 // List all threads for the authenticated user (or guest)
 export const list = query({
   args: {

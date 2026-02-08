@@ -50,6 +50,9 @@ interface ChatContextType {
   sendError: string | null;
   createThreadError: string | null;
   deleteThreadError: string | null;
+  // Single-thread model - greeting state
+  pendingGreeting: string | null;
+  showDivider: boolean;
   createThread: () => Promise<void>;
   selectThread: (threadId: string) => void;
   deleteThread: (threadId: string) => Promise<void>;
@@ -59,6 +62,7 @@ interface ChatContextType {
   clearCreateThreadError: () => void;
   clearDeleteThreadError: () => void;
   clearGuestLimitReached: () => void;
+  clearPendingGreeting: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -72,6 +76,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const [guestLimitReached, setGuestLimitReached] = useState(false);
+  // Single-thread model - greeting state
+  const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
+  const [showDivider, setShowDivider] = useState(false);
+  const [threadInitialized, setThreadInitialized] = useState(false);
   const { track, incrementUserProperty } = usePostHogAnalytics();
 
   // Use refs for race condition prevention
@@ -117,6 +125,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Mutations and actions
   const createThreadAction = useAction(api.threads.create);
+  const getOrCreateThreadAction = useAction(api.threads.getOrCreate);
   const deleteThreadAction = useAction(api.threads.remove);
   const sendMessageAction = useAction(api.messages.send);
   const incrementFeedbackThreadCount = useMutation(api.feedback.incrementThreadCount);
@@ -178,12 +187,54 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Messages loading state
   const isMessagesLoading = Boolean(activeThreadId && canQuery && messagesResult === undefined);
 
-  // Auto-select first thread if none selected
+  // Single-thread model: Initialize thread on app start using getOrCreate
   React.useEffect(() => {
-    if (!isLoading && threads.length > 0 && !activeThreadId) {
+    const initializeThread = async () => {
+      if (!canQuery || threadInitialized || isCreatingThread) return;
+      
+      setIsCreatingThread(true);
+      try {
+        const actionArgs = isAuthenticated ? {} : { guestId: guestId! };
+        const result = await getOrCreateThreadAction(actionArgs);
+        
+        if (mountedRef.current) {
+          setActiveThreadId(result.threadId);
+          setThreadInitialized(true);
+          
+          // Handle greeting if returned
+          if (result.greeting) {
+            setPendingGreeting(result.greeting);
+            setShowDivider(result.showDivider);
+          }
+          
+          if (result.isNew) {
+            track('Thread Created', { thread_id: result.threadId, is_guest: isGuest });
+            incrementUserProperty('threads_created');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize thread:', error);
+        if (mountedRef.current) {
+          setCreateThreadError(error instanceof Error ? error.message : 'Failed to initialize');
+        }
+      } finally {
+        if (mountedRef.current) {
+          setIsCreatingThread(false);
+        }
+      }
+    };
+
+    if (!isLoading && canQuery && !activeThreadId && !threadInitialized) {
+      initializeThread();
+    }
+  }, [isLoading, canQuery, activeThreadId, threadInitialized, isAuthenticated, isGuest, guestId, isCreatingThread, getOrCreateThreadAction, track, incrementUserProperty]);
+
+  // Legacy: Auto-select first thread if none selected (fallback for existing threads)
+  React.useEffect(() => {
+    if (!isLoading && threads.length > 0 && !activeThreadId && !threadInitialized) {
       setActiveThreadId(threads[0].id);
     }
-  }, [isLoading, threads, activeThreadId]);
+  }, [isLoading, threads, activeThreadId, threadInitialized]);
 
   // Clear active thread when user signs out (and is not a guest)
   React.useEffect(() => {
@@ -203,6 +254,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const clearGuestLimitReached = useCallback(() => {
     setGuestLimitReached(false);
+  }, []);
+
+  // Clear pending greeting after it's been displayed
+  const clearPendingGreeting = useCallback(() => {
+    setPendingGreeting(null);
+    setShowDivider(false);
   }, []);
 
   // Create new thread
@@ -349,6 +406,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         sendError,
         createThreadError,
         deleteThreadError,
+        pendingGreeting,
+        showDivider,
         createThread,
         selectThread,
         deleteThread,
@@ -358,6 +417,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearCreateThreadError,
         clearDeleteThreadError,
         clearGuestLimitReached,
+        clearPendingGreeting,
       }}
     >
       {children}
