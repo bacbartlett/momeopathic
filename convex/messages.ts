@@ -257,6 +257,12 @@ export const send = action({
       }
     }
 
+    // Record activity for greeting system
+    // This cancels pending greeting schedules and schedules new ones
+    await ctx.runMutation(internal.greetings.recordActivity, {
+      userId: user._id,
+    });
+
     return {
       text: result.text,
       messageId: result.messageId,
