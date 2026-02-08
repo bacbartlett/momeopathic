@@ -18,6 +18,9 @@ const userReturnValidator = v.object({
   isGuest: v.optional(v.boolean()),
   guestId: v.optional(v.string()),
   guestThreadCount: v.optional(v.number()),
+  // Greeting system fields
+  lastActivityAt: v.optional(v.number()),
+  timezone: v.optional(v.string()),
 });
 
 /**
