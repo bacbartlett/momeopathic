@@ -9,7 +9,6 @@ import { systemPrompt } from "./systemprompt";
 const baseMasterPrompt = systemPrompt;
 
 // Create OpenAI-compatible client pointing to OpenRouter
-// OpenRouter provides full OpenAI API compatibility
 const openrouter = createOpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
@@ -25,16 +24,10 @@ const searchMateriaMedica = createTool({
     query: z.string().describe("The symptom picture, condition, or remedy name to search for"),
   }),
   handler: async (ctx, args): Promise<SearchRAGTextResult> => {
-    console.log("[TOOL CALL] searchMateriaMedica invoked with query:", args.query);
-    const result = await ctx.runAction(api.rag.searchRAGText, {
+    return await ctx.runAction(api.rag.searchRAGText, {
       namespace: "universal",
       searchFor: args.query,
     });
-    console.log(
-      "[TOOL CALL] searchMateriaMedica result count:",
-      Array.isArray(result) ? result.length : "non-array"
-    );
-    return result;
   },
 });
 
@@ -45,15 +38,12 @@ const getLearnMoreLink = createTool({
     nameOfRemedy: z.string().describe("The name of the homeopathic remedy to link to"),
   }),
   handler: async (__, args): Promise<string> => {
-    console.log("[TOOL CALL] getLearnMoreLink invoked with nameOfRemedy:", args.nameOfRemedy);
     const normalizedName = args.nameOfRemedy.toUpperCase().trim();
     const urlName = args.nameOfRemedy.toLowerCase().replace(/ /g, "-");
     const externalUrl = `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`;
     const encodedName = encodeURIComponent(normalizedName);
     const encodedFallback = encodeURIComponent(externalUrl);
-    const link = `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
-    console.log("[TOOL CALL] getLearnMoreLink result:", link);
-    return link;
+    return `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
   },
 });
 
@@ -68,13 +58,10 @@ const loadSkill = createTool({
     skillName: z.string().describe("The name of the skill to load (e.g., 'dosing')"),
   }),
   handler: async (_ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] loadSkill invoked with skillName:", args.skillName);
     const skill = skills[args.skillName];
     if (!skill) {
-      console.log("[TOOL CALL] loadSkill - skill not found:", args.skillName);
       return `Skill "${args.skillName}" not found. Available skills: ${Object.keys(skills).join(", ")}`;
     }
-    console.log("[TOOL CALL] loadSkill - loaded skill:", args.skillName, "length:", skill.content.length);
     return skill.content;
   },
 });
@@ -85,24 +72,20 @@ const loadSkill = createTool({
 
 /**
  * Get all essential notes at conversation start.
- * Returns profile, active cases, and lessons learned.
  */
 const getNotes = createTool({
   description:
     "Retrieve all essential notes about this user. CALL THIS AT THE START OF EVERY CONVERSATION. Returns their profile (family info, preferences), active cases (current issues), and lessons learned (what works for them).",
   args: z.object({}),
   handler: async (ctx): Promise<string> => {
-    console.log("[TOOL CALL] getNotes invoked");
     const userId = ctx.userId;
     if (!userId) {
-      console.log("[TOOL CALL] getNotes - no userId available");
       return "No user context available.";
     }
 
     const notes = await ctx.runQuery(internal.notes.getNotes, { userId });
 
     if (!notes.profile && !notes.activeCases && !notes.lessonsLearned) {
-      console.log("[TOOL CALL] getNotes - no notes found for userId:", userId);
       return "No notes saved for this user yet. This appears to be a new user.";
     }
 
@@ -120,7 +103,6 @@ const getNotes = createTool({
       result += `## Lessons Learned\n${notes.lessonsLearned.map((l: string) => `- ${l}`).join("\n")}\n`;
     }
 
-    console.log("[TOOL CALL] getNotes - returning notes, length:", result.length);
     return result || "No notes saved for this user yet.";
   },
 });
@@ -133,26 +115,22 @@ const getProfile = createTool({
     "Retrieve the user's profile only (family info, preferences). Use this when you need to check names, ages, or preferences without fetching active cases or lessons.",
   args: z.object({}),
   handler: async (ctx): Promise<string> => {
-    console.log("[TOOL CALL] getProfile invoked");
     const userId = ctx.userId;
     if (!userId) {
-      console.log("[TOOL CALL] getProfile - no userId available");
       return "No user context available.";
     }
 
     const notes = await ctx.runQuery(internal.notes.getNotes, { userId });
     if (!notes.profile) {
-      console.log("[TOOL CALL] getProfile - no profile found for userId:", userId);
       return "No profile saved for this user yet.";
     }
 
-    console.log("[TOOL CALL] getProfile - returning profile, length:", notes.profile.length);
     return notes.profile;
   },
 });
 
 /**
- * Get case history for pattern matching and recommendations.
+ * Get case history for pattern matching.
  */
 const getCaseHistory = createTool({
   description:
@@ -164,7 +142,6 @@ const getCaseHistory = createTool({
       .describe("Maximum number of cases to retrieve. Defaults to all."),
   }),
   handler: async (ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] getCaseHistory invoked, limit:", args.limit);
     const userId = ctx.userId;
     if (!userId) {
       return "No user context available.";
@@ -179,15 +156,12 @@ const getCaseHistory = createTool({
       return "No case history found for this user.";
     }
 
-    const formatted = history
+    return history
       .map((h: { createdAt: number; entry: string }) => {
         const date = new Date(h.createdAt).toLocaleDateString();
         return `[${date}] ${h.entry}`;
       })
       .join("\n");
-
-    console.log("[TOOL CALL] getCaseHistory - returning", history.length, "cases");
-    return formatted;
   },
 });
 
@@ -203,7 +177,6 @@ const saveProfile = createTool({
     ),
   }),
   handler: async (ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] saveProfile invoked, length:", args.content.length);
     const userId = ctx.userId;
     if (!userId) {
       return "Could not save: no user context available.";
@@ -214,7 +187,6 @@ const saveProfile = createTool({
       content: args.content,
     });
 
-    console.log("[TOOL CALL] saveProfile - saved for userId:", userId);
     return "Profile saved.";
   },
 });
@@ -231,7 +203,6 @@ const saveActiveCases = createTool({
     ),
   }),
   handler: async (ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] saveActiveCases invoked, length:", args.content.length);
     const userId = ctx.userId;
     if (!userId) {
       return "Could not save: no user context available.";
@@ -242,7 +213,6 @@ const saveActiveCases = createTool({
       content: args.content,
     });
 
-    console.log("[TOOL CALL] saveActiveCases - saved for userId:", userId);
     return "Active cases saved.";
   },
 });
@@ -259,7 +229,6 @@ const appendCaseHistory = createTool({
     ),
   }),
   handler: async (ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] appendCaseHistory invoked:", args.entry);
     const userId = ctx.userId;
     if (!userId) {
       return "Could not save: no user context available.";
@@ -270,7 +239,6 @@ const appendCaseHistory = createTool({
       entry: args.entry,
     });
 
-    console.log("[TOOL CALL] appendCaseHistory - appended for userId:", userId);
     return "Case logged to history.";
   },
 });
@@ -287,7 +255,6 @@ const saveLesson = createTool({
     ),
   }),
   handler: async (ctx, args): Promise<string> => {
-    console.log("[TOOL CALL] saveLesson invoked:", args.lesson);
     const userId = ctx.userId;
     if (!userId) {
       return "Could not save: no user context available.";
@@ -298,7 +265,6 @@ const saveLesson = createTool({
       lesson: args.lesson,
     });
 
-    console.log("[TOOL CALL] saveLesson - saved for userId:", userId);
     return "Lesson saved.";
   },
 });
@@ -330,17 +296,4 @@ export const homeopathicAgent = new Agent(components.agent, {
   instructions: baseMasterPrompt + buildSkillsCatalog(),
   maxSteps: 20,
   tools,
-  usageHandler: async (_ctx, { userId, threadId, agentName, usage, model, provider }) => {
-    console.log(
-      "[USAGE]",
-      JSON.stringify({
-        userId,
-        threadId,
-        agentName,
-        model,
-        provider,
-        ...(usage as any),
-      })
-    );
-  },
 });

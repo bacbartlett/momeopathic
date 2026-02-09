@@ -133,7 +133,6 @@ export default function RemedyDetailScreen() {
         title: displayName,
       });
     } catch (err) {
-      console.log('[RemedyDetail] Share error:', err);
     }
   };
 

@@ -27,10 +27,7 @@ export function SessionManager() {
     try {
       // Request a fresh token from Clerk
       // This will use the refresh token to get a new access token
-      const token = await getToken();
-      if (token) {
-        console.log('[SessionManager] Token refreshed successfully');
-      }
+      await getToken();
     } catch (error) {
       console.error('[SessionManager] Error refreshing token:', error);
     }
@@ -46,8 +43,6 @@ export function SessionManager() {
       }
       return;
     }
-
-    console.log('[SessionManager] Setting up token refresh interval');
 
     // Refresh immediately on mount
     refreshToken();
@@ -66,9 +61,8 @@ export function SessionManager() {
   // Refresh token when app comes to foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      // App has come to the foreground
+      // App has come to the foreground - refresh token
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('[SessionManager] App foregrounded, refreshing token');
         if (isSignedIn) {
           refreshToken();
         }
@@ -80,16 +74,6 @@ export function SessionManager() {
       subscription.remove();
     };
   }, [isSignedIn]);
-
-  // Log session info for debugging
-  useEffect(() => {
-    if (isSignedIn && user) {
-      console.log('[SessionManager] User session active:', {
-        userId: user.id,
-        email: user.primaryEmailAddress?.emailAddress,
-      });
-    }
-  }, [isSignedIn, user]);
 
   // This component doesn't render anything
   return null;

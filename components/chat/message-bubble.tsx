@@ -225,9 +225,6 @@ const filterBrokenLinks = (text: string): string => {
 };
 
 export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
-  if (__DEV__) {
-    console.log("[MessageBubble] Content:", message.content);
-  }
   const router = useRouter();
   const { getRemedyByName } = useMateriaMedica();
 
@@ -281,7 +278,6 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
    */
   const handleLinkPress = useCallback(
     (url: string): boolean => {
-      console.log("[MessageBubble] Link pressed:", url);
 
       // Check if this is our internal mymateria:// link
       if (url.startsWith("mymateria://materia-medica")) {
@@ -381,7 +377,6 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         });
       } catch (error) {
         if (__DEV__) {
-          console.log("[MessageBubble] Share error:", error);
         }
       }
     }

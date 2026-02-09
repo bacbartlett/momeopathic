@@ -367,41 +367,21 @@ export const getGreetingForThread = internalQuery({
     const bucket = getTimeBucket(hour);
     const prefix = getRandomPrefix(bucket);
 
-    console.log("[getGreetingForThread] userId:", args.userId);
-    console.log(
-      "[getGreetingForThread] gap (min):",
-      Math.round((now - lastActivity) / 60000),
-    );
-    console.log(
-      "[getGreetingForThread] validCached count:",
-      validCached.length,
-    );
-    console.log(
-      "[getGreetingForThread] bestCached:",
-      bestCached ? bestCached.tier : "none",
-    );
-
     if (bestCached) {
       const result = {
         greeting: `${prefix} ${bestCached.greeting}`,
         tier: bestCached.tier,
         showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
       };
-      console.log("[getGreetingForThread] returning:", JSON.stringify(result));
       return result;
     }
 
     // Fallback greeting
-    const fallbackResult = {
+    return {
       greeting: `${prefix} How can I help you today?`,
       tier: "fallback",
       showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
     };
-    console.log(
-      "[getGreetingForThread] returning fallback:",
-      JSON.stringify(fallbackResult),
-    );
-    return fallbackResult;
   },
 });
 
@@ -666,7 +646,7 @@ export const generateGreeting = internalAction({
       // Clean up the temporary thread
       await homeopathicAgent.deleteThreadSync(ctx, { threadId });
     } catch (error) {
-      console.error(
+      // Error: 
         `Failed to generate greeting for user ${args.userId}:`,
         error,
       );

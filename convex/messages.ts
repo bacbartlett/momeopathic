@@ -149,6 +149,14 @@ export const send = action({
 
     const user = await resolveUserFromAction(ctx, args.guestId);
 
+    // Rate limit check
+    const rateLimit = await ctx.runQuery(internal.rateLimit.checkRateLimit, {
+      userId: user._id,
+    });
+    if (!rateLimit.allowed) {
+      throw new Error("Slow down! You're sending messages too quickly. Please wait a moment.");
+    }
+
     // Get the thread to verify ownership
     const thread = await ctx.runQuery(components.agent.threads.getThread, {
       threadId: args.threadId,
@@ -162,85 +170,19 @@ export const send = action({
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
+    // Record this message for rate limiting
+    await ctx.runMutation(internal.rateLimit.recordMessage, {
+      userId: user._id,
+    });
+
     // Check if this is the first user message (thread title is still default)
     const isFirstUserMessage = !thread.title || thread.title === "New Chat";
-
-    console.log("[SEND] Calling generateText for thread:", args.threadId, "prompt:", args.content.slice(0, 100));
 
     const result = await homeopathicAgent.generateText(
       ctx,
       { threadId: args.threadId, userId: thread.userId },
       { prompt: args.content }
     );
-
-    // --- DEBUG LOGGING ---
-    console.log("[RESULT] finishReason:", result.finishReason);
-    console.log("[RESULT] text length:", result.text?.length ?? 0);
-    console.log("[RESULT] text preview:", result.text?.slice(0, 200));
-
-    if (result.toolCalls && result.toolCalls.length > 0) {
-      console.log("[RESULT] toolCalls count:", result.toolCalls.length);
-      for (const tc of result.toolCalls) {
-        const t = tc as any;
-        console.log("[RESULT] toolCall:", JSON.stringify({
-          toolName: t.toolName,
-          args: t.args,
-          toolCallId: t.toolCallId,
-        }));
-      }
-    } else {
-      console.log("[RESULT] No tool calls in final step");
-    }
-
-    if (result.toolResults && result.toolResults.length > 0) {
-      console.log("[RESULT] toolResults count:", result.toolResults.length);
-      for (const tr of result.toolResults) {
-        const t = tr as any;
-        console.log("[RESULT] toolResult:", JSON.stringify({
-          toolName: t.toolName,
-          toolCallId: t.toolCallId,
-          resultPreview: typeof t.result === "string" ? t.result.slice(0, 200) : JSON.stringify(t.result).slice(0, 200),
-        }));
-      }
-    }
-
-    if (result.usage) {
-      console.log("[RESULT] usage:", JSON.stringify(result.usage));
-    }
-
-    if ((result as any).reasoning) {
-      console.log("[RESULT] reasoning:", (result as any).reasoning);
-    }
-    if ((result as any).reasoningDetails) {
-      console.log("[RESULT] reasoningDetails:", JSON.stringify((result as any).reasoningDetails));
-    }
-    if ((result as any).providerMetadata) {
-      console.log("[RESULT] providerMetadata:", JSON.stringify((result as any).providerMetadata));
-    }
-
-    if (result.savedMessages && result.savedMessages.length > 0) {
-      console.log("[RESULT] savedMessages count:", result.savedMessages.length);
-      for (const msg of result.savedMessages) {
-        console.log("[SAVED MSG]", JSON.stringify({
-          _id: msg._id,
-          role: msg.message?.role,
-          tool: msg.tool,
-          stepOrder: msg.stepOrder,
-          order: msg.order,
-          status: msg.status,
-          finishReason: msg.finishReason,
-          textPreview: (msg.text || "").slice(0, 150),
-          hasReasoning: !!msg.reasoning,
-          reasoning: msg.reasoning ? msg.reasoning.slice(0, 300) : null,
-          reasoningDetails: msg.reasoningDetails ? JSON.stringify(msg.reasoningDetails).slice(0, 300) : null,
-          usage: msg.usage ?? null,
-          contentType: msg.message?.content ? (typeof msg.message.content === "string" ? "string" : "array[" + (msg.message.content as any[]).length + "]") : "none",
-        }));
-      }
-    }
-
-    console.log("[SEND] Generation complete for thread:", args.threadId);
-    // --- END DEBUG LOGGING ---
 
     // Generate and update thread title if this is the first user message
     if (isFirstUserMessage) {
@@ -252,13 +194,12 @@ export const send = action({
             title: generatedTitle,
           },
         });
-      } catch (error) {
-        console.error("Failed to generate thread title:", error);
+      } catch {
+        // Title generation is non-critical, continue silently
       }
     }
 
     // Record activity for greeting system
-    // This cancels pending greeting schedules and schedules new ones
     await ctx.runMutation(internal.greetings.recordActivity, {
       userId: user._id,
     });

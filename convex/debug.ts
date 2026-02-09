@@ -1,7 +1,8 @@
 /**
- * DEBUG ENDPOINTS - Remove before production build
+ * DEBUG ENDPOINTS
  * 
  * These are for testing the greeting system and debugging message issues.
+ * Gated behind DEV_MODE environment variable - set via `npx convex env set DEV_MODE true`
  */
 
 import { listMessages, saveMessage } from "@convex-dev/agent";
@@ -9,7 +10,11 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { action, internalMutation, query } from "./_generated/server";
 
-// Note: TypeScript errors about internal.debug will resolve after running `npx convex dev`
+// Check if we're in dev mode
+const isDevMode = () => process.env.DEV_MODE === "true";
+
+// No-op response for production
+const PROD_DISABLED = { success: false, message: "Debug endpoints disabled in production" };
 
 /**
  * Debug: Get raw messages for a thread (bypasses toUIMessages transform)
@@ -19,6 +24,8 @@ export const getRawMessages = query({
   args: { threadId: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (!isDevMode()) return [];
+    
     const result = await listMessages(ctx, components.agent, {
       threadId: args.threadId,
       paginationOpts: { cursor: null, numItems: 50 },
@@ -38,11 +45,13 @@ export const simulateInactivity = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (!isDevMode()) return null;
+    
     const now = Date.now();
     const offsets = {
-      "30min": 35 * 60 * 1000,        // 35 minutes ago
-      "4hour": 5 * 60 * 60 * 1000,    // 5 hours ago
-      "1week": 8 * 24 * 60 * 60 * 1000, // 8 days ago
+      "30min": 35 * 60 * 1000,
+      "4hour": 5 * 60 * 60 * 1000,
+      "1week": 8 * 24 * 60 * 60 * 1000,
     };
     
     const newLastActivity = now - offsets[args.tier];
@@ -51,7 +60,6 @@ export const simulateInactivity = internalMutation({
       lastActivityAt: newLastActivity,
     });
     
-    console.log(`[DEBUG] Set lastActivityAt to ${new Date(newLastActivity).toISOString()} (${args.tier} tier)`);
     return null;
   },
 });
@@ -70,7 +78,8 @@ export const testGreetingTier = action({
     message: v.string(),
   }),
   handler: async (ctx, args) => {
-    // Resolve user
+    if (!isDevMode()) return PROD_DISABLED;
+    
     const identity = await ctx.auth.getUserIdentity();
     let user = null;
 
@@ -88,13 +97,11 @@ export const testGreetingTier = action({
       return { success: false, message: "User not found" };
     }
 
-    // Simulate inactivity
     await ctx.runMutation(internal.debug.simulateInactivity, {
       userId: user._id,
       tier: args.tier,
     });
 
-    // Trigger greeting generation for this tier
     await ctx.scheduler.runAfter(0, internal.greetings.generateGreeting, {
       userId: user._id,
       tier: args.tier,
@@ -122,6 +129,8 @@ export const insertDebugMessage = action({
     message: v.string(),
   }),
   handler: async (ctx, args) => {
+    if (!isDevMode()) return PROD_DISABLED;
+    
     const identity = await ctx.auth.getUserIdentity();
     let user = null;
 
@@ -155,11 +164,7 @@ export const insertDebugMessage = action({
 });
 
 /**
- * Debug: Check what greeting would be returned right now
- */
-/**
  * Debug: List messages for a thread showing raw format
- * Call from dashboard or add to UI to see what's actually stored
  */
 export const listRawMessagesForThread = query({
   args: { 
@@ -168,12 +173,13 @@ export const listRawMessagesForThread = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (!isDevMode()) return { count: 0, messages: [] };
+    
     const result = await listMessages(ctx, components.agent, {
       threadId: args.threadId,
       paginationOpts: { cursor: null, numItems: 50 },
     });
     
-    // Return simplified view of messages
     return {
       count: result.page.length,
       messages: result.page.map((msg: any) => ({
@@ -191,10 +197,15 @@ export const listRawMessagesForThread = query({
   },
 });
 
+/**
+ * Debug: Check what greeting state exists for current user
+ */
 export const checkGreetingState = query({
   args: { guestId: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (!isDevMode()) return { disabled: true };
+    
     const identity = await ctx.auth.getUserIdentity();
     let user = null;
 
@@ -216,7 +227,6 @@ export const checkGreetingState = query({
     const lastActivity = user.lastActivityAt || 0;
     const gap = now - lastActivity;
 
-    // Get cached greetings
     const cachedGreetings = await ctx.db
       .query("greetingCache")
       .withIndex("by_userId", q => q.eq("userId", user._id))

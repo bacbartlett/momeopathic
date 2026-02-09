@@ -99,14 +99,16 @@ export default defineSchema({
     .index("by_userId_tier", ["userId", "tier"]),
 
   // ============================================
-  // LEGACY - keeping for migration, will deprecate
+  // RATE LIMITING
   // ============================================
 
-  notes: defineTable({
-    userId: v.string(),
-    content: v.string(),
-    updatedAt: v.number(),
-  }).index("by_userId", ["userId"]),
+  // Simple rate limit tracking - stores timestamp of recent messages
+  rateLimitMessages: defineTable({
+    userId: v.id("users"),
+    timestamp: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_timestamp", ["userId", "timestamp"]),
 
   // ============================================
   // OTHER TABLES

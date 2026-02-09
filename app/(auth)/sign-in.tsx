@@ -104,8 +104,6 @@ export default function SignInScreen() {
         }
       } else {
         setError('Sign in incomplete. Please try again.');
-        console.log(result);
-        console.log(result.status);
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -142,8 +140,6 @@ export default function SignInScreen() {
         }
       } else {
         setError('Verification incomplete. Please try again.');
-        console.log(result);
-        console.log(result.status);
       }
     } catch (err) {
       if (err instanceof Error) {

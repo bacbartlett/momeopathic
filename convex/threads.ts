@@ -370,8 +370,6 @@ export const getOrCreate = action({
         userId: user._id,
       }) as GreetingInfo | null;
 
-      console.log("[getOrCreate] Existing thread. greetingInfo:", JSON.stringify(greetingInfo));
-
       // If there's a greeting, INSERT it as a message so it shows via sync
       if (greetingInfo?.greeting) {
         await saveMessage(ctx, components.agent, {
@@ -382,13 +380,11 @@ export const getOrCreate = action({
             content: greetingInfo.greeting,
           },
         });
-        console.log("[getOrCreate] Inserted greeting message into thread");
         
         // Clear the cached greeting so it doesn't repeat
         await ctx.runMutation(internal.greetings.clearGreetingCache, {
           userId: user._id,
         });
-        console.log("[getOrCreate] Cleared greeting cache");
       }
 
       return {
