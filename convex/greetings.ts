@@ -1,7 +1,12 @@
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
-import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 
 // ============================================
@@ -10,11 +15,11 @@ import { homeopathicAgent } from "./agents/homeopathic";
 
 // Time buckets for greeting prefixes (user's local time)
 const TIME_BUCKETS = {
-  lateNight: { start: 22, end: 4 },   // 10pm-4am
+  lateNight: { start: 22, end: 4 }, // 10pm-4am
   earlyMorning: { start: 4, end: 7 }, // 4am-7am
-  morning: { start: 7, end: 12 },     // 7am-12pm
-  afternoon: { start: 12, end: 17 },  // 12pm-5pm
-  evening: { start: 17, end: 22 },    // 5pm-10pm
+  morning: { start: 7, end: 12 }, // 7am-12pm
+  afternoon: { start: 12, end: 17 }, // 12pm-5pm
+  evening: { start: 17, end: 22 }, // 5pm-10pm
 } as const;
 
 // Prefix variations per time bucket (variety so they don't feel canned)
@@ -59,7 +64,7 @@ const INACTIVITY_TIERS = {
 
 // How long each cached greeting is valid before regeneration
 const CACHE_TTL = {
-  "30min": 4 * 60 * 60 * 1000,  // 4 hours
+  "30min": 4 * 60 * 60 * 1000, // 4 hours
   "4hour": 24 * 60 * 60 * 1000, // 1 day
   "1week": 7 * 24 * 60 * 60 * 1000, // 1 week
 } as const;
@@ -100,7 +105,7 @@ function getUserLocalHour(timezone?: string): number {
       hour12: false,
     });
     const parts = formatter.formatToParts(new Date());
-    const hourPart = parts.find(p => p.type === "hour");
+    const hourPart = parts.find((p) => p.type === "hour");
     return hourPart ? parseInt(hourPart.value, 10) : 12;
   } catch {
     return 12; // Default to noon if timezone parsing fails
@@ -120,34 +125,34 @@ export const getUserContext = internalQuery({
     // Get profile
     const profile = await ctx.db
       .query("userProfiles")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .unique();
 
     // Get active cases
     const activeCases = await ctx.db
       .query("activeCases")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .unique();
 
     // Get recent case history (last 5 entries)
     const caseHistory = await ctx.db
       .query("caseHistory")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(5);
 
     // Get lessons learned (last 5)
     const lessons = await ctx.db
       .query("lessonsLearned")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(5);
 
     return {
       profile: profile?.content,
       activeCases: activeCases?.content,
-      recentHistory: caseHistory.map(h => h.entry),
-      lessons: lessons.map(l => l.lesson),
+      recentHistory: caseHistory.map((h) => h.entry),
+      lessons: lessons.map((l) => l.lesson),
     };
   },
 });
@@ -169,23 +174,23 @@ export const getCachedGreeting = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const now = Date.now();
-    
+
     // Get all cached greetings for user, ordered by tier priority
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     // Filter valid (non-expired) greetings
-    const valid = cached.filter(g => g.expiresAt > now);
-    
+    const valid = cached.filter((g) => g.expiresAt > now);
+
     if (valid.length === 0) return null;
 
     // Return the most appropriate one (longest tier = most personalized)
     // Priority: 1week > 4hour > 30min
     const tierOrder = ["1week", "4hour", "30min"];
     for (const tier of tierOrder) {
-      const match = valid.find(g => g.tier === tier);
+      const match = valid.find((g) => g.tier === tier);
       if (match) return match;
     }
 
@@ -201,7 +206,7 @@ export const getPendingSchedules = internalQuery({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
   },
 });
@@ -237,22 +242,22 @@ export const getGreeting = internalQuery({
     if (!user) return null;
 
     const now = Date.now();
-    
+
     // Get all cached greetings for user
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     // Filter valid (non-expired) greetings
-    const valid = cached.filter(g => g.expiresAt > now);
-    
+    const valid = cached.filter((g) => g.expiresAt > now);
+
     if (valid.length === 0) return null;
 
     // Return the most appropriate one (longest tier = most personalized)
     const tierOrder = ["1week", "4hour", "30min"];
     for (const tier of tierOrder) {
-      const match = valid.find(g => g.tier === tier);
+      const match = valid.find((g) => g.tier === tier);
       if (match) {
         // Add time prefix
         const hour = getUserLocalHour(user.timezone);
@@ -279,23 +284,23 @@ export const consumeGreeting = internalMutation({
     if (!user) return null;
 
     const now = Date.now();
-    
+
     // Get all cached greetings for user
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     // Filter valid (non-expired) greetings
-    const valid = cached.filter(g => g.expiresAt > now);
-    
+    const valid = cached.filter((g) => g.expiresAt > now);
+
     if (valid.length === 0) return null;
 
     // Find the best one (longest tier = most personalized)
     const tierOrder = ["1week", "4hour", "30min"];
     let bestMatch = null;
     for (const tier of tierOrder) {
-      const match = valid.find(g => g.tier === tier);
+      const match = valid.find((g) => g.tier === tier);
       if (match) {
         bestMatch = match;
         break;
@@ -331,7 +336,7 @@ export const getGreetingForThread = internalQuery({
 
     const now = Date.now();
     const lastActivity = user.lastActivityAt || 0;
-    
+
     // If user was recently active (within 30min), no greeting needed
     if (now - lastActivity < INACTIVITY_TIERS["30min"]) {
       return null;
@@ -340,17 +345,17 @@ export const getGreetingForThread = internalQuery({
     // Get cached greeting
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     // Filter valid (non-expired) greetings
-    const validCached = cached.filter(g => g.expiresAt > now);
-    
+    const validCached = cached.filter((g) => g.expiresAt > now);
+
     // Get the best tier (longest inactivity = most personalized)
     const tierOrder = ["1week", "4hour", "30min"];
     let bestCached = null;
     for (const tier of tierOrder) {
-      const match = validCached.find(g => g.tier === tier);
+      const match = validCached.find((g) => g.tier === tier);
       if (match) {
         bestCached = match;
         break;
@@ -363,9 +368,18 @@ export const getGreetingForThread = internalQuery({
     const prefix = getRandomPrefix(bucket);
 
     console.log("[getGreetingForThread] userId:", args.userId);
-    console.log("[getGreetingForThread] gap (min):", Math.round((now - lastActivity) / 60000));
-    console.log("[getGreetingForThread] validCached count:", validCached.length);
-    console.log("[getGreetingForThread] bestCached:", bestCached ? bestCached.tier : "none");
+    console.log(
+      "[getGreetingForThread] gap (min):",
+      Math.round((now - lastActivity) / 60000),
+    );
+    console.log(
+      "[getGreetingForThread] validCached count:",
+      validCached.length,
+    );
+    console.log(
+      "[getGreetingForThread] bestCached:",
+      bestCached ? bestCached.tier : "none",
+    );
 
     if (bestCached) {
       const result = {
@@ -383,7 +397,10 @@ export const getGreetingForThread = internalQuery({
       tier: "fallback",
       showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
     };
-    console.log("[getGreetingForThread] returning fallback:", JSON.stringify(fallbackResult));
+    console.log(
+      "[getGreetingForThread] returning fallback:",
+      JSON.stringify(fallbackResult),
+    );
     return fallbackResult;
   },
 });
@@ -403,16 +420,17 @@ export const saveGreetingToCache = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const ttl = CACHE_TTL[args.tier as keyof typeof CACHE_TTL] || CACHE_TTL["30min"];
+    const ttl =
+      CACHE_TTL[args.tier as keyof typeof CACHE_TTL] || CACHE_TTL["30min"];
 
     // Delete any existing greeting for this tier
     const existing = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId_tier", q => 
-        q.eq("userId", args.userId).eq("tier", args.tier)
+      .withIndex("by_userId_tier", (q) =>
+        q.eq("userId", args.userId).eq("tier", args.tier),
       )
       .unique();
-    
+
     if (existing) {
       await ctx.db.delete(existing._id);
     }
@@ -441,11 +459,11 @@ export const scheduleGreetingJob = internalMutation({
     // Delete any existing schedule for this tier
     const existing = await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId_tier", q => 
-        q.eq("userId", args.userId).eq("tier", args.tier)
+      .withIndex("by_userId_tier", (q) =>
+        q.eq("userId", args.userId).eq("tier", args.tier),
       )
       .unique();
-    
+
     if (existing) {
       // Cancel the scheduled function
       try {
@@ -460,7 +478,7 @@ export const scheduleGreetingJob = internalMutation({
     const scheduledId = await ctx.scheduler.runAt(
       args.scheduledFor,
       internal.greetings.generateGreeting,
-      { userId: args.userId, tier: args.tier }
+      { userId: args.userId, tier: args.tier },
     );
 
     // Save the schedule reference
@@ -481,7 +499,7 @@ export const cancelPendingGreetings = internalMutation({
   handler: async (ctx, args) => {
     const pending = await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     for (const schedule of pending) {
@@ -503,7 +521,7 @@ export const clearGreetingCache = internalMutation({
   handler: async (ctx, args) => {
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     for (const greeting of cached) {
@@ -539,7 +557,7 @@ export const recordActivity = internalMutation({
     // Cancel any pending greeting schedules
     const pending = await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     for (const schedule of pending) {
@@ -554,7 +572,7 @@ export const recordActivity = internalMutation({
     // Clear any cached greetings (they're stale now)
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", args.userId))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
       .collect();
 
     for (const greeting of cached) {
@@ -564,11 +582,11 @@ export const recordActivity = internalMutation({
     // Schedule new greeting generations
     for (const [tier, delay] of Object.entries(INACTIVITY_TIERS)) {
       const scheduledFor = now + delay;
-      
+
       const scheduledId = await ctx.scheduler.runAt(
         scheduledFor,
         internal.greetings.generateGreeting,
-        { userId: args.userId, tier }
+        { userId: args.userId, tier },
       );
 
       await ctx.db.insert("greetingSchedule", {
@@ -595,15 +613,19 @@ export const generateGreeting = internalAction({
   },
   handler: async (ctx, args) => {
     // Get user and their context
-    const user = await ctx.runQuery(internal.greetings.getUserById, { userId: args.userId });
+    const user = await ctx.runQuery(internal.greetings.getUserById, {
+      userId: args.userId,
+    });
     if (!user) return;
 
-    const context = await ctx.runQuery(internal.greetings.getUserContext, { userId: args.userId });
+    const context = await ctx.runQuery(internal.greetings.getUserContext, {
+      userId: args.userId,
+    });
 
     // Build the generation prompt
     let prompt = `Generate a warm, personalized greeting for a returning user. `;
     prompt += `They've been away for ${args.tier === "1week" ? "about a week" : args.tier === "4hour" ? "a few hours" : "a little while"}. `;
-    
+
     if (context.activeCases) {
       prompt += `\n\nTheir active cases: ${context.activeCases}`;
     }
@@ -616,6 +638,9 @@ export const generateGreeting = internalAction({
 
     prompt += `\n\nGenerate ONLY the greeting body (1-2 sentences). Do NOT include a time-based prefix like "Good morning" - that will be added separately. `;
     prompt += `Be warm and reference relevant context if available. If they had active cases, ask a natural follow-up about how things are going.`;
+    prompt += `While being warm, remember that someone is probably coming to this app to seek help, so do not use any exclamation marks or anything that would feel overly excited about them coming back.`;
+    prompt += `It should feel like a warm receptionist at a doctors office who deeply cares and knows you well.`;
+    prompt += `Jump right to the main content. Do not say "Good to see you" or "Good to hear from you"`;
 
     try {
       // Use a lightweight approach - create temp thread, generate, cleanup
@@ -626,7 +651,7 @@ export const generateGreeting = internalAction({
       const result = await homeopathicAgent.generateText(
         ctx,
         { threadId, userId: args.userId },
-        { prompt }
+        { prompt },
       );
 
       const greeting = result.text.trim();
@@ -640,9 +665,11 @@ export const generateGreeting = internalAction({
 
       // Clean up the temporary thread
       await homeopathicAgent.deleteThreadSync(ctx, { threadId });
-
     } catch (error) {
-      console.error(`Failed to generate greeting for user ${args.userId}:`, error);
+      console.error(
+        `Failed to generate greeting for user ${args.userId}:`,
+        error,
+      );
     }
   },
 });
@@ -674,12 +701,14 @@ export const getGreetingOnOpen = query({
     if (identity) {
       user = await ctx.db
         .query("users")
-        .withIndex("by_token", q => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .withIndex("by_token", (q) =>
+          q.eq("tokenIdentifier", identity.tokenIdentifier),
+        )
         .unique();
     } else if (args.guestId) {
       user = await ctx.db
         .query("users")
-        .withIndex("by_guestId", q => q.eq("guestId", args.guestId))
+        .withIndex("by_guestId", (q) => q.eq("guestId", args.guestId))
         .unique();
     }
 
@@ -693,9 +722,14 @@ export const getGreetingOnOpen = query({
     }
 
     // Get cached greeting (explicit cast to avoid circular type inference)
-    const cached = await ctx.runQuery(internal.greetings.getCachedGreeting, {
+    const cached = (await ctx.runQuery(internal.greetings.getCachedGreeting, {
       userId: user._id,
-    }) as { greeting: string; tier: string; generatedAt: number; expiresAt: number } | null;
+    })) as {
+      greeting: string;
+      tier: string;
+      generatedAt: number;
+      expiresAt: number;
+    } | null;
 
     if (!cached) {
       // No cached greeting - return a simple fallback
@@ -737,12 +771,14 @@ export const onUserActivity = mutation({
     if (identity) {
       user = await ctx.db
         .query("users")
-        .withIndex("by_token", q => q.eq("tokenIdentifier", identity.tokenIdentifier))
+        .withIndex("by_token", (q) =>
+          q.eq("tokenIdentifier", identity.tokenIdentifier),
+        )
         .unique();
     } else if (args.guestId) {
       user = await ctx.db
         .query("users")
-        .withIndex("by_guestId", q => q.eq("guestId", args.guestId))
+        .withIndex("by_guestId", (q) => q.eq("guestId", args.guestId))
         .unique();
     }
 
@@ -756,7 +792,7 @@ export const onUserActivity = mutation({
     // Cancel any pending greeting schedules
     const pending = await ctx.db
       .query("greetingSchedule")
-      .withIndex("by_userId", q => q.eq("userId", user._id))
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .collect();
 
     for (const schedule of pending) {
@@ -771,7 +807,7 @@ export const onUserActivity = mutation({
     // Clear any cached greetings (they're stale now)
     const cached = await ctx.db
       .query("greetingCache")
-      .withIndex("by_userId", q => q.eq("userId", user._id))
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .collect();
 
     for (const greeting of cached) {
@@ -781,11 +817,11 @@ export const onUserActivity = mutation({
     // Schedule new greeting generations
     for (const [tier, delay] of Object.entries(INACTIVITY_TIERS)) {
       const scheduledFor = now + delay;
-      
+
       const scheduledId = await ctx.scheduler.runAt(
         scheduledFor,
         internal.greetings.generateGreeting,
-        { userId: user._id, tier }
+        { userId: user._id, tier },
       );
 
       await ctx.db.insert("greetingSchedule", {
