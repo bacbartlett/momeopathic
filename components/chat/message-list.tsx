@@ -175,25 +175,37 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   const pullProgress = useRef(new Animated.Value(0)).current;
   const [isPullReady, setIsPullReady] = useState(false);
   const revealAnimation = useRef(new Animated.Value(0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
+  const [layoutHeight, setLayoutHeight] = useState(0);
+  const [isAtTop, setIsAtTop] = useState(false);
 
-  const sortedByNewest = useMemo(() => {
-    return [...messages].sort((a, b) => b.timestamp - a.timestamp);
+  const sortedByOldest = useMemo(() => {
+    return [...messages].sort((a, b) => a.timestamp - b.timestamp);
   }, [messages]);
 
-  const newestMessage = sortedByNewest[0] ?? null;
-  const previousMessage = sortedByNewest[1] ?? null;
+  const dividerIndex = useMemo(() => {
+    if (sortedByOldest.length < 2) return null;
+    let index: number | null = null;
+    for (let i = 1; i < sortedByOldest.length; i++) {
+      if (sortedByOldest[i].timestamp - sortedByOldest[i - 1].timestamp >= TIME_DIVIDER_THRESHOLD_MS) {
+        index = i;
+      }
+    }
+    if (forceDivider) {
+      // Debug mode: keep the last two messages as the "new" segment.
+      return Math.max(sortedByOldest.length - 2, 1);
+    }
+    return index;
+  }, [sortedByOldest, forceDivider]);
 
-  const computedShowDivider = Boolean(
-    newestMessage &&
-      previousMessage &&
-      newestMessage.timestamp - previousMessage.timestamp >= TIME_DIVIDER_THRESHOLD_MS
-  );
-  const showDivider = forceDivider || computedShowDivider;
+  const showDivider = dividerIndex !== null;
+  const oldSegment = dividerIndex !== null ? sortedByOldest.slice(0, dividerIndex) : [];
+  const newSegment = dividerIndex !== null ? sortedByOldest.slice(dividerIndex) : sortedByOldest;
 
   // Determine if we should use pull-to-reveal mode
   // Only when: showDivider is true (4h+ gap), messages exist, and not yet revealed
   // Activate pull-to-reveal when: 4h+ gap, old messages exist, and not yet revealed
-  const shouldUsePullToReveal = showDivider && messages.length > 0 && !oldMessagesRevealed;
+  const shouldUsePullToReveal = showDivider && oldSegment.length > 0 && !oldMessagesRevealed;
 
   // Reset reveal state when thread changes or showDivider changes
   useEffect(() => {
@@ -204,6 +216,14 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       revealAnimation.setValue(0);
     }
   }, [showDivider]);
+  
+  // Debug: force divider should always reset reveal state
+  useEffect(() => {
+    if (forceDivider) {
+      setOldMessagesRevealed(false);
+      revealAnimation.setValue(0);
+    }
+  }, [forceDivider, revealAnimation]);
 
   /**
    * Expose scroll method to parent
@@ -237,19 +257,29 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   }, []);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!shouldUsePullToReveal) return;
+    const { contentOffset } = event.nativeEvent;
+    const maxOffset = Math.max(0, contentHeight - layoutHeight);
+    const atTop = contentOffset.y >= maxOffset - 8;
+    if (atTop !== isAtTop) {
+      setIsAtTop(atTop);
+    }
+    if (!shouldUsePullToReveal || !atTop) {
+      pullProgress.setValue(0);
+      setIsPullReady(false);
+      return;
+    }
 
     const pullDistance = getPullDistance(event);
     
     pullProgress.setValue(pullDistance);
     setIsPullReady(pullDistance >= PULL_THRESHOLD);
-  }, [shouldUsePullToReveal, pullProgress, getPullDistance]);
+  }, [shouldUsePullToReveal, pullProgress, getPullDistance, contentHeight, layoutHeight, isAtTop]);
 
   /**
    * Handle scroll end - trigger reveal if threshold met
    */
   const handleScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!shouldUsePullToReveal) return;
+    if (!shouldUsePullToReveal || !isAtTop) return;
 
     const pullDistance = getPullDistance(event);
 
@@ -271,20 +301,23 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       useNativeDriver: false,
     }).start();
     setIsPullReady(false);
-  }, [shouldUsePullToReveal, pullProgress, revealAnimation, getPullDistance]);
+  }, [shouldUsePullToReveal, isAtTop, pullProgress, revealAnimation, getPullDistance]);
 
   const panResponder = useMemo(() => {
     return PanResponder.create({
-      onMoveShouldSetPanResponder: () => shouldUsePullToReveal,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        if (!shouldUsePullToReveal || !isAtTop) return false;
+        return Math.abs(gestureState.dy) > 6 && Math.abs(gestureState.dx) < 6;
+      },
       onPanResponderMove: (_, gestureState) => {
-        if (!shouldUsePullToReveal) return;
-        const pullDistance = Math.max(0, gestureState.dy);
+        if (!shouldUsePullToReveal || !isAtTop) return;
+        const pullDistance = Math.max(0, Math.abs(gestureState.dy));
         pullProgress.setValue(pullDistance);
         setIsPullReady(pullDistance >= PULL_THRESHOLD);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (!shouldUsePullToReveal) return;
-        const pullDistance = Math.max(0, gestureState.dy);
+        if (!shouldUsePullToReveal || !isAtTop) return;
+        const pullDistance = Math.max(0, Math.abs(gestureState.dy));
         if (pullDistance >= PULL_THRESHOLD) {
           setOldMessagesRevealed(true);
           Animated.spring(revealAnimation, {
@@ -302,7 +335,33 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         setIsPullReady(false);
       },
     });
-  }, [shouldUsePullToReveal, pullProgress, revealAnimation]);
+  }, [shouldUsePullToReveal, isAtTop, pullProgress, revealAnimation]);
+
+  // Build list items - show only the new segment until revealed
+  const listItems = useMemo((): ListItem[] => {
+    const items: ListItem[] = [];
+    
+    const visibleMessages = shouldUsePullToReveal ? newSegment : sortedByOldest;
+    
+    for (let i = 0; i < visibleMessages.length; i++) {
+      const msg = visibleMessages[i];
+      const prevMsg = i > 0 ? visibleMessages[i - 1] : null;
+      
+      // Check if we need a divider before this message
+      if (prevMsg && msg.timestamp - prevMsg.timestamp >= TIME_DIVIDER_THRESHOLD_MS) {
+        items.push({
+          type: 'divider',
+          timestamp: msg.timestamp,
+          key: `divider-${msg.id}`,
+        });
+      }
+      
+      items.push({ type: 'message', message: msg });
+    }
+    
+    // Reverse for inverted FlatList (newest first)
+    return items.reverse();
+  }, [shouldUsePullToReveal, newSegment, sortedByOldest]);
 
   // Show skeleton while loading messages for a thread switch
   if (isLoading) {
@@ -351,38 +410,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       </View>
     );
   }
-
-  // Build list items - filter to only newest if in pull-to-reveal mode
-  const listItems = useMemo((): ListItem[] => {
-    const items: ListItem[] = [];
-    
-    // Sort messages chronologically (oldest first)
-    const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
-    
-    // If in pull-to-reveal mode (not revealed yet), show only the newest message
-    if (shouldUsePullToReveal && newestMessage) {
-      return [{ type: 'message', message: newestMessage }];
-    }
-    
-    for (let i = 0; i < sorted.length; i++) {
-      const msg = sorted[i];
-      const prevMsg = i > 0 ? sorted[i - 1] : null;
-      
-      // Check if we need a divider before this message
-      if (prevMsg && msg.timestamp - prevMsg.timestamp >= TIME_DIVIDER_THRESHOLD_MS) {
-        items.push({
-          type: 'divider',
-          timestamp: msg.timestamp,
-          key: `divider-${msg.id}`,
-        });
-      }
-      
-      items.push({ type: 'message', message: msg });
-    }
-    
-    // Reverse for inverted FlatList (newest first)
-    return items.reverse();
-  }, [messages, shouldUsePullToReveal, newestMessage]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'divider') {
@@ -459,15 +486,21 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
           <View style={pullIndicatorStyles.breakLine} />
           <View style={pullIndicatorStyles.content}>
             <Ionicons
-              name={isPullReady ? "checkmark-circle" : "arrow-down-circle-outline"}
+              name={isPullReady ? "checkmark-circle" : "arrow-up-circle-outline"}
               size={18}
               color={isPullReady ? Colors.primary : Colors.textMuted}
             />
             <Text style={[pullIndicatorStyles.text, isPullReady && pullIndicatorStyles.textReady]}>
-              {isPullReady ? "Release to load old messages" : "Pull down to see previous messages"}
+              {isPullReady ? "Release to load previous messages" : "Pull up to see previous messages"}
             </Text>
           </View>
         </Animated.View>
+      )}
+      {shouldUsePullToReveal && (
+        <View style={pullIndicatorStyles.staticBanner}>
+          <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+          <Text style={pullIndicatorStyles.staticText}>Previous messages hidden</Text>
+        </View>
       )}
 
       <FlatList
@@ -489,11 +522,21 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         onScroll={handleScroll}
         onScrollEndDrag={handleScrollEndDrag}
         scrollEventThrottle={16}
-        scrollEnabled={!shouldUsePullToReveal}
         // Allow overscroll for pull gesture
         bounces={true}
         alwaysBounceVertical={true}
         overScrollMode="always"
+        onContentSizeChange={(_, height) => {
+          setContentHeight(height);
+          const maxOffset = Math.max(0, height - layoutHeight);
+          setIsAtTop(maxOffset === 0);
+        }}
+        onLayout={(event) => {
+          const height = event.nativeEvent.layout.height;
+          setLayoutHeight(height);
+          const maxOffset = Math.max(0, contentHeight - height);
+          setIsAtTop(maxOffset === 0);
+        }}
         // Performance optimizations
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}
@@ -784,6 +827,18 @@ const pullIndicatorStyles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'flex-end',
     paddingHorizontal: Spacing.md,
+  },
+  staticBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+  },
+  staticText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textMuted,
   },
   breakLine: {
     height: 1,

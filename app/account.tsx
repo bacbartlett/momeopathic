@@ -48,6 +48,7 @@ export default function AccountScreen() {
   const { guestId } = useGuest();
   const { activeThread, debugForceDivider, setDebugForceDivider } = useChat();
   const testGreetingTier = useAction(api.debug.testGreetingTier);
+  const insertDebugMessage = useAction(api.debug.insertDebugMessage);
   const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
   const rawMessages = useQuery(
     api.debug.listRawMessagesForThread, 
@@ -63,6 +64,22 @@ export default function AccountScreen() {
       Alert.alert("Error", String(error));
     } finally {
       setDebugTesting(null);
+    }
+  };
+
+  const handleInsertDebugMessage = async () => {
+    if (!activeThread?.id) {
+      Alert.alert("Debug", "No active thread found.");
+      return;
+    }
+    try {
+      const result = await insertDebugMessage({
+        threadId: activeThread.id,
+        guestId: guestId ?? undefined,
+      });
+      Alert.alert("Debug", result.message);
+    } catch (error) {
+      Alert.alert("Error", String(error));
     }
   };
 
@@ -661,6 +678,15 @@ export default function AccountScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.debugHint}>Use this to test pull-to-reveal without waiting.</Text>
+            <View style={styles.debugButtonRow}>
+              <TouchableOpacity
+                style={styles.debugButton}
+                onPress={handleInsertDebugMessage}
+              >
+                <Text style={styles.debugButtonText}>Add Debug Message</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.debugHint}>Divider needs at least 2 messages to show a split.</Text>
           </View>
 
           {/* Footer */}

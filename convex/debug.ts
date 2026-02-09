@@ -4,7 +4,7 @@
  * These are for testing the greeting system and debugging message issues.
  */
 
-import { listMessages } from "@convex-dev/agent";
+import { listMessages, saveMessage } from "@convex-dev/agent";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { action, internalMutation, query } from "./_generated/server";
@@ -104,6 +104,53 @@ export const testGreetingTier = action({
       success: true, 
       message: `Simulated ${args.tier} inactivity. Close and reopen the app to see the greeting.`
     };
+  },
+});
+
+/**
+ * Debug: Insert a synthetic assistant message into a thread.
+ * Useful for testing divider behavior with multiple messages.
+ */
+export const insertDebugMessage = action({
+  args: {
+    threadId: v.string(),
+    guestId: v.optional(v.string()),
+    content: v.optional(v.string()),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    let user = null;
+
+    if (identity) {
+      user = await ctx.runQuery(internal.threads.getUserByToken, {
+        tokenIdentifier: identity.tokenIdentifier,
+      });
+    } else if (args.guestId) {
+      user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
+        guestId: args.guestId,
+      });
+    }
+
+    if (!user) {
+      return { success: false, message: "User not found" };
+    }
+
+    const content = args.content ?? "Debug message";
+
+    await saveMessage(ctx, components.agent, {
+      threadId: args.threadId,
+      userId: user._id,
+      message: {
+        role: "assistant",
+        content,
+      },
+    });
+
+    return { success: true, message: "Debug message inserted." };
   },
 });
 
