@@ -46,7 +46,7 @@ export default function AccountScreen() {
   // Debug state
   const [debugTesting, setDebugTesting] = useState<string | null>(null);
   const { guestId } = useGuest();
-  const { activeThread, pendingGreeting } = useChat();
+  const { activeThread, pendingGreeting, showDivider } = useChat();
   const testGreetingTier = useAction(api.debug.testGreetingTier);
   const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
   const rawMessages = useQuery(
@@ -591,7 +591,9 @@ export default function AccountScreen() {
               <Text style={styles.debugText}>Thread ID: {activeThread?.id ?? 'none'}</Text>
               <Text style={styles.debugText}>Messages in thread: {activeThread?.messages?.length ?? 0}</Text>
               <Text style={styles.debugText}>pendingGreeting: {pendingGreeting ? `"${pendingGreeting.slice(0, 30)}..."` : 'null'}</Text>
+              <Text style={styles.debugText}>showDivider: {showDivider ? 'true' : 'false'}</Text>
               <Text style={styles.debugText}>Raw messages (backend): {rawMessages?.count ?? 'loading...'}</Text>
+              <Text style={styles.debugText}>Pull-to-reveal active: {showDivider && (activeThread?.messages?.length ?? 0) > 1 ? 'YES' : 'NO'}</Text>
             </View>
 
             {/* Raw Messages Preview */}
