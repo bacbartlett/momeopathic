@@ -646,7 +646,8 @@ export const generateGreeting = internalAction({
       // Clean up the temporary thread
       await homeopathicAgent.deleteThreadSync(ctx, { threadId });
     } catch (error) {
-      // Error: 
+      // Error:
+      console.log(
         `Failed to generate greeting for user ${args.userId}:`,
         error,
       );

@@ -20,6 +20,7 @@ import type * as messages from "../messages.js";
 import type * as notes from "../notes.js";
 import type * as offerCodes from "../offerCodes.js";
 import type * as rag from "../rag.js";
+import type * as rateLimit from "../rateLimit.js";
 import type * as skills_index from "../skills/index.js";
 import type * as threads from "../threads.js";
 import type * as users from "../users.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   notes: typeof notes;
   offerCodes: typeof offerCodes;
   rag: typeof rag;
+  rateLimit: typeof rateLimit;
   "skills/index": typeof skills_index;
   threads: typeof threads;
   users: typeof users;
