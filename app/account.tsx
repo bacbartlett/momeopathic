@@ -1,13 +1,17 @@
 import { DisclaimerModal } from '@/components/disclaimer-modal';
 import { PaywallModal } from '@/components/paywall-modal';
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useChat } from '@/context/chat-context';
+import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
 import { useClerk, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
+import { useAction, useQuery } from 'convex/react';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
+import { api } from '../convex/_generated/api';
 import {
     ActivityIndicator,
     Alert,
@@ -38,6 +42,29 @@ export default function AccountScreen() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+
+  // Debug state
+  const [debugTesting, setDebugTesting] = useState<string | null>(null);
+  const { guestId } = useGuest();
+  const { activeThread, pendingGreeting } = useChat();
+  const testGreetingTier = useAction(api.debug.testGreetingTier);
+  const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
+  const rawMessages = useQuery(
+    api.debug.listRawMessagesForThread, 
+    activeThread?.id ? { threadId: activeThread.id, guestId: guestId ?? undefined } : "skip"
+  );
+
+  const handleTestGreeting = async (tier: "30min" | "4hour" | "1week") => {
+    setDebugTesting(tier);
+    try {
+      const result = await testGreetingTier({ tier, guestId: guestId ?? undefined });
+      Alert.alert("Debug", result.message);
+    } catch (error) {
+      Alert.alert("Error", String(error));
+    } finally {
+      setDebugTesting(null);
+    }
+  };
 
   // Track page view
   useEffect(() => {
@@ -555,6 +582,68 @@ export default function AccountScreen() {
             <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
           </TouchableOpacity>
 
+          {/* Debug Section - REMOVE BEFORE PRODUCTION */}
+          <View style={styles.debugSection}>
+            <Text style={styles.debugSectionTitle}>🐛 Debug (Remove before build)</Text>
+            
+            {/* Thread & Message Info */}
+            <View style={styles.debugInfo}>
+              <Text style={styles.debugText}>Thread ID: {activeThread?.id ?? 'none'}</Text>
+              <Text style={styles.debugText}>Messages in thread: {activeThread?.messages?.length ?? 0}</Text>
+              <Text style={styles.debugText}>pendingGreeting: {pendingGreeting ? `"${pendingGreeting.slice(0, 30)}..."` : 'null'}</Text>
+              <Text style={styles.debugText}>Raw messages (backend): {rawMessages?.count ?? 'loading...'}</Text>
+            </View>
+
+            {/* Raw Messages Preview */}
+            {rawMessages?.messages && rawMessages.messages.length > 0 && (
+              <View style={styles.debugInfo}>
+                <Text style={styles.debugSubtitle}>Raw Messages:</Text>
+                {rawMessages.messages.slice(0, 3).map((msg: any, i: number) => (
+                  <Text key={i} style={styles.debugText}>
+                    {i + 1}. {msg.role}: {msg.text || msg.contentPreview || '(no text)'}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {/* Greeting State Info */}
+            {greetingState && !('error' in greetingState) && (
+              <View style={styles.debugInfo}>
+                <Text style={styles.debugSubtitle}>Greeting State:</Text>
+                <Text style={styles.debugText}>Tier: {greetingState.tier}</Text>
+                <Text style={styles.debugText}>Gap: {greetingState.gapMinutes} minutes</Text>
+                <Text style={styles.debugText}>Cached: {greetingState.cachedGreetings?.length ?? 0}</Text>
+              </View>
+            )}
+
+            {/* Test Greeting Buttons */}
+            <Text style={styles.debugSubtitle}>Simulate Inactivity:</Text>
+            <View style={styles.debugButtonRow}>
+              <TouchableOpacity
+                style={[styles.debugButton, debugTesting === '30min' && styles.debugButtonActive]}
+                onPress={() => handleTestGreeting('30min')}
+                disabled={!!debugTesting}
+              >
+                <Text style={styles.debugButtonText}>30 min</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.debugButton, debugTesting === '4hour' && styles.debugButtonActive]}
+                onPress={() => handleTestGreeting('4hour')}
+                disabled={!!debugTesting}
+              >
+                <Text style={styles.debugButtonText}>4 hour</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.debugButton, debugTesting === '1week' && styles.debugButtonActive]}
+                onPress={() => handleTestGreeting('1week')}
+                disabled={!!debugTesting}
+              >
+                <Text style={styles.debugButtonText}>1 week</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.debugHint}>After pressing, close and reopen the app to see the greeting.</Text>
+          </View>
+
           {/* Footer */}
           <View style={styles.footer}>
             <View style={styles.footerContent}>
@@ -903,5 +992,69 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
     color: Colors.textMuted,
+  },
+  // Debug styles - REMOVE BEFORE PRODUCTION
+  debugSection: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.xl,
+    padding: Spacing.md,
+    backgroundColor: '#FFF3CD',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#FFECB5',
+  },
+  debugSectionTitle: {
+    fontFamily: Fonts?.heading ?? 'System',
+    fontSize: Typography.base,
+    fontWeight: '700',
+    color: '#856404',
+    marginBottom: Spacing.sm,
+  },
+  debugSubtitle: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '600',
+    color: '#856404',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  debugInfo: {
+    backgroundColor: '#FFFFFF50',
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    marginBottom: Spacing.sm,
+  },
+  debugText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: '#856404',
+  },
+  debugButtonRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  debugButton: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: '#856404',
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+  },
+  debugButtonActive: {
+    opacity: 0.6,
+  },
+  debugButtonText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  debugHint: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: '#856404',
+    marginTop: Spacing.sm,
+    fontStyle: 'italic',
   },
 });

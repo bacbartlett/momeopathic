@@ -53,6 +53,9 @@ type ListItem =
 interface MessageListProps {
   messages: Message[];
   isLoading?: boolean;
+  pendingGreeting?: string | null;
+  showDivider?: boolean;
+  onGreetingDisplayed?: () => void;
 }
 
 export interface MessageListHandle {
@@ -137,9 +140,21 @@ function MessageListSkeleton() {
  * - https://getstream.io/blog/react-native-how-to-build-bidirectional-infinite-scroll/
  */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
-  function MessageList({ messages, isLoading = false }, ref) {
+  function MessageList({ messages, isLoading = false, pendingGreeting, showDivider, onGreetingDisplayed }, ref) {
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
+  const greetingDisplayedRef = useRef(false);
+
+  // Clear greeting after it's been shown and user has interacted
+  useEffect(() => {
+    if (pendingGreeting && !greetingDisplayedRef.current) {
+      greetingDisplayedRef.current = true;
+      // Clear greeting once messages start coming in (user sent a message)
+      if (messages.length > 0 && onGreetingDisplayed) {
+        onGreetingDisplayed();
+      }
+    }
+  }, [pendingGreeting, messages.length, onGreetingDisplayed]);
 
   /**
    * Expose scroll method to parent
@@ -169,6 +184,27 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   // Show skeleton while loading messages for a thread switch
   if (isLoading) {
     return <MessageListSkeleton />;
+  }
+
+  // Show greeting if we have one (either from new thread or returning user)
+  if (messages.length === 0 && pendingGreeting) {
+    // Create a synthetic message for the greeting
+    const greetingMessage: Message = {
+      id: 'pending-greeting',
+      role: 'assistant',
+      content: pendingGreeting,
+      timestamp: Date.now(),
+      status: 'complete',
+    };
+
+    return (
+      <View style={styles.listWrapper}>
+        {showDivider && <TimeDivider timestamp={Date.now()} />}
+        <View style={styles.greetingContainer}>
+          <MessageBubble message={greetingMessage} />
+        </View>
+      </View>
+    );
   }
 
   if (messages.length === 0) {
@@ -368,6 +404,12 @@ const styles = StyleSheet.create({
   },
   errorDismissButton: {
     padding: Spacing.xs,
+  },
+  greetingContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingVertical: Spacing.md,
+    backgroundColor: ChatColors.background,
   },
   emptyContainer: {
     flex: 1,

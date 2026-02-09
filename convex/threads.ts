@@ -390,13 +390,15 @@ export const getOrCreate = action({
       title: "Chat",
     });
 
+    const initialGreeting = "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?";
+
     // Add initial greeting message
     await saveMessage(ctx, components.agent, {
       threadId,
       userId: user._id,
       message: {
         role: "assistant",
-        content: "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?",
+        content: initialGreeting,
       },
     });
 
@@ -407,10 +409,11 @@ export const getOrCreate = action({
       });
     }
 
+    // Return greeting so UI can display immediately (avoids timing issues with saveMessage)
     return {
       threadId,
       isNew: true,
-      greeting: null, // Initial greeting already added as message
+      greeting: initialGreeting,
       showDivider: false,
     };
   },
