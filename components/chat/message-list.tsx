@@ -181,7 +181,8 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
 
   // Determine if we should use pull-to-reveal mode
   // Only when: showDivider is true (4h+ gap), messages exist, and not yet revealed
-  const shouldUsePullToReveal = showDivider && messages.length > 1 && !oldMessagesRevealed;
+  // Activate pull-to-reveal when: 4h+ gap, old messages exist, and not yet revealed
+  const shouldUsePullToReveal = showDivider && messages.length > 0 && !oldMessagesRevealed;
 
   // Find the newest message (the greeting after 4h+ gap)
   const newestMessage = useMemo(() => {
@@ -350,9 +351,22 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     // Sort messages chronologically (oldest first)
     const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
     
-    // If in pull-to-reveal mode (not revealed yet), only show the newest message
-    if (shouldUsePullToReveal && newestMessage) {
-      return [{ type: 'message', message: newestMessage }];
+    // If in pull-to-reveal mode (not revealed yet), show the pending greeting (not old messages)
+    if (shouldUsePullToReveal) {
+      if (pendingGreeting) {
+        const greetingMessage: Message = {
+          id: 'pending-greeting',
+          role: 'assistant',
+          content: pendingGreeting,
+          timestamp: Date.now(),
+          status: 'complete',
+        };
+        return [{ type: 'message', message: greetingMessage }];
+      }
+      // Fallback: if no greeting but still in pull-to-reveal, show newest existing message
+      if (newestMessage) {
+        return [{ type: 'message', message: newestMessage }];
+      }
     }
     
     for (let i = 0; i < sorted.length; i++) {
@@ -373,7 +387,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     
     // Reverse for inverted FlatList (newest first)
     return items.reverse();
-  }, [messages, shouldUsePullToReveal, newestMessage]);
+  }, [messages, shouldUsePullToReveal, newestMessage, pendingGreeting]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'divider') {
