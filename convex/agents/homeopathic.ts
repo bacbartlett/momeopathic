@@ -126,6 +126,32 @@ const getNotes = createTool({
 });
 
 /**
+ * Get only the user's profile.
+ */
+const getProfile = createTool({
+  description:
+    "Retrieve the user's profile only (family info, preferences). Use this when you need to check names, ages, or preferences without fetching active cases or lessons.",
+  args: z.object({}),
+  handler: async (ctx): Promise<string> => {
+    console.log("[TOOL CALL] getProfile invoked");
+    const userId = ctx.userId;
+    if (!userId) {
+      console.log("[TOOL CALL] getProfile - no userId available");
+      return "No user context available.";
+    }
+
+    const notes = await ctx.runQuery(internal.notes.getNotes, { userId });
+    if (!notes.profile) {
+      console.log("[TOOL CALL] getProfile - no profile found for userId:", userId);
+      return "No profile saved for this user yet.";
+    }
+
+    console.log("[TOOL CALL] getProfile - returning profile, length:", notes.profile.length);
+    return notes.profile;
+  },
+});
+
+/**
  * Get case history for pattern matching and recommendations.
  */
 const getCaseHistory = createTool({
@@ -289,6 +315,7 @@ const tools = {
   loadSkill,
   // Notes - Reading
   getNotes,
+  getProfile,
   getCaseHistory,
   // Notes - Writing
   saveProfile,
