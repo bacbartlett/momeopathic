@@ -3,7 +3,7 @@ import { useChat } from '@/context/chat-context';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, NativeScrollEvent, NativeSyntheticEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, FlatList, NativeScrollEvent, NativeSyntheticEvent, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
 
 // 4 hours in milliseconds - threshold for showing time dividers
@@ -56,9 +56,7 @@ type ListItem =
 interface MessageListProps {
   messages: Message[];
   isLoading?: boolean;
-  pendingGreeting?: string | null;
-  showDivider?: boolean;
-  onGreetingDisplayed?: () => void;
+  forceDivider?: boolean;
 }
 
 export interface MessageListHandle {
@@ -168,10 +166,9 @@ function PullToRevealBanner({ pullProgress, isReady }: { pullProgress: Animated.
  * - Auto-scroll only when user is at bottom (viewing latest messages)
  */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
-  function MessageList({ messages, isLoading = false, pendingGreeting, showDivider, onGreetingDisplayed }, ref) {
+  function MessageList({ messages, isLoading = false, forceDivider = false }, ref) {
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
-  const greetingDisplayedRef = useRef(false);
   
   // Pull-to-reveal state for 4h+ gaps
   const [oldMessagesRevealed, setOldMessagesRevealed] = useState(false);
@@ -179,16 +176,24 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   const [isPullReady, setIsPullReady] = useState(false);
   const revealAnimation = useRef(new Animated.Value(0)).current;
 
+  const sortedByNewest = useMemo(() => {
+    return [...messages].sort((a, b) => b.timestamp - a.timestamp);
+  }, [messages]);
+
+  const newestMessage = sortedByNewest[0] ?? null;
+  const previousMessage = sortedByNewest[1] ?? null;
+
+  const computedShowDivider = Boolean(
+    newestMessage &&
+      previousMessage &&
+      newestMessage.timestamp - previousMessage.timestamp >= TIME_DIVIDER_THRESHOLD_MS
+  );
+  const showDivider = forceDivider || computedShowDivider;
+
   // Determine if we should use pull-to-reveal mode
   // Only when: showDivider is true (4h+ gap), messages exist, and not yet revealed
   // Activate pull-to-reveal when: 4h+ gap, old messages exist, and not yet revealed
   const shouldUsePullToReveal = showDivider && messages.length > 0 && !oldMessagesRevealed;
-
-  // Find the newest message (the greeting after 4h+ gap)
-  const newestMessage = useMemo(() => {
-    if (messages.length === 0) return null;
-    return [...messages].sort((a, b) => b.timestamp - a.timestamp)[0];
-  }, [messages]);
 
   // Reset reveal state when thread changes or showDivider changes
   useEffect(() => {
@@ -199,16 +204,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       revealAnimation.setValue(0);
     }
   }, [showDivider]);
-
-  // Clear greeting after it's been shown and user has interacted
-  useEffect(() => {
-    if (pendingGreeting && !greetingDisplayedRef.current) {
-      greetingDisplayedRef.current = true;
-      if (messages.length > 0 && onGreetingDisplayed) {
-        onGreetingDisplayed();
-      }
-    }
-  }, [pendingGreeting, messages.length, onGreetingDisplayed]);
 
   /**
    * Expose scroll method to parent
@@ -236,16 +231,19 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   /**
    * Handle scroll for pull-to-reveal
    */
+  const getPullDistance = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset } = event.nativeEvent;
+    return Math.max(0, Math.abs(contentOffset.y));
+  }, []);
+
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!shouldUsePullToReveal) return;
 
-    const { contentOffset } = event.nativeEvent;
-    // In inverted list, pulling "down" when at top creates negative offset
-    const pullDistance = Math.max(0, -contentOffset.y);
+    const pullDistance = getPullDistance(event);
     
     pullProgress.setValue(pullDistance);
     setIsPullReady(pullDistance >= PULL_THRESHOLD);
-  }, [shouldUsePullToReveal, pullProgress]);
+  }, [shouldUsePullToReveal, pullProgress, getPullDistance]);
 
   /**
    * Handle scroll end - trigger reveal if threshold met
@@ -253,8 +251,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   const handleScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!shouldUsePullToReveal) return;
 
-    const { contentOffset } = event.nativeEvent;
-    const pullDistance = Math.max(0, -contentOffset.y);
+    const pullDistance = getPullDistance(event);
 
     if (pullDistance >= PULL_THRESHOLD) {
       // Trigger reveal animation
@@ -274,31 +271,42 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       useNativeDriver: false,
     }).start();
     setIsPullReady(false);
+  }, [shouldUsePullToReveal, pullProgress, revealAnimation, getPullDistance]);
+
+  const panResponder = useMemo(() => {
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: () => shouldUsePullToReveal,
+      onPanResponderMove: (_, gestureState) => {
+        if (!shouldUsePullToReveal) return;
+        const pullDistance = Math.max(0, gestureState.dy);
+        pullProgress.setValue(pullDistance);
+        setIsPullReady(pullDistance >= PULL_THRESHOLD);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (!shouldUsePullToReveal) return;
+        const pullDistance = Math.max(0, gestureState.dy);
+        if (pullDistance >= PULL_THRESHOLD) {
+          setOldMessagesRevealed(true);
+          Animated.spring(revealAnimation, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 7,
+          }).start();
+        }
+        Animated.timing(pullProgress, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: false,
+        }).start();
+        setIsPullReady(false);
+      },
+    });
   }, [shouldUsePullToReveal, pullProgress, revealAnimation]);
 
   // Show skeleton while loading messages for a thread switch
   if (isLoading) {
     return <MessageListSkeleton />;
-  }
-
-  // Show greeting if we have one (either from new thread or returning user) and no messages yet
-  if (messages.length === 0 && pendingGreeting) {
-    const greetingMessage: Message = {
-      id: 'pending-greeting',
-      role: 'assistant',
-      content: pendingGreeting,
-      timestamp: Date.now(),
-      status: 'complete',
-    };
-
-    return (
-      <View style={styles.listWrapper}>
-        {showDivider && <TimeDivider timestamp={Date.now()} />}
-        <View style={styles.greetingContainer}>
-          <MessageBubble message={greetingMessage} />
-        </View>
-      </View>
-    );
   }
 
   if (messages.length === 0) {
@@ -351,22 +359,9 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     // Sort messages chronologically (oldest first)
     const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
     
-    // If in pull-to-reveal mode (not revealed yet), show the pending greeting (not old messages)
-    if (shouldUsePullToReveal) {
-      if (pendingGreeting) {
-        const greetingMessage: Message = {
-          id: 'pending-greeting',
-          role: 'assistant',
-          content: pendingGreeting,
-          timestamp: Date.now(),
-          status: 'complete',
-        };
-        return [{ type: 'message', message: greetingMessage }];
-      }
-      // Fallback: if no greeting but still in pull-to-reveal, show newest existing message
-      if (newestMessage) {
-        return [{ type: 'message', message: newestMessage }];
-      }
+    // If in pull-to-reveal mode (not revealed yet), show only the newest message
+    if (shouldUsePullToReveal && newestMessage) {
+      return [{ type: 'message', message: newestMessage }];
     }
     
     for (let i = 0; i < sorted.length; i++) {
@@ -387,7 +382,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     
     // Reverse for inverted FlatList (newest first)
     return items.reverse();
-  }, [messages, shouldUsePullToReveal, newestMessage, pendingGreeting]);
+  }, [messages, shouldUsePullToReveal, newestMessage]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'divider') {
@@ -405,14 +400,24 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     return item.type === 'divider' ? item.key : item.message.id;
   }, []);
 
-  // Header component for pull-to-reveal banner (appears at top of screen in inverted list)
-  const ListHeaderComponent = useMemo(() => {
-    if (!shouldUsePullToReveal) return null;
-    return <PullToRevealBanner pullProgress={pullProgress} isReady={isPullReady} />;
-  }, [shouldUsePullToReveal, pullProgress, isPullReady]);
+  const pullIndicatorHeight = useMemo(() => {
+    return pullProgress.interpolate({
+      inputRange: [0, PULL_THRESHOLD],
+      outputRange: [0, 64],
+      extrapolate: 'clamp',
+    });
+  }, [pullProgress]);
+
+  const pullIndicatorOpacity = useMemo(() => {
+    return pullProgress.interpolate({
+      inputRange: [0, 20, PULL_THRESHOLD],
+      outputRange: [0, 0.6, 1],
+      extrapolate: 'clamp',
+    });
+  }, [pullProgress]);
 
   return (
-    <View style={styles.listWrapper}>
+    <View style={styles.listWrapper} {...panResponder.panHandlers}>
       {/* Error banner */}
       {sendError && (
         <View style={styles.errorBanner}>
@@ -443,12 +448,26 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         </View>
       )}
 
-      {/* Pull-to-reveal static banner when in that mode */}
+      {/* Pull-to-reveal indicator (classic pull-to-refresh style) */}
       {shouldUsePullToReveal && (
-        <View style={pullBannerStyles.staticBanner}>
-          <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
-          <Text style={pullBannerStyles.staticText}>Pull down to see previous messages</Text>
-        </View>
+        <Animated.View
+          style={[
+            pullIndicatorStyles.container,
+            { height: pullIndicatorHeight, opacity: pullIndicatorOpacity },
+          ]}
+        >
+          <View style={pullIndicatorStyles.breakLine} />
+          <View style={pullIndicatorStyles.content}>
+            <Ionicons
+              name={isPullReady ? "checkmark-circle" : "arrow-down-circle-outline"}
+              size={18}
+              color={isPullReady ? Colors.primary : Colors.textMuted}
+            />
+            <Text style={[pullIndicatorStyles.text, isPullReady && pullIndicatorStyles.textReady]}>
+              {isPullReady ? "Release to load old messages" : "Pull down to see previous messages"}
+            </Text>
+          </View>
+        </Animated.View>
       )}
 
       <FlatList
@@ -470,8 +489,11 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         onScroll={handleScroll}
         onScrollEndDrag={handleScrollEndDrag}
         scrollEventThrottle={16}
+        scrollEnabled={!shouldUsePullToReveal}
         // Allow overscroll for pull gesture
         bounces={true}
+        alwaysBounceVertical={true}
+        overScrollMode="always"
         // Performance optimizations
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}
@@ -534,12 +556,6 @@ const styles = StyleSheet.create({
   },
   errorDismissButton: {
     padding: Spacing.xs,
-  },
-  greetingContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingVertical: Spacing.md,
-    backgroundColor: ChatColors.background,
   },
   emptyContainer: {
     flex: 1,
@@ -760,5 +776,35 @@ const pullBannerStyles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
     color: Colors.textMuted,
+  },
+});
+
+const pullIndicatorStyles = StyleSheet.create({
+  container: {
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    paddingHorizontal: Spacing.md,
+  },
+  breakLine: {
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    opacity: 0.6,
+    marginBottom: Spacing.xs,
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+  },
+  text: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textMuted,
+  },
+  textReady: {
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

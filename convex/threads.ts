@@ -331,8 +331,6 @@ interface GreetingInfo {
 interface GetOrCreateResult {
   threadId: string;
   isNew: boolean;
-  greeting: string | null;
-  showDivider: boolean;
 }
 
 /**
@@ -342,8 +340,6 @@ interface GetOrCreateResult {
  * Returns:
  * - threadId: The thread to use
  * - isNew: Whether this is a brand new thread (no prior messages)
- * - greeting: Optional AI greeting to display on session resume
- * - showDivider: Whether to show a visual divider (4h+ gap)
  */
 export const getOrCreate = action({
   args: {
@@ -352,8 +348,6 @@ export const getOrCreate = action({
   returns: v.object({
     threadId: v.string(),
     isNew: v.boolean(),
-    greeting: v.union(v.string(), v.null()),
-    showDivider: v.boolean(),
   }),
   handler: async (ctx, args): Promise<GetOrCreateResult> => {
     const user = await resolveUserFromAction(ctx, args.guestId);
@@ -400,8 +394,6 @@ export const getOrCreate = action({
       return {
         threadId: thread._id as string,
         isNew: false,
-        greeting: greetingInfo?.greeting ?? null,
-        showDivider: greetingInfo?.showDivider ?? false,
       };
     }
 
@@ -434,8 +426,6 @@ export const getOrCreate = action({
     return {
       threadId,
       isNew: true,
-      greeting: initialGreeting,
-      showDivider: false,
     };
   },
 });

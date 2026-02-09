@@ -50,9 +50,6 @@ interface ChatContextType {
   sendError: string | null;
   createThreadError: string | null;
   deleteThreadError: string | null;
-  // Single-thread model - greeting state
-  pendingGreeting: string | null;
-  showDivider: boolean;
   createThread: () => Promise<void>;
   selectThread: (threadId: string) => void;
   deleteThread: (threadId: string) => Promise<void>;
@@ -62,7 +59,8 @@ interface ChatContextType {
   clearCreateThreadError: () => void;
   clearDeleteThreadError: () => void;
   clearGuestLimitReached: () => void;
-  clearPendingGreeting: () => void;
+  debugForceDivider: boolean;
+  setDebugForceDivider: (value: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -76,9 +74,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const [guestLimitReached, setGuestLimitReached] = useState(false);
-  // Single-thread model - greeting state
-  const [pendingGreeting, setPendingGreeting] = useState<string | null>(null);
-  const [showDivider, setShowDivider] = useState(false);
+  const [debugForceDivider, setDebugForceDivider] = useState(false);
   const [threadInitialized, setThreadInitialized] = useState(false);
   const { track, incrementUserProperty } = usePostHogAnalytics();
 
@@ -203,14 +199,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setActiveThreadId(result.threadId);
           setThreadInitialized(true);
           
-          // Handle greeting if returned
-          console.log('[chat-context] result.greeting:', result.greeting);
-          if (result.greeting) {
-            console.log('[chat-context] Setting pendingGreeting to:', result.greeting);
-            setPendingGreeting(result.greeting);
-            setShowDivider(result.showDivider);
-          }
-          
           if (result.isNew) {
             track('Thread Created', { thread_id: result.threadId, is_guest: isGuest });
             incrementUserProperty('threads_created');
@@ -258,12 +246,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const clearGuestLimitReached = useCallback(() => {
     setGuestLimitReached(false);
-  }, []);
-
-  // Clear pending greeting after it's been displayed
-  const clearPendingGreeting = useCallback(() => {
-    setPendingGreeting(null);
-    setShowDivider(false);
   }, []);
 
   // Create new thread
@@ -410,8 +392,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         sendError,
         createThreadError,
         deleteThreadError,
-        pendingGreeting,
-        showDivider,
         createThread,
         selectThread,
         deleteThread,
@@ -421,7 +401,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearCreateThreadError,
         clearDeleteThreadError,
         clearGuestLimitReached,
-        clearPendingGreeting,
+        debugForceDivider,
+        setDebugForceDivider,
       }}
     >
       {children}

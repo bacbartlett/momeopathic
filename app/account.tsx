@@ -46,7 +46,7 @@ export default function AccountScreen() {
   // Debug state
   const [debugTesting, setDebugTesting] = useState<string | null>(null);
   const { guestId } = useGuest();
-  const { activeThread, pendingGreeting, showDivider } = useChat();
+  const { activeThread, debugForceDivider, setDebugForceDivider } = useChat();
   const testGreetingTier = useAction(api.debug.testGreetingTier);
   const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
   const rawMessages = useQuery(
@@ -590,10 +590,9 @@ export default function AccountScreen() {
             <View style={styles.debugInfo}>
               <Text style={styles.debugText}>Thread ID: {activeThread?.id ?? 'none'}</Text>
               <Text style={styles.debugText}>Messages in thread: {activeThread?.messages?.length ?? 0}</Text>
-              <Text style={styles.debugText}>pendingGreeting: {pendingGreeting ? `"${pendingGreeting.slice(0, 30)}..."` : 'null'}</Text>
-              <Text style={styles.debugText}>showDivider: {showDivider ? 'true' : 'false'}</Text>
               <Text style={styles.debugText}>Raw messages (backend): {rawMessages?.count ?? 'loading...'}</Text>
-              <Text style={styles.debugText}>Pull-to-reveal active: {showDivider && (activeThread?.messages?.length ?? 0) > 1 ? 'YES' : 'NO'}</Text>
+              <Text style={styles.debugText}>Pull-to-reveal active: {(activeThread?.messages?.length ?? 0) > 1 ? 'YES' : 'NO'}</Text>
+              <Text style={styles.debugText}>Force divider: {debugForceDivider ? 'ON' : 'OFF'}</Text>
             </View>
 
             {/* Raw Messages Preview */}
@@ -644,6 +643,24 @@ export default function AccountScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.debugHint}>After pressing, close and reopen the app to see the greeting.</Text>
+
+            {/* Force divider toggle */}
+            <Text style={styles.debugSubtitle}>Divider Testing:</Text>
+            <View style={styles.debugButtonRow}>
+              <TouchableOpacity
+                style={[styles.debugButton, debugForceDivider && styles.debugButtonActive]}
+                onPress={() => setDebugForceDivider(true)}
+              >
+                <Text style={styles.debugButtonText}>Force Divider</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.debugButton, !debugForceDivider && styles.debugButtonActive]}
+                onPress={() => setDebugForceDivider(false)}
+              >
+                <Text style={styles.debugButtonText}>Clear Divider</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.debugHint}>Use this to test pull-to-reveal without waiting.</Text>
           </View>
 
           {/* Footer */}

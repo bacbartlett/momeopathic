@@ -33,9 +33,7 @@ export default function ChatScreen() {
     guestLimitReached,
     clearGuestLimitReached,
     sendMessage,
-    pendingGreeting,
-    showDivider,
-    clearPendingGreeting,
+    debugForceDivider,
   } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isInitialized } = useRevenueCat();
@@ -138,9 +136,7 @@ export default function ChatScreen() {
           ref={messageListRef} 
           messages={activeThread?.messages ?? []} 
           isLoading={isMessagesLoading}
-          pendingGreeting={pendingGreeting}
-          showDivider={showDivider}
-          onGreetingDisplayed={clearPendingGreeting}
+          forceDivider={debugForceDivider}
         />
       </View>
 
