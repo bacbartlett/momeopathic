@@ -2,12 +2,15 @@ import { ChatColors, Colors, Fonts, Radius, Spacing, Typography } from '@/consta
 import { useChat } from '@/context/chat-context';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Animated, FlatList, NativeScrollEvent, NativeSyntheticEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
 
 // 4 hours in milliseconds - threshold for showing time dividers
 const TIME_DIVIDER_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+
+// Pull threshold for revealing old messages
+const PULL_THRESHOLD = 100;
 
 // Time divider component
 function TimeDivider({ timestamp }: { timestamp: number }) {
@@ -129,27 +132,77 @@ function MessageListSkeleton() {
 }
 
 /**
+ * Pull-to-reveal banner component
+ */
+function PullToRevealBanner({ pullProgress, isReady }: { pullProgress: Animated.Value; isReady: boolean }) {
+  const opacity = pullProgress.interpolate({
+    inputRange: [0, 50, PULL_THRESHOLD],
+    outputRange: [0.3, 0.7, 1],
+    extrapolate: 'clamp',
+  });
+
+  const scale = pullProgress.interpolate({
+    inputRange: [0, PULL_THRESHOLD],
+    outputRange: [0.9, 1],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <Animated.View style={[pullBannerStyles.container, { opacity, transform: [{ scale }] }]}>
+      <Ionicons 
+        name={isReady ? "checkmark-circle" : "arrow-down-circle-outline"} 
+        size={16} 
+        color={isReady ? Colors.primary : Colors.textMuted} 
+      />
+      <Text style={[pullBannerStyles.text, isReady && pullBannerStyles.textReady]}>
+        {isReady ? "Release to load old messages" : "Pull down to see old messages"}
+      </Text>
+    </Animated.View>
+  );
+}
+
+/**
  * Best practice for chat scrolling based on React Native community recommendations:
  * - Use inverted FlatList (renders messages bottom-to-top like iMessage/WhatsApp)
  * - Use maintainVisibleContentPosition to prevent scroll jumping
  * - Auto-scroll only when user is at bottom (viewing latest messages)
- *
- * Sources:
- * - https://reactnative.dev/docs/flatlist
- * - https://github.com/FaridSafi/react-native-gifted-chat
- * - https://getstream.io/blog/react-native-how-to-build-bidirectional-infinite-scroll/
  */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   function MessageList({ messages, isLoading = false, pendingGreeting, showDivider, onGreetingDisplayed }, ref) {
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
   const greetingDisplayedRef = useRef(false);
+  
+  // Pull-to-reveal state for 4h+ gaps
+  const [oldMessagesRevealed, setOldMessagesRevealed] = useState(false);
+  const pullProgress = useRef(new Animated.Value(0)).current;
+  const [isPullReady, setIsPullReady] = useState(false);
+  const revealAnimation = useRef(new Animated.Value(0)).current;
+
+  // Determine if we should use pull-to-reveal mode
+  // Only when: showDivider is true (4h+ gap), messages exist, and not yet revealed
+  const shouldUsePullToReveal = showDivider && messages.length > 1 && !oldMessagesRevealed;
+
+  // Find the newest message (the greeting after 4h+ gap)
+  const newestMessage = useMemo(() => {
+    if (messages.length === 0) return null;
+    return [...messages].sort((a, b) => b.timestamp - a.timestamp)[0];
+  }, [messages]);
+
+  // Reset reveal state when thread changes or showDivider changes
+  useEffect(() => {
+    if (!showDivider) {
+      setOldMessagesRevealed(true); // No 4h+ gap, show all messages
+    } else {
+      setOldMessagesRevealed(false); // 4h+ gap, start hidden
+      revealAnimation.setValue(0);
+    }
+  }, [showDivider]);
 
   // Clear greeting after it's been shown and user has interacted
   useEffect(() => {
     if (pendingGreeting && !greetingDisplayedRef.current) {
       greetingDisplayedRef.current = true;
-      // Clear greeting once messages start coming in (user sent a message)
       if (messages.length > 0 && onGreetingDisplayed) {
         onGreetingDisplayed();
       }
@@ -162,7 +215,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   useImperativeHandle(ref, () => ({
     scrollToBottom: (animated = true) => {
       if (messages.length > 0 && flatListRef.current) {
-        // For inverted list, scrollToOffset with offset 0 = bottom
         flatListRef.current.scrollToOffset({ offset: 0, animated });
       }
     },
@@ -173,7 +225,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
    */
   useEffect(() => {
     if (!isLoading && messages.length > 0) {
-      // Small delay to let layout settle
       const timer = setTimeout(() => {
         flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       }, 100);
@@ -181,14 +232,56 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     }
   }, [isLoading]);
 
+  /**
+   * Handle scroll for pull-to-reveal
+   */
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!shouldUsePullToReveal) return;
+
+    const { contentOffset } = event.nativeEvent;
+    // In inverted list, pulling "down" when at top creates negative offset
+    const pullDistance = Math.max(0, -contentOffset.y);
+    
+    pullProgress.setValue(pullDistance);
+    setIsPullReady(pullDistance >= PULL_THRESHOLD);
+  }, [shouldUsePullToReveal, pullProgress]);
+
+  /**
+   * Handle scroll end - trigger reveal if threshold met
+   */
+  const handleScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!shouldUsePullToReveal) return;
+
+    const { contentOffset } = event.nativeEvent;
+    const pullDistance = Math.max(0, -contentOffset.y);
+
+    if (pullDistance >= PULL_THRESHOLD) {
+      // Trigger reveal animation
+      setOldMessagesRevealed(true);
+      Animated.spring(revealAnimation, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    }
+
+    // Reset pull progress
+    Animated.timing(pullProgress, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+    setIsPullReady(false);
+  }, [shouldUsePullToReveal, pullProgress, revealAnimation]);
+
   // Show skeleton while loading messages for a thread switch
   if (isLoading) {
     return <MessageListSkeleton />;
   }
 
-  // Show greeting if we have one (either from new thread or returning user)
+  // Show greeting if we have one (either from new thread or returning user) and no messages yet
   if (messages.length === 0 && pendingGreeting) {
-    // Create a synthetic message for the greeting
     const greetingMessage: Message = {
       id: 'pending-greeting',
       role: 'assistant',
@@ -250,13 +343,17 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     );
   }
 
-  // Build list items with dividers inserted for 4h+ gaps
-  // Process in chronological order, then reverse for inverted list
+  // Build list items - filter to only newest if in pull-to-reveal mode
   const listItems = useMemo((): ListItem[] => {
     const items: ListItem[] = [];
     
     // Sort messages chronologically (oldest first)
     const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
+    
+    // If in pull-to-reveal mode (not revealed yet), only show the newest message
+    if (shouldUsePullToReveal && newestMessage) {
+      return [{ type: 'message', message: newestMessage }];
+    }
     
     for (let i = 0; i < sorted.length; i++) {
       const msg = sorted[i];
@@ -276,7 +373,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     
     // Reverse for inverted FlatList (newest first)
     return items.reverse();
-  }, [messages]);
+  }, [messages, shouldUsePullToReveal, newestMessage]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'divider') {
@@ -293,6 +390,12 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   const keyExtractor = useCallback((item: ListItem) => {
     return item.type === 'divider' ? item.key : item.message.id;
   }, []);
+
+  // Header component for pull-to-reveal banner (appears at top of screen in inverted list)
+  const ListHeaderComponent = useMemo(() => {
+    if (!shouldUsePullToReveal) return null;
+    return <PullToRevealBanner pullProgress={pullProgress} isReady={isPullReady} />;
+  }, [shouldUsePullToReveal, pullProgress, isPullReady]);
 
   return (
     <View style={styles.listWrapper}>
@@ -326,6 +429,14 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         </View>
       )}
 
+      {/* Pull-to-reveal static banner when in that mode */}
+      {shouldUsePullToReveal && (
+        <View style={pullBannerStyles.staticBanner}>
+          <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+          <Text style={pullBannerStyles.staticText}>Pull down to see previous messages</Text>
+        </View>
+      )}
+
       <FlatList
         ref={flatListRef}
         data={listItems}
@@ -337,11 +448,16 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         // CRITICAL: Inverted list for chat (newest at bottom)
         inverted
         // CRITICAL: Prevents scroll jumping when new messages arrive
-        // This keeps the user's scroll position stable when content is added
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
           autoscrollToTopThreshold: 10,
         }}
+        // Pull-to-reveal handlers
+        onScroll={handleScroll}
+        onScrollEndDrag={handleScrollEndDrag}
+        scrollEventThrottle={16}
+        // Allow overscroll for pull gesture
+        bounces={true}
         // Performance optimizations
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}
@@ -590,6 +706,43 @@ const dividerStyles = StyleSheet.create({
     borderColor: Colors.border,
   },
   label: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.xs,
+    color: Colors.textMuted,
+  },
+});
+
+// Pull-to-reveal banner styles
+const pullBannerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
+  text: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.textMuted,
+  },
+  textReady: {
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  staticBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.bgSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  staticText: {
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
     color: Colors.textMuted,
