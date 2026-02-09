@@ -376,6 +376,8 @@ export const getOrCreate = action({
         userId: user._id,
       }) as GreetingInfo | null;
 
+      console.log("[getOrCreate] Existing thread. greetingInfo:", JSON.stringify(greetingInfo));
+
       return {
         threadId: thread._id as string,
         isNew: false,

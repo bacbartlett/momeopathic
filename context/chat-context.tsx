@@ -197,12 +197,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const actionArgs = isAuthenticated ? {} : { guestId: guestId! };
         const result = await getOrCreateThreadAction(actionArgs);
         
+        console.log('[chat-context] getOrCreate result:', JSON.stringify(result));
+        
         if (mountedRef.current) {
           setActiveThreadId(result.threadId);
           setThreadInitialized(true);
           
           // Handle greeting if returned
+          console.log('[chat-context] result.greeting:', result.greeting);
           if (result.greeting) {
+            console.log('[chat-context] Setting pendingGreeting to:', result.greeting);
             setPendingGreeting(result.greeting);
             setShowDivider(result.showDivider);
           }
