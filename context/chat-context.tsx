@@ -1,14 +1,14 @@
 import { ChatState, Message, Thread } from '@/types/chat';
 import { useAction, useConvexAuth, useMutation, useQuery } from 'convex/react';
 import React, {
-    createContext,
-    ReactNode,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
 import { useGuest } from './guest-context';
