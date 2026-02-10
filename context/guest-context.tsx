@@ -1,7 +1,7 @@
 import { api } from '@/convex/_generated/api';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
-import { useConvexAuth, useMutation } from 'convex/react';
+import { useAction, useConvexAuth, useMutation } from 'convex/react';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 const GUEST_ID_KEY = 'guest_id';
@@ -20,15 +20,40 @@ export function GuestProvider({ children }: { children: ReactNode }) {
   const [isGuestLoading, setIsGuestLoading] = useState(true);
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const createGuestUser = useMutation(api.users.createGuestUser);
+  const claimGuestAccount = useAction(api.users.claimGuestAccount);
 
   useEffect(() => {
     // Wait for auth to settle
     if (isAuthLoading) return;
 
-    // If user is Clerk-authenticated, don't create/load guest session
+    // Signed in: try to recover any pending guest account claim.
     if (isAuthenticated) {
-      setGuestId(null);
-      setIsGuestLoading(false);
+      const recoverGuestAccount = async () => {
+        try {
+          const existingId = await SecureStore.getItemAsync(GUEST_ID_KEY);
+          if (!existingId) {
+            setGuestId(null);
+            return;
+          }
+
+          // Keep the id in memory so claim can retry on next app open if this fails.
+          setGuestId(existingId);
+
+          try {
+            await claimGuestAccount({ guestId: existingId });
+            await SecureStore.deleteItemAsync(GUEST_ID_KEY);
+            setGuestId(null);
+          } catch (error) {
+            console.error('[GuestProvider] Failed to claim guest account, will retry later:', error);
+          }
+        } catch (error) {
+          console.error('[GuestProvider] Error recovering guest session:', error);
+        } finally {
+          setIsGuestLoading(false);
+        }
+      };
+
+      recoverGuestAccount();
       return;
     }
 
@@ -66,7 +91,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
     };
 
     initGuest();
-  }, [isAuthLoading, isAuthenticated, createGuestUser]);
+  }, [isAuthLoading, isAuthenticated, createGuestUser, claimGuestAccount]);
 
   const clearGuestSession = useCallback(async () => {
     try {

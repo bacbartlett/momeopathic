@@ -3,10 +3,55 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
-import { action, ActionCtx, internalAction, internalMutation, internalQuery, mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
+import {
+  action,
+  ActionCtx,
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  MutationCtx,
+  query,
+  QueryCtx,
+} from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 
 const MAX_GUEST_THREADS = 3;
+const userDocValidator = v.object({
+  _id: v.id("users"),
+  _creationTime: v.number(),
+  tokenIdentifier: v.string(),
+  name: v.string(),
+  email: v.optional(v.string()),
+  imageUrl: v.optional(v.string()),
+  disclaimerAccepted: v.optional(v.boolean()),
+  noPaywall: v.optional(v.boolean()),
+  feedbackThreadCount: v.optional(v.number()),
+  feedbackDismissCount: v.optional(v.number()),
+  feedbackGiven: v.optional(v.boolean()),
+  isGuest: v.optional(v.boolean()),
+  guestId: v.optional(v.string()),
+  guestThreadCount: v.optional(v.number()),
+  lastActivityAt: v.optional(v.number()),
+  timezone: v.optional(v.string()),
+});
+const threadDocValidator = v.object({
+  _creationTime: v.number(),
+  _id: v.string(),
+  status: v.union(v.literal("active"), v.literal("archived")),
+  summary: v.optional(v.string()),
+  title: v.optional(v.string()),
+  userId: v.optional(v.string()),
+});
+const paginatedThreadsValidator = v.object({
+  continueCursor: v.string(),
+  isDone: v.boolean(),
+  page: v.array(threadDocValidator),
+  pageStatus: v.optional(
+    v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null()),
+  ),
+  splitCursor: v.optional(v.union(v.string(), v.null())),
+});
 
 // ============================================================
 // Dual-auth user resolution helpers
@@ -17,7 +62,7 @@ const MAX_GUEST_THREADS = 3;
  */
 async function resolveUserFromQuery(
   ctx: QueryCtx,
-  guestId?: string
+  guestId?: string,
 ): Promise<Doc<"users">> {
   // Try Clerk auth first
   const identity = await ctx.auth.getUserIdentity();
@@ -25,7 +70,7 @@ async function resolveUserFromQuery(
     const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
     if (user) return user;
@@ -48,7 +93,7 @@ async function resolveUserFromQuery(
  */
 async function resolveUserFromMutation(
   ctx: MutationCtx,
-  guestId?: string
+  guestId?: string,
 ): Promise<Doc<"users">> {
   // Try Clerk auth first
   const identity = await ctx.auth.getUserIdentity();
@@ -56,7 +101,7 @@ async function resolveUserFromMutation(
     const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
     if (user) return user;
@@ -79,7 +124,7 @@ async function resolveUserFromMutation(
  */
 async function resolveUserFromAction(
   ctx: ActionCtx,
-  guestId?: string
+  guestId?: string,
 ): Promise<Doc<"users">> {
   // Try Clerk auth first
   const identity = await ctx.auth.getUserIdentity();
@@ -111,11 +156,12 @@ async function resolveUserFromAction(
  */
 export const getUserByToken = internalQuery({
   args: { tokenIdentifier: v.string() },
+  returns: v.union(v.null(), userDocValidator),
   handler: async (ctx, args): Promise<Doc<"users"> | null> => {
     return await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", args.tokenIdentifier)
+        q.eq("tokenIdentifier", args.tokenIdentifier),
       )
       .unique();
   },
@@ -126,6 +172,7 @@ export const getUserByToken = internalQuery({
  */
 export const getGuestUserByGuestId = internalQuery({
   args: { guestId: v.string() },
+  returns: v.union(v.null(), userDocValidator),
   handler: async (ctx, args): Promise<Doc<"users"> | null> => {
     return await ctx.db
       .query("users")
@@ -174,7 +221,10 @@ export const decrementGuestThreadCount = internalMutation({
  * Helper function to check if a thread is empty (has no user messages).
  * Returns true if the thread only contains assistant/system messages.
  */
-async function isThreadEmpty(ctx: ActionCtx, threadId: string): Promise<boolean> {
+async function isThreadEmpty(
+  ctx: ActionCtx,
+  threadId: string,
+): Promise<boolean> {
   try {
     const messages = await ctx.runQuery(
       components.agent.messages.listMessagesByThreadId,
@@ -183,7 +233,7 @@ async function isThreadEmpty(ctx: ActionCtx, threadId: string): Promise<boolean>
         order: "asc",
         paginationOpts: { cursor: null, numItems: 100 },
         excludeToolMessages: false,
-      }
+      },
     );
 
     // Check if there are any user messages
@@ -211,7 +261,7 @@ async function isThreadEmpty(ctx: ActionCtx, threadId: string): Promise<boolean>
  */
 export const cleanupEmptyThreads = internalAction({
   args: {
-    userId: v.string(),
+    userId: v.id("users"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -222,7 +272,7 @@ export const cleanupEmptyThreads = internalAction({
         {
           userId: args.userId,
           paginationOpts: { cursor: null, numItems: 100 },
-        }
+        },
       );
 
       // Find all empty threads
@@ -247,7 +297,10 @@ export const cleanupEmptyThreads = internalAction({
             threadId: emptyThreads[i].id,
           });
         } catch (error) {
-          console.error(`Error deleting empty thread ${emptyThreads[i].id}:`, error);
+          console.error(
+            `Error deleting empty thread ${emptyThreads[i].id}:`,
+            error,
+          );
         }
       }
     } catch (error) {
@@ -273,7 +326,9 @@ export const create = action({
   handler: async (ctx, args) => {
     // Validate title length if provided
     if (args.title && args.title.length > MAX_TITLE_LENGTH) {
-      throw new Error(`Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`);
+      throw new Error(
+        `Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`,
+      );
     }
     const user = await resolveUserFromAction(ctx, args.guestId);
 
@@ -291,14 +346,14 @@ export const create = action({
     });
 
     // Add initial greeting message from the AI directly as an assistant message
-    await saveMessage(ctx, components.agent, {
-      threadId,
-      userId: user._id,
-      message: {
-        role: "assistant",
-        content: "Hello, how can I help you today?",
-      },
-    });
+    // await saveMessage(ctx, components.agent, {
+    //   threadId,
+    //   userId: user._id,
+    //   message: {
+    //     role: "assistant",
+    //     content: "Hello, how can I help you today?",
+    //   },
+    // });
 
     // Increment guest thread count
     if (user.isGuest) {
@@ -336,7 +391,7 @@ interface GetOrCreateResult {
 /**
  * Get the user's single thread, or create one if none exists.
  * This is the main entry point for the single-thread chat model.
- * 
+ *
  * Returns:
  * - threadId: The thread to use
  * - isNew: Whether this is a brand new thread (no prior messages)
@@ -358,17 +413,20 @@ export const getOrCreate = action({
       {
         userId: user._id,
         paginationOpts: { cursor: null, numItems: 1 },
-      }
+      },
     );
 
     // If user has a thread, return it with greeting info
     if (threadsResult.page.length > 0) {
       const thread = threadsResult.page[0];
-      
+
       // Get greeting info (explicit cast to avoid circular type inference)
-      const greetingInfo = await ctx.runQuery(internal.greetings.getGreetingForThread, {
-        userId: user._id,
-      }) as GreetingInfo | null;
+      const greetingInfo = (await ctx.runQuery(
+        internal.greetings.getGreetingForThread,
+        {
+          userId: user._id,
+        },
+      )) as GreetingInfo | null;
 
       // If there's a greeting, INSERT it as a message so it shows via sync
       if (greetingInfo?.greeting) {
@@ -380,7 +438,7 @@ export const getOrCreate = action({
             content: greetingInfo.greeting,
           },
         });
-        
+
         // Clear the cached greeting so it doesn't repeat
         await ctx.runMutation(internal.greetings.clearGreetingCache, {
           userId: user._id,
@@ -399,7 +457,8 @@ export const getOrCreate = action({
       title: "Chat",
     });
 
-    const initialGreeting = "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?";
+    const initialGreeting =
+      "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?";
 
     // Add initial greeting message
     await saveMessage(ctx, components.agent, {
@@ -432,6 +491,7 @@ export const list = query({
     paginationOpts: v.optional(paginationOptsValidator),
     guestId: v.optional(v.string()),
   },
+  returns: paginatedThreadsValidator,
   handler: async (ctx, args) => {
     // Try to resolve user, return empty for unauthenticated
     let user: Doc<"users"> | null = null;
@@ -447,7 +507,7 @@ export const list = query({
       {
         userId: user._id,
         paginationOpts: args.paginationOpts ?? { cursor: null, numItems: 50 },
-      }
+      },
     );
     return threads;
   },
@@ -459,6 +519,7 @@ export const get = query({
     threadId: v.string(),
     guestId: v.optional(v.string()),
   },
+  returns: v.union(v.null(), threadDocValidator),
   handler: async (ctx, args) => {
     const user = await resolveUserFromQuery(ctx, args.guestId);
 
@@ -471,7 +532,7 @@ export const get = query({
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
-    return thread;
+    return thread ?? null;
   },
 });
 
@@ -526,10 +587,14 @@ export const updateMetadata = mutation({
   }),
   handler: async (ctx, args) => {
     if (args.title && args.title.length > MAX_TITLE_LENGTH) {
-      throw new Error(`Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`);
+      throw new Error(
+        `Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`,
+      );
     }
     if (args.summary && args.summary.length > MAX_SUMMARY_LENGTH) {
-      throw new Error(`Summary too long. Maximum length is ${MAX_SUMMARY_LENGTH} characters.`);
+      throw new Error(
+        `Summary too long. Maximum length is ${MAX_SUMMARY_LENGTH} characters.`,
+      );
     }
     const user = await resolveUserFromMutation(ctx, args.guestId);
 

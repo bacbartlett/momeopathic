@@ -57,6 +57,7 @@ interface MessageListProps {
   messages: Message[];
   isLoading?: boolean;
   forceDivider?: boolean;
+  threadKey?: string | null;
 }
 
 export interface MessageListHandle {
@@ -130,43 +131,13 @@ function MessageListSkeleton() {
 }
 
 /**
- * Pull-to-reveal banner component
- */
-function PullToRevealBanner({ pullProgress, isReady }: { pullProgress: Animated.Value; isReady: boolean }) {
-  const opacity = pullProgress.interpolate({
-    inputRange: [0, 50, PULL_THRESHOLD],
-    outputRange: [0.3, 0.7, 1],
-    extrapolate: 'clamp',
-  });
-
-  const scale = pullProgress.interpolate({
-    inputRange: [0, PULL_THRESHOLD],
-    outputRange: [0.9, 1],
-    extrapolate: 'clamp',
-  });
-
-  return (
-    <Animated.View style={[pullBannerStyles.container, { opacity, transform: [{ scale }] }]}>
-      <Ionicons 
-        name={isReady ? "checkmark-circle" : "arrow-down-circle-outline"} 
-        size={16} 
-        color={isReady ? Colors.primary : Colors.textMuted} 
-      />
-      <Text style={[pullBannerStyles.text, isReady && pullBannerStyles.textReady]}>
-        {isReady ? "Release to load old messages" : "Pull down to see old messages"}
-      </Text>
-    </Animated.View>
-  );
-}
-
-/**
  * Best practice for chat scrolling based on React Native community recommendations:
  * - Use inverted FlatList (renders messages bottom-to-top like iMessage/WhatsApp)
  * - Use maintainVisibleContentPosition to prevent scroll jumping
  * - Auto-scroll only when user is at bottom (viewing latest messages)
  */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
-  function MessageList({ messages, isLoading = false, forceDivider = false }, ref) {
+  function MessageList({ messages, isLoading = false, forceDivider = false, threadKey = null }, ref) {
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
   
@@ -177,7 +148,11 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   const revealAnimation = useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
   const [layoutHeight, setLayoutHeight] = useState(0);
-  const [isAtTop, setIsAtTop] = useState(false);
+  const isAtTopRef = useRef(false);
+
+  const updateIsAtTop = useCallback((nextIsAtTop: boolean) => {
+    isAtTopRef.current = nextIsAtTop;
+  }, []);
 
   const sortedByOldest = useMemo(() => {
     return [...messages].sort((a, b) => a.timestamp - b.timestamp);
@@ -215,7 +190,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       setOldMessagesRevealed(false); // 4h+ gap, start hidden
       revealAnimation.setValue(0);
     }
-  }, [showDivider]);
+  }, [showDivider, threadKey, revealAnimation]);
   
   // Debug: force divider should always reset reveal state
   useEffect(() => {
@@ -246,7 +221,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [isLoading]);
+  }, [isLoading, messages.length, threadKey]);
 
   /**
    * Handle scroll for pull-to-reveal
@@ -260,9 +235,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     const { contentOffset } = event.nativeEvent;
     const maxOffset = Math.max(0, contentHeight - layoutHeight);
     const atTop = contentOffset.y >= maxOffset - 8;
-    if (atTop !== isAtTop) {
-      setIsAtTop(atTop);
-    }
+    updateIsAtTop(atTop);
     if (!shouldUsePullToReveal || !atTop) {
       pullProgress.setValue(0);
       setIsPullReady(false);
@@ -273,13 +246,13 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     
     pullProgress.setValue(pullDistance);
     setIsPullReady(pullDistance >= PULL_THRESHOLD);
-  }, [shouldUsePullToReveal, pullProgress, getPullDistance, contentHeight, layoutHeight, isAtTop]);
+  }, [shouldUsePullToReveal, pullProgress, getPullDistance, contentHeight, layoutHeight, updateIsAtTop]);
 
   /**
    * Handle scroll end - trigger reveal if threshold met
    */
   const handleScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!shouldUsePullToReveal || !isAtTop) return;
+    if (!shouldUsePullToReveal || !isAtTopRef.current) return;
 
     const pullDistance = getPullDistance(event);
 
@@ -301,22 +274,22 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       useNativeDriver: false,
     }).start();
     setIsPullReady(false);
-  }, [shouldUsePullToReveal, isAtTop, pullProgress, revealAnimation, getPullDistance]);
+  }, [shouldUsePullToReveal, pullProgress, revealAnimation, getPullDistance]);
 
   const panResponder = useMemo(() => {
     return PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        if (!shouldUsePullToReveal || !isAtTop) return false;
+        if (!shouldUsePullToReveal || !isAtTopRef.current) return false;
         return Math.abs(gestureState.dy) > 6 && Math.abs(gestureState.dx) < 6;
       },
       onPanResponderMove: (_, gestureState) => {
-        if (!shouldUsePullToReveal || !isAtTop) return;
+        if (!shouldUsePullToReveal || !isAtTopRef.current) return;
         const pullDistance = Math.max(0, Math.abs(gestureState.dy));
         pullProgress.setValue(pullDistance);
         setIsPullReady(pullDistance >= PULL_THRESHOLD);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (!shouldUsePullToReveal || !isAtTop) return;
+        if (!shouldUsePullToReveal || !isAtTopRef.current) return;
         const pullDistance = Math.max(0, Math.abs(gestureState.dy));
         if (pullDistance >= PULL_THRESHOLD) {
           setOldMessagesRevealed(true);
@@ -335,7 +308,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         setIsPullReady(false);
       },
     });
-  }, [shouldUsePullToReveal, isAtTop, pullProgress, revealAnimation]);
+  }, [shouldUsePullToReveal, pullProgress, revealAnimation]);
 
   // Build list items - show only the new segment until revealed
   const listItems = useMemo((): ListItem[] => {
@@ -362,54 +335,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     // Reverse for inverted FlatList (newest first)
     return items.reverse();
   }, [shouldUsePullToReveal, newSegment, sortedByOldest]);
-
-  // Show skeleton while loading messages for a thread switch
-  if (isLoading) {
-    return <MessageListSkeleton />;
-  }
-
-  if (messages.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        {/* Decorative illustration */}
-        <View style={styles.illustrationContainer}>
-          <View style={styles.illustrationCircle}>
-            <View style={styles.illustrationInnerCircle}>
-              <Ionicons name="leaf" size={48} color={Colors.primary} />
-            </View>
-          </View>
-          {/* Decorative leaves */}
-          <View style={[styles.decorativeLeaf, styles.leafTopRight]}>
-            <Ionicons name="leaf-outline" size={20} color={Colors.primaryLight} />
-          </View>
-          <View style={[styles.decorativeLeaf, styles.leafBottomLeft]}>
-            <Ionicons name="leaf-outline" size={16} color={Colors.accent} />
-          </View>
-        </View>
-
-        <Text style={styles.emptyTitle}>Welcome! 👋</Text>
-        <Text style={styles.emptySubtitle}>
-          I'm here to help you explore homeopathic remedies for your family's wellness. Ask me anything about natural healing!
-        </Text>
-
-        {/* Suggestion chips */}
-        <View style={styles.suggestionsContainer}>
-          <View style={styles.suggestionChip}>
-            <Ionicons name="help-circle-outline" size={14} color={Colors.primary} />
-            <Text style={styles.suggestionText}>What is homeopathy?</Text>
-          </View>
-          <View style={styles.suggestionChip}>
-            <Ionicons name="thermometer-outline" size={14} color={Colors.primary} />
-            <Text style={styles.suggestionText}>Remedies for fever</Text>
-          </View>
-          <View style={styles.suggestionChip}>
-            <Ionicons name="moon-outline" size={14} color={Colors.primary} />
-            <Text style={styles.suggestionText}>Sleep support for kids</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'divider') {
@@ -442,6 +367,54 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
       extrapolate: 'clamp',
     });
   }, [pullProgress]);
+
+  // Show skeleton while loading messages for a thread switch
+  if (isLoading) {
+    return <MessageListSkeleton />;
+  }
+
+  if (messages.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        {/* Decorative illustration */}
+        <View style={styles.illustrationContainer}>
+          <View style={styles.illustrationCircle}>
+            <View style={styles.illustrationInnerCircle}>
+              <Ionicons name="leaf" size={48} color={Colors.primary} />
+            </View>
+          </View>
+          {/* Decorative leaves */}
+          <View style={[styles.decorativeLeaf, styles.leafTopRight]}>
+            <Ionicons name="leaf-outline" size={20} color={Colors.primaryLight} />
+          </View>
+          <View style={[styles.decorativeLeaf, styles.leafBottomLeft]}>
+            <Ionicons name="leaf-outline" size={16} color={Colors.accent} />
+          </View>
+        </View>
+
+        <Text style={styles.emptyTitle}>Welcome! 👋</Text>
+        <Text style={styles.emptySubtitle}>
+          I&apos;m here to help you explore homeopathic remedies for your family&apos;s wellness. Ask me anything about natural healing!
+        </Text>
+
+        {/* Suggestion chips */}
+        <View style={styles.suggestionsContainer}>
+          <View style={styles.suggestionChip}>
+            <Ionicons name="help-circle-outline" size={14} color={Colors.primary} />
+            <Text style={styles.suggestionText}>What is homeopathy?</Text>
+          </View>
+          <View style={styles.suggestionChip}>
+            <Ionicons name="thermometer-outline" size={14} color={Colors.primary} />
+            <Text style={styles.suggestionText}>Remedies for fever</Text>
+          </View>
+          <View style={styles.suggestionChip}>
+            <Ionicons name="moon-outline" size={14} color={Colors.primary} />
+            <Text style={styles.suggestionText}>Sleep support for kids</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.listWrapper} {...panResponder.panHandlers}>
@@ -529,13 +502,13 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         onContentSizeChange={(_, height) => {
           setContentHeight(height);
           const maxOffset = Math.max(0, height - layoutHeight);
-          setIsAtTop(maxOffset === 0);
+          updateIsAtTop(maxOffset === 0);
         }}
         onLayout={(event) => {
           const height = event.nativeEvent.layout.height;
           setLayoutHeight(height);
           const maxOffset = Math.max(0, contentHeight - height);
-          setIsAtTop(maxOffset === 0);
+          updateIsAtTop(maxOffset === 0);
         }}
         // Performance optimizations
         removeClippedSubviews={true}
@@ -779,43 +752,6 @@ const dividerStyles = StyleSheet.create({
     borderColor: Colors.border,
   },
   label: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.xs,
-    color: Colors.textMuted,
-  },
-});
-
-// Pull-to-reveal banner styles
-const pullBannerStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-  },
-  text: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.textMuted,
-  },
-  textReady: {
-    color: Colors.primary,
-    fontWeight: '500',
-  },
-  staticBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.bgSurface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  staticText: {
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
     color: Colors.textMuted,

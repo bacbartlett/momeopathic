@@ -9,6 +9,50 @@ import {
 } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 
+const userDocValidator = v.object({
+  _id: v.id("users"),
+  _creationTime: v.number(),
+  tokenIdentifier: v.string(),
+  name: v.string(),
+  email: v.optional(v.string()),
+  imageUrl: v.optional(v.string()),
+  disclaimerAccepted: v.optional(v.boolean()),
+  noPaywall: v.optional(v.boolean()),
+  feedbackThreadCount: v.optional(v.number()),
+  feedbackDismissCount: v.optional(v.number()),
+  feedbackGiven: v.optional(v.boolean()),
+  isGuest: v.optional(v.boolean()),
+  guestId: v.optional(v.string()),
+  guestThreadCount: v.optional(v.number()),
+  lastActivityAt: v.optional(v.number()),
+  timezone: v.optional(v.string()),
+});
+
+const greetingCacheDocValidator = v.object({
+  _id: v.id("greetingCache"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  greeting: v.string(),
+  tier: v.string(),
+  generatedAt: v.number(),
+  expiresAt: v.number(),
+});
+
+const greetingScheduleDocValidator = v.object({
+  _id: v.id("greetingSchedule"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  tier: v.string(),
+  scheduledId: v.id("_scheduled_functions"),
+  scheduledFor: v.number(),
+});
+
+const greetingTierValidator = v.union(
+  v.literal("30min"),
+  v.literal("4hour"),
+  v.literal("1week"),
+);
+
 // ============================================
 // TIME BUCKETS & PREFIXES
 // ============================================
@@ -121,6 +165,12 @@ function getUserLocalHour(timezone?: string): number {
  */
 export const getUserContext = internalQuery({
   args: { userId: v.id("users") },
+  returns: v.object({
+    profile: v.optional(v.string()),
+    activeCases: v.optional(v.string()),
+    recentHistory: v.array(v.string()),
+    lessons: v.array(v.string()),
+  }),
   handler: async (ctx, args) => {
     // Get profile
     const profile = await ctx.db
@@ -162,6 +212,7 @@ export const getUserContext = internalQuery({
  */
 export const getUserById = internalQuery({
   args: { userId: v.id("users") },
+  returns: v.union(v.null(), userDocValidator),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.userId);
   },
@@ -172,6 +223,7 @@ export const getUserById = internalQuery({
  */
 export const getCachedGreeting = internalQuery({
   args: { userId: v.id("users") },
+  returns: v.union(v.null(), greetingCacheDocValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
 
@@ -203,6 +255,7 @@ export const getCachedGreeting = internalQuery({
  */
 export const getPendingSchedules = internalQuery({
   args: { userId: v.id("users") },
+  returns: v.array(greetingScheduleDocValidator),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("greetingSchedule")
@@ -217,7 +270,11 @@ export const getPendingSchedules = internalQuery({
  */
 export const checkInactivityTier = internalQuery({
   args: { userId: v.id("users") },
-  handler: async (ctx, args): Promise<string | null> => {
+  returns: v.union(v.null(), greetingTierValidator),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<"30min" | "4hour" | "1week" | null> => {
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
 
@@ -237,6 +294,13 @@ export const checkInactivityTier = internalQuery({
  */
 export const getGreeting = internalQuery({
   args: { userId: v.id("users") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      greeting: v.string(),
+      tier: v.string(),
+    }),
+  ),
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
@@ -279,6 +343,13 @@ export const getGreeting = internalQuery({
  */
 export const consumeGreeting = internalMutation({
   args: { userId: v.id("users") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      greeting: v.string(),
+      tier: v.string(),
+    }),
+  ),
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
@@ -330,6 +401,14 @@ export const consumeGreeting = internalMutation({
  */
 export const getGreetingForThread = internalQuery({
   args: { userId: v.id("users") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      greeting: v.string(),
+      tier: v.string(),
+      showDivider: v.boolean(),
+    }),
+  ),
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) return null;
@@ -367,19 +446,13 @@ export const getGreetingForThread = internalQuery({
     const bucket = getTimeBucket(hour);
     const prefix = getRandomPrefix(bucket);
 
-    if (bestCached) {
-      const result = {
-        greeting: `${prefix} ${bestCached.greeting}`,
-        tier: bestCached.tier,
-        showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
-      };
-      return result;
+    if (!bestCached) {
+      return null;
     }
 
-    // Fallback greeting
     return {
-      greeting: `${prefix} How can I help you today?`,
-      tier: "fallback",
+      greeting: `${prefix} ${bestCached.greeting}`,
+      tier: bestCached.tier,
       showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
     };
   },
@@ -398,6 +471,7 @@ export const saveGreetingToCache = internalMutation({
     greeting: v.string(),
     tier: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const now = Date.now();
     const ttl =
@@ -423,6 +497,7 @@ export const saveGreetingToCache = internalMutation({
       generatedAt: now,
       expiresAt: now + ttl,
     });
+    return null;
   },
 });
 
@@ -435,6 +510,7 @@ export const scheduleGreetingJob = internalMutation({
     tier: v.string(),
     scheduledFor: v.number(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     // Delete any existing schedule for this tier
     const existing = await ctx.db
@@ -468,6 +544,7 @@ export const scheduleGreetingJob = internalMutation({
       scheduledId,
       scheduledFor: args.scheduledFor,
     });
+    return null;
   },
 });
 
@@ -476,6 +553,7 @@ export const scheduleGreetingJob = internalMutation({
  */
 export const cancelPendingGreetings = internalMutation({
   args: { userId: v.id("users") },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const pending = await ctx.db
       .query("greetingSchedule")
@@ -490,6 +568,7 @@ export const cancelPendingGreetings = internalMutation({
       }
       await ctx.db.delete(schedule._id);
     }
+    return null;
   },
 });
 
@@ -498,6 +577,7 @@ export const cancelPendingGreetings = internalMutation({
  */
 export const clearGreetingCache = internalMutation({
   args: { userId: v.id("users") },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const cached = await ctx.db
       .query("greetingCache")
@@ -507,6 +587,7 @@ export const clearGreetingCache = internalMutation({
     for (const greeting of cached) {
       await ctx.db.delete(greeting._id);
     }
+    return null;
   },
 });
 
@@ -515,10 +596,12 @@ export const clearGreetingCache = internalMutation({
  */
 export const updateLastActivity = internalMutation({
   args: { userId: v.id("users") },
+  returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.userId, {
       lastActivityAt: Date.now(),
     });
+    return null;
   },
 });
 
@@ -528,6 +611,7 @@ export const updateLastActivity = internalMutation({
  */
 export const recordActivity = internalMutation({
   args: { userId: v.id("users") },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const now = Date.now();
 
@@ -576,6 +660,7 @@ export const recordActivity = internalMutation({
         scheduledFor,
       });
     }
+    return null;
   },
 });
 
@@ -591,12 +676,13 @@ export const generateGreeting = internalAction({
     userId: v.id("users"),
     tier: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     // Get user and their context
     const user = await ctx.runQuery(internal.greetings.getUserById, {
       userId: args.userId,
     });
-    if (!user) return;
+    if (!user) return null;
 
     const context = await ctx.runQuery(internal.greetings.getUserContext, {
       userId: args.userId,
@@ -652,6 +738,7 @@ export const generateGreeting = internalAction({
         error,
       );
     }
+    return null;
   },
 });
 
@@ -674,6 +761,14 @@ export const getGreetingOnOpen = query({
   args: {
     guestId: v.optional(v.string()),
   },
+  returns: v.union(
+    v.null(),
+    v.object({
+      greeting: v.string(),
+      tier: v.string(),
+      showDivider: v.boolean(),
+    }),
+  ),
   handler: async (ctx, args): Promise<GreetingOnOpenResult | null> => {
     // Resolve user
     const identity = await ctx.auth.getUserIdentity();
@@ -713,15 +808,7 @@ export const getGreetingOnOpen = query({
     } | null;
 
     if (!cached) {
-      // No cached greeting - return a simple fallback
-      const hour = getUserLocalHour(user.timezone);
-      const bucket = getTimeBucket(hour);
-      const prefix = getRandomPrefix(bucket);
-      return {
-        greeting: `${prefix} How can I help you today?`,
-        tier: "fallback",
-        showDivider: now - lastActivity >= INACTIVITY_TIERS["4hour"],
-      };
+      return null;
     }
 
     // Build the full greeting with time prefix
@@ -744,6 +831,7 @@ export const onUserActivity = mutation({
   args: {
     guestId: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     // Resolve user
     const identity = await ctx.auth.getUserIdentity();
@@ -763,7 +851,7 @@ export const onUserActivity = mutation({
         .unique();
     }
 
-    if (!user) return;
+    if (!user) return null;
 
     const now = Date.now();
 
@@ -812,5 +900,6 @@ export const onUserActivity = mutation({
         scheduledFor,
       });
     }
+    return null;
   },
 });

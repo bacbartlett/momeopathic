@@ -97,6 +97,16 @@ export const handleAppOpen = action({
   handler: async (ctx, args): Promise<HandleAppOpenResult> => {
     const user = await resolveUserFromAction(ctx, args.guestId);
 
+    const thread = await ctx.runQuery(components.agent.threads.getThread, {
+      threadId: args.threadId,
+    });
+    if (!thread) {
+      throw new Error("Thread not found");
+    }
+    if (thread.userId !== user._id) {
+      throw new Error("Access denied: Thread does not belong to current user");
+    }
+
     // Check inactivity tier
     const tier: string | null = await ctx.runQuery(internal.greetings.checkInactivityTier, {
       userId: user._id,
@@ -157,6 +167,13 @@ export const getAppOpenInfo = query({
   args: {
     guestId: v.optional(v.string()),
   },
+  returns: v.object({
+    needsGreeting: v.boolean(),
+    showDivider: v.boolean(),
+    tier: v.union(v.string(), v.null()),
+    hasGreeting: v.boolean(),
+    greeting: v.union(v.string(), v.null()),
+  }),
   handler: async (ctx, args): Promise<GetAppOpenInfoResult> => {
     const user = await resolveUserFromQuery(ctx, args.guestId);
 

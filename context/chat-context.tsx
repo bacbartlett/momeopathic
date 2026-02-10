@@ -36,6 +36,11 @@ interface ConvexThread {
   userId?: string;
 }
 
+interface FailedMessageRetry {
+  content: string;
+  threadId: string;
+}
+
 // Context types
 interface ChatContextType {
   state: ChatState;
@@ -72,7 +77,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [sendError, setSendError] = useState<string | null>(null);
   const [createThreadError, setCreateThreadError] = useState<string | null>(null);
   const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
-  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState<FailedMessageRetry | null>(null);
   const [guestLimitReached, setGuestLimitReached] = useState(false);
   const [debugForceDivider, setDebugForceDivider] = useState(false);
   const [threadInitialized, setThreadInitialized] = useState(false);
@@ -233,6 +238,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isGuest]);
 
+  // Clear retry state when leaving the failed thread.
+  React.useEffect(() => {
+    if (!lastFailedMessage) return;
+    if (activeThreadId !== lastFailedMessage.threadId) {
+      setLastFailedMessage(null);
+    }
+  }, [activeThreadId, lastFailedMessage]);
+
+  // Recover from stale thread id after auth/guest transitions.
+  React.useEffect(() => {
+    if (isLoading || !activeThreadId || threadsResult === undefined) {
+      return;
+    }
+
+    const hasActiveThread = threads.some((thread) => thread.id === activeThreadId);
+    if (!hasActiveThread) {
+      setActiveThreadId(null);
+      setThreadInitialized(false);
+    }
+  }, [isLoading, activeThreadId, threadsResult, threads]);
+
   // Clear error states
   const clearCreateThreadError = useCallback(() => {
     setCreateThreadError(null);
@@ -359,7 +385,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('Failed to send message:', error);
       if (mountedRef.current) {
         setSendError(errorMessage);
-        setLastFailedMessage(content);
+        setLastFailedMessage({
+          content,
+          threadId: activeThreadId,
+        });
       }
     } finally {
       isSendingRef.current = false;
@@ -372,8 +401,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Retry last failed message
   const retryLastMessage = useCallback(async () => {
     if (!lastFailedMessage) return;
-    await sendMessage(lastFailedMessage);
-  }, [lastFailedMessage, sendMessage]);
+    if (activeThreadId !== lastFailedMessage.threadId) {
+      setLastFailedMessage(null);
+      return;
+    }
+    await sendMessage(lastFailedMessage.content);
+  }, [activeThreadId, lastFailedMessage, sendMessage]);
 
   return (
     <ChatContext.Provider

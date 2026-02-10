@@ -1,20 +1,26 @@
 export const isDev = __DEV__;
 
-export const CONVEX_DEPLOYMENT = isDev ? 'dev:abundant-bandicoot-147' : 'prod:avid-toad-683';
+function readEnv(name: string): string | undefined {
+  const value = process.env[name];
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
-export const EXPO_PUBLIC_CONVEX_URL = isDev ? 'https://abundant-bandicoot-147.convex.cloud' : 'https://avid-toad-683.convex.cloud';
+function requireEnv(name: string): string {
+  const value = readEnv(name);
+  if (!value) {
+    throw new Error(`[env] Missing required environment variable: ${name}`);
+  }
+  return value;
+}
 
-export const EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = isDev ? 'pk_test_cHJvLXR1cmtleS02LmNsZXJrLmFjY291bnRzLmRldiQ' : 'pk_live_Y2xlcmsubXltYXRlcmlhLmFwcCQ';
+export const CONVEX_DEPLOYMENT = readEnv('CONVEX_DEPLOYMENT');
 
-// export const CLERK_JWT_ISSUER_DOMAIN = isDev ? 'https://pro-turkey-6.clerk.accounts.dev' : 'https://clerk.mymateria.app';
-
-export const EXPO_PUBLIC_REVENUECAT_IOS_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : 'appl_WolnANIJoYtoDiSDOFkmTZuJpsM';
-// TODO: Replace 'YOUR_REVENUECAT_ANDROID_API_KEY' with your actual production API key from RevenueCat Dashboard
-// Go to: RevenueCat Dashboard → Project Settings → API Keys → Google Play public API key
-export const EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = isDev ? 'test_obVyjOiqZssaWBxasxuHcJmPjKg' : 'goog_bSiHsKxbXVpuCMpQAQiVjqZRujU';
-
-export const EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID = isDev ? 'Homeopathy Chat Unlimited' : 'Homeopathy Chat Unlimited';
-
-// TODO: Replace 'YOUR_POSTHOG_API_KEY' with your actual PostHog project API key from the PostHog dashboard
-export const EXPO_PUBLIC_POSTHOG_API_KEY = isDev ? 'phc_71PdQlY1NaecBD1Kz79ZGrVSO4NskfKOdCzlUGHMyid' : 'phc_71PdQlY1NaecBD1Kz79ZGrVSO4NskfKOdCzlUGHMyid';
-export const EXPO_PUBLIC_POSTHOG_HOST = 'https://us.i.posthog.com';
+export const EXPO_PUBLIC_CONVEX_URL = requireEnv('EXPO_PUBLIC_CONVEX_URL');
+export const EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = requireEnv('EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY');
+export const EXPO_PUBLIC_REVENUECAT_IOS_KEY = requireEnv('EXPO_PUBLIC_REVENUECAT_IOS_KEY');
+export const EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = requireEnv('EXPO_PUBLIC_REVENUECAT_ANDROID_KEY');
+export const EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID = requireEnv('EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID');
+export const EXPO_PUBLIC_POSTHOG_API_KEY = readEnv('EXPO_PUBLIC_POSTHOG_API_KEY') ?? 'YOUR_POSTHOG_API_KEY';
+export const EXPO_PUBLIC_POSTHOG_HOST = readEnv('EXPO_PUBLIC_POSTHOG_HOST') ?? 'https://us.i.posthog.com';

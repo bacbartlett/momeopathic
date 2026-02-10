@@ -24,8 +24,92 @@ import Purchases, {
 // Can be configured via environment variable or defaults to 'premium'
 const ENTITLEMENT_ID = EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID;
 
+// Guard against duplicate configure calls in development StrictMode.
+let hasConfiguredRevenueCat = false;
+
 // Map of product ID to intro eligibility status
 type IntroEligibilityMap = Record<string, IntroEligibility>;
+
+function extractRevenueCatErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+
+  if (typeof err === 'string' && err.length > 0) {
+    return err;
+  }
+
+  if (err && typeof err === 'object') {
+    const maybePurchasesError = err as {
+      message?: string;
+      underlyingErrorMessage?: string;
+      readableErrorCode?: string;
+      code?: string;
+    };
+    const segments: string[] = [];
+    if (typeof maybePurchasesError.message === 'string' && maybePurchasesError.message.length > 0) {
+      segments.push(maybePurchasesError.message);
+    }
+    if (
+      typeof maybePurchasesError.underlyingErrorMessage === 'string' &&
+      maybePurchasesError.underlyingErrorMessage.length > 0
+    ) {
+      segments.push(`underlying=${maybePurchasesError.underlyingErrorMessage}`);
+    }
+    if (typeof maybePurchasesError.readableErrorCode === 'string' && maybePurchasesError.readableErrorCode.length > 0) {
+      segments.push(`code=${maybePurchasesError.readableErrorCode}`);
+    } else if (typeof maybePurchasesError.code === 'string' && maybePurchasesError.code.length > 0) {
+      segments.push(`code=${maybePurchasesError.code}`);
+    }
+    if (segments.length > 0) {
+      return segments.join(' | ');
+    }
+  }
+
+  return fallback;
+}
+
+function extractRevenueCatErrorDetails(err: unknown): Record<string, string> {
+  if (err instanceof Error) {
+    return {
+      message: err.message,
+      name: err.name,
+      stack: err.stack ?? 'no stack',
+    };
+  }
+
+  if (err && typeof err === 'object') {
+    const maybePurchasesError = err as {
+      message?: string;
+      underlyingErrorMessage?: string;
+      readableErrorCode?: string;
+      code?: string;
+      userCancelled?: boolean;
+    };
+    const details: Record<string, string> = {};
+    if (typeof maybePurchasesError.message === 'string') details.message = maybePurchasesError.message;
+    if (typeof maybePurchasesError.underlyingErrorMessage === 'string') {
+      details.underlyingErrorMessage = maybePurchasesError.underlyingErrorMessage;
+    }
+    if (typeof maybePurchasesError.readableErrorCode === 'string') {
+      details.readableErrorCode = maybePurchasesError.readableErrorCode;
+    }
+    if (typeof maybePurchasesError.code === 'string') details.code = maybePurchasesError.code;
+    if (typeof maybePurchasesError.userCancelled === 'boolean') {
+      details.userCancelled = String(maybePurchasesError.userCancelled);
+    }
+    try {
+      details.raw = JSON.stringify(err);
+    } catch {
+      details.raw = String(err);
+    }
+    return details;
+  }
+
+  return {
+    raw: String(err),
+  };
+}
 
 interface RevenueCatContextType {
   /** Whether RevenueCat has been initialized */
@@ -172,82 +256,119 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
         }
 
-        // Configure RevenueCat
-        logRevenueCat('log', 'Calling Purchases.configure()...');
-        const configureStartTime = Date.now();
-        await Purchases.configure({ apiKey });
-        const configureDuration = Date.now() - configureStartTime;
-        logRevenueCat('log', '✅ Purchases.configure() completed in', configureDuration, 'ms');
+        // Configure RevenueCat once to avoid duplicate configure errors in dev StrictMode.
+        if (!hasConfiguredRevenueCat) {
+          logRevenueCat('log', 'Calling Purchases.configure()...');
+          const configureStartTime = Date.now();
+          await Purchases.configure({ apiKey });
+          const configureDuration = Date.now() - configureStartTime;
+          hasConfiguredRevenueCat = true;
+          logRevenueCat('log', '✅ Purchases.configure() completed in', configureDuration, 'ms');
+        } else {
+          logRevenueCat('log', 'Purchases already configured; skipping duplicate configure call');
+        }
         logRevenueCat('log', 'Setting isInitialized=true');
         setIsInitialized(true);
 
-        // Get initial customer info
-        logRevenueCat('log', 'Calling Purchases.getCustomerInfo()...');
-        const customerInfoStartTime = Date.now();
-        const info = await Purchases.getCustomerInfo();
-        const customerInfoDuration = Date.now() - customerInfoStartTime;
-        logRevenueCat('log', '✅ Purchases.getCustomerInfo() completed in', customerInfoDuration, 'ms');
-        logRevenueCat('log', 'Customer Info received:', {
-          originalAppUserId: info.originalAppUserId,
-          firstSeen: info.firstSeen,
-          requestDate: info.requestDate,
-          activeEntitlements: Object.keys(info.entitlements.active),
-          allEntitlements: Object.keys(info.entitlements.all),
-          managementURL: info.managementURL,
-        });
-        setCustomerInfo(info);
-        logRevenueCat('log', 'Customer info state updated');
+        let nonFatalInitError: string | null = null;
 
-        // Get offerings
-        logRevenueCat('log', 'Calling Purchases.getOfferings()...');
-        const offeringsStartTime = Date.now();
-        const offerings = await Purchases.getOfferings();
-        const offeringsDuration = Date.now() - offeringsStartTime;
-        logRevenueCat('log', '✅ Purchases.getOfferings() completed in', offeringsDuration, 'ms');
-        logRevenueCat('log', 'Offerings received:', {
-          hasCurrent: !!offerings.current,
-          currentIdentifier: offerings.current?.identifier,
-          availablePackages: offerings.current?.availablePackages.map(p => ({
-            identifier: p.identifier,
-            productId: p.product.identifier,
-            price: p.product.priceString,
-          })),
-          allOfferings: Object.keys(offerings.all),
-        });
-        
-        if (offerings.current) {
-          setCurrentOffering(offerings.current);
-          logRevenueCat('log', 'Current offering state updated');
-          
-          // Check intro/trial eligibility for all subscription products
-          const subscriptionProductIds = offerings.current.availablePackages
-            .filter(pkg => pkg.product.subscriptionPeriod)
-            .map(pkg => pkg.product.identifier);
-          
-          if (subscriptionProductIds.length > 0) {
-            logRevenueCat('log', 'Checking intro eligibility for products:', subscriptionProductIds);
-            const eligibilityStartTime = Date.now();
-            const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(subscriptionProductIds);
-            const eligibilityDuration = Date.now() - eligibilityStartTime;
-            logRevenueCat('log', '✅ Intro eligibility check completed in', eligibilityDuration, 'ms');
-            logRevenueCat('log', 'Eligibility results:', eligibility);
-            setIntroEligibility(eligibility);
-          }
-        } else {
-          logRevenueCat('log', '⚠️ No current offering available');
+        // Get initial customer info (non-fatal if it fails).
+        try {
+          logRevenueCat('log', 'Calling Purchases.getCustomerInfo()...');
+          const customerInfoStartTime = Date.now();
+          const info = await Purchases.getCustomerInfo();
+          const customerInfoDuration = Date.now() - customerInfoStartTime;
+          logRevenueCat('log', '✅ Purchases.getCustomerInfo() completed in', customerInfoDuration, 'ms');
+          logRevenueCat('log', 'Customer Info received:', {
+            originalAppUserId: info.originalAppUserId,
+            firstSeen: info.firstSeen,
+            requestDate: info.requestDate,
+            activeEntitlements: Object.keys(info.entitlements.active),
+            allEntitlements: Object.keys(info.entitlements.all),
+            managementURL: info.managementURL,
+          });
+          setCustomerInfo(info);
+          logRevenueCat('log', 'Customer info state updated');
+        } catch (err) {
+          nonFatalInitError = extractRevenueCatErrorMessage(err, 'Failed to fetch RevenueCat customer info');
+          logRevenueCat('warn', 'Unable to fetch customer info during initialization (non-fatal)', {
+            message: nonFatalInitError,
+            details: extractRevenueCatErrorDetails(err),
+          });
         }
 
-        logRevenueCat('log', 'Setting isReady=true, error=null');
+        // Get offerings (non-fatal if it fails).
+        try {
+          logRevenueCat('log', 'Calling Purchases.getOfferings()...');
+          const offeringsStartTime = Date.now();
+          const offerings = await Purchases.getOfferings();
+          const offeringsDuration = Date.now() - offeringsStartTime;
+          logRevenueCat('log', '✅ Purchases.getOfferings() completed in', offeringsDuration, 'ms');
+          logRevenueCat('log', 'Offerings received:', {
+            hasCurrent: !!offerings.current,
+            currentIdentifier: offerings.current?.identifier,
+            availablePackages: offerings.current?.availablePackages.map(p => ({
+              identifier: p.identifier,
+              productId: p.product.identifier,
+              price: p.product.priceString,
+            })),
+            allOfferings: Object.keys(offerings.all),
+          });
+          
+          if (offerings.current) {
+            setCurrentOffering(offerings.current);
+            logRevenueCat('log', 'Current offering state updated');
+            
+            // Intro eligibility is optional, so it should not fail initialization.
+            const subscriptionProductIds = offerings.current.availablePackages
+              .filter(pkg => pkg.product.subscriptionPeriod)
+              .map(pkg => pkg.product.identifier);
+            
+            if (subscriptionProductIds.length > 0) {
+              try {
+                logRevenueCat('log', 'Checking intro eligibility for products:', subscriptionProductIds);
+                const eligibilityStartTime = Date.now();
+                const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility(subscriptionProductIds);
+                const eligibilityDuration = Date.now() - eligibilityStartTime;
+                logRevenueCat('log', '✅ Intro eligibility check completed in', eligibilityDuration, 'ms');
+                logRevenueCat('log', 'Eligibility results:', eligibility);
+                setIntroEligibility(eligibility);
+              } catch (err) {
+                const introEligibilityError = extractRevenueCatErrorMessage(
+                  err,
+                  'Failed to check intro eligibility'
+                );
+                if (!nonFatalInitError) {
+                  nonFatalInitError = introEligibilityError;
+                }
+                logRevenueCat('warn', 'Intro eligibility check failed (non-fatal)', {
+                  message: introEligibilityError,
+                  details: extractRevenueCatErrorDetails(err),
+                });
+              }
+            }
+          } else {
+            logRevenueCat('log', '⚠️ No current offering available');
+          }
+        } catch (err) {
+          const offeringsError = extractRevenueCatErrorMessage(err, 'Failed to fetch RevenueCat offerings');
+          if (!nonFatalInitError) {
+            nonFatalInitError = offeringsError;
+          }
+          logRevenueCat('warn', 'Unable to fetch offerings during initialization (non-fatal)', {
+            message: offeringsError,
+            details: extractRevenueCatErrorDetails(err),
+          });
+        }
+
+        logRevenueCat('log', 'Setting isReady=true');
         setIsReady(true);
-        setError(null);
+        setInitializationFailed(false);
+        setError(nonFatalInitError);
         logRevenueCat('log', '========== INITIALIZATION SUCCESS ==========');
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to initialize RevenueCat';
-        const errorDetails = err instanceof Error ? {
-          message: err.message,
-          name: err.name,
-          stack: err.stack,
-        } : { error: String(err) };
+        const errorMessage = extractRevenueCatErrorMessage(err, 'Failed to initialize RevenueCat');
+        const errorDetails = extractRevenueCatErrorDetails(err);
         
         logRevenueCat('error', '========== INITIALIZATION ERROR ==========');
         console.error('[RevenueCat] Error message:', errorMessage);
@@ -451,12 +572,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
           logRevenueCat('log', 'ℹ️ No sync needed - user state unchanged');
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to sync user identity';
-        const errorDetails = err instanceof Error ? {
-          message: err.message,
-          name: err.name,
-          stack: err.stack,
-        } : { error: String(err) };
+        const errorMessage = extractRevenueCatErrorMessage(err, 'Failed to sync user identity');
+        const errorDetails = extractRevenueCatErrorDetails(err);
         
         logRevenueCat('error', '========== SYNC ERROR ==========');
         console.error('[RevenueCat] Error message:', errorMessage);
@@ -537,24 +654,19 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
       logRevenueCat('log', '========== PURCHASE SUCCESS ==========');
       return hasEntitlement;
     } catch (err) {
-      const errorDetails = err instanceof Error ? {
-        message: err.message,
-        name: err.name,
-        stack: err.stack,
-        userCancelled: 'userCancelled' in err ? (err as { userCancelled?: boolean }).userCancelled : undefined,
-      } : { error: String(err) };
+      const errorDetails = extractRevenueCatErrorDetails(err);
       
       logRevenueCat('error', '========== PURCHASE ERROR ==========');
       console.error('[RevenueCat] Error details:', errorDetails);
       
       // Check if user cancelled
-      if (err instanceof Error && 'userCancelled' in err && (err as { userCancelled?: boolean }).userCancelled) {
+      if (err && typeof err === 'object' && (err as { userCancelled?: boolean }).userCancelled === true) {
         logRevenueCat('log', 'ℹ️ User cancelled purchase (not an error)');
         logRevenueCat('log', '========== PURCHASE CANCELLED ==========');
         return false;
       }
       
-      const errorMessage = err instanceof Error ? err.message : 'Purchase failed';
+      const errorMessage = extractRevenueCatErrorMessage(err, 'Purchase failed');
       console.error('[RevenueCat] Setting error state:', errorMessage);
       setError(errorMessage);
       logRevenueCat('error', '========== PURCHASE FAILED ==========');
@@ -616,12 +728,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
       logRevenueCat('log', '========== RESTORE COMPLETE ==========');
       return hasEntitlement;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to restore purchases';
-      const errorDetails = err instanceof Error ? {
-        message: err.message,
-        name: err.name,
-        stack: err.stack,
-      } : { error: String(err) };
+      const errorMessage = extractRevenueCatErrorMessage(err, 'Failed to restore purchases');
+      const errorDetails = extractRevenueCatErrorDetails(err);
       
       logRevenueCat('error', '========== RESTORE ERROR ==========');
       console.error('[RevenueCat] Error message:', errorMessage);
@@ -669,12 +777,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
       setError(null);
       logRevenueCat('log', '========== REFRESH SUCCESS ==========');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh subscription status';
-      const errorDetails = err instanceof Error ? {
-        message: err.message,
-        name: err.name,
-        stack: err.stack,
-      } : { error: String(err) };
+      const errorMessage = extractRevenueCatErrorMessage(err, 'Failed to refresh subscription status');
+      const errorDetails = extractRevenueCatErrorDetails(err);
       
       logRevenueCat('error', '========== REFRESH ERROR ==========');
       console.error('[RevenueCat] Error message:', errorMessage);

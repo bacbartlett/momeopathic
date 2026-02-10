@@ -2,7 +2,7 @@ import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
@@ -33,15 +33,20 @@ import { tokenCache } from '@/lib/clerk-token-cache';
 import { initializeDatabase } from '@/lib/db/init';
 import { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
 
-// Startup logging - logs in both dev and production for debugging black screen issues
-console.log('[STARTUP] _layout.tsx: Module loaded');
+const startupLog = (...args: Parameters<typeof console.log>) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
+startupLog('[STARTUP] _layout.tsx: Module loaded');
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-console.log('[STARTUP] Preventing splash screen auto-hide');
+startupLog('[STARTUP] Preventing splash screen auto-hide');
 SplashScreen.preventAutoHideAsync();
 
 // Initialize the Convex client
@@ -58,23 +63,23 @@ const convex = new ConvexReactClient(
  * We use useConvexAuth to wait for Convex to have the auth token (not just Clerk's isSignedIn).
  */
 function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
-  console.log('[STARTUP] StoreUserInDatabase: Rendering');
+  startupLog('[STARTUP] StoreUserInDatabase: Rendering');
   // useConvexAuth tells us when Convex has received and validated the JWT token
   const { isAuthenticated, isLoading } = useConvexAuth();
   const storeUser = useMutation(api.users.store);
 
   useEffect(() => {
-    console.log('[STARTUP] StoreUserInDatabase: useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+    startupLog('[STARTUP] StoreUserInDatabase: useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
     // Only store user when Convex auth is ready and authenticated
     if (!isLoading && isAuthenticated) {
-      console.log('[STARTUP] StoreUserInDatabase: Storing user in database');
+      startupLog('[STARTUP] StoreUserInDatabase: Storing user in database');
       storeUser().catch((error) => {
         console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', error);
       });
     }
   }, [isLoading, isAuthenticated, storeUser]);
 
-  console.log('[STARTUP] StoreUserInDatabase: Returning children');
+  startupLog('[STARTUP] StoreUserInDatabase: Returning children');
   return <>{children}</>;
 }
 
@@ -83,19 +88,19 @@ function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
  * Must be rendered inside PostHogProviderWrapper.
  */
 function AppOpenedTracker({ children }: { children: React.ReactNode }) {
-  console.log('[STARTUP] AppOpenedTracker: Rendering');
+  startupLog('[STARTUP] AppOpenedTracker: Rendering');
   const { track, isReady } = usePostHogAnalytics();
-  console.log('[STARTUP] AppOpenedTracker: PostHog isReady:', isReady);
+  startupLog('[STARTUP] AppOpenedTracker: PostHog isReady:', isReady);
 
   useEffect(() => {
-    console.log('[STARTUP] AppOpenedTracker: useEffect - isReady:', isReady);
+    startupLog('[STARTUP] AppOpenedTracker: useEffect - isReady:', isReady);
     if (isReady) {
-      console.log('[STARTUP] AppOpenedTracker: Tracking App Opened event');
+      startupLog('[STARTUP] AppOpenedTracker: Tracking App Opened event');
       track('App Opened');
     }
   }, [isReady, track]);
 
-  console.log('[STARTUP] AppOpenedTracker: Returning children');
+  startupLog('[STARTUP] AppOpenedTracker: Returning children');
   return <>{children}</>;
 }
 
@@ -104,15 +109,13 @@ function AppOpenedTracker({ children }: { children: React.ReactNode }) {
  * This seeds the database on first launch with all remedy data.
  */
 function MateriaMedicaInitializer({ children }: { children: React.ReactNode }) {
-  const [isInitialized, setIsInitialized] = useState(false);
-
   useEffect(() => {
     const init = async () => {
-      console.log('[STARTUP] MateriaMedicaInitializer: Starting database initialization');
+      startupLog('[STARTUP] MateriaMedicaInitializer: Starting database initialization');
       try {
         const result = await initializeDatabase();
         if (result.success) {
-          console.log('[STARTUP] MateriaMedicaInitializer: Database initialized successfully', {
+          startupLog('[STARTUP] MateriaMedicaInitializer: Database initialized successfully', {
             isNewInstall: result.isNewInstall,
           });
         } else {
@@ -120,8 +123,6 @@ function MateriaMedicaInitializer({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('[STARTUP] MateriaMedicaInitializer: Unexpected error during initialization:', error);
-      } finally {
-        setIsInitialized(true);
       }
     };
 
@@ -134,7 +135,7 @@ function MateriaMedicaInitializer({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  console.log('[STARTUP] RootLayout: Component rendering');
+  startupLog('[STARTUP] RootLayout: Component rendering');
   
   const [fontsLoaded] = useFonts({
     'Quicksand-Regular': Quicksand_400Regular,
@@ -144,12 +145,12 @@ export default function RootLayout() {
     'Lato-Regular': Lato_400Regular,
     'Lato-Bold': Lato_700Bold,
   });
-  console.log('[STARTUP] RootLayout: Fonts loaded:', fontsLoaded);
+  startupLog('[STARTUP] RootLayout: Fonts loaded:', fontsLoaded);
 
   useEffect(() => {
-    console.log('[STARTUP] RootLayout: useEffect - fontsLoaded:', fontsLoaded);
+    startupLog('[STARTUP] RootLayout: useEffect - fontsLoaded:', fontsLoaded);
     if (fontsLoaded) {
-      console.log('[STARTUP] RootLayout: Hiding splash screen');
+      startupLog('[STARTUP] RootLayout: Hiding splash screen');
       SplashScreen.hideAsync().catch((error) => {
         console.error('[STARTUP] RootLayout: Failed to hide splash screen:', error);
       });
@@ -157,12 +158,12 @@ export default function RootLayout() {
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
-    console.log('[STARTUP] RootLayout: Fonts not loaded, returning null');
+    startupLog('[STARTUP] RootLayout: Fonts not loaded, returning null');
     return null;
   }
 
   const clerkPublishableKey = EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  console.log('[STARTUP] RootLayout: Clerk key exists:', !!clerkPublishableKey);
+  startupLog('[STARTUP] RootLayout: Clerk key exists:', !!clerkPublishableKey);
 
   if (!clerkPublishableKey) {
     console.error('[STARTUP] RootLayout: Missing Clerk Publishable Key');
@@ -171,7 +172,7 @@ export default function RootLayout() {
     );
   }
 
-  console.log('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
+  startupLog('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
   return (
     <ClerkProvider
       publishableKey={clerkPublishableKey}
@@ -191,8 +192,8 @@ export default function RootLayout() {
                         <ThemeProvider value={NavigationTheme}>
                           <ChatProvider>
                             <Stack>
-                              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                               <Stack.Screen
                                 name="materia-medica"
                                 options={{

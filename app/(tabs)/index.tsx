@@ -1,5 +1,5 @@
 import { Composer, ComposerHandle } from '@/components/chat/composer';
-import { MessageList, MessageListHandle } from '@/components/chat/message-list';
+import { MessageList } from '@/components/chat/message-list';
 import { GuestSignUpModal } from '@/components/guest-signup-modal';
 import { Paywall } from '@/components/paywall';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -39,8 +39,8 @@ export default function ChatScreen() {
   const { isInitialized } = useRevenueCat();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [keyboardKey, setKeyboardKey] = useState(0);
-  const messageListRef = useRef<MessageListHandle>(null);
   const composerRef = useRef<ComposerHandle>(null);
+  const [showGuestSignUpModal, setShowGuestSignUpModal] = useState(false);
 
   // Thread initialization is now handled by chat-context via getOrCreate
 
@@ -86,9 +86,15 @@ export default function ChatScreen() {
           {/* Account button (left) */}
           <TouchableOpacity
             style={styles.headerActionButton}
-            onPress={() => router.push('/account')}
+            onPress={() => {
+              if (isGuest) {
+                setShowGuestSignUpModal(true);
+                return;
+              }
+              router.push('/account');
+            }}
             activeOpacity={0.7}
-            accessibilityLabel="Account settings"
+            accessibilityLabel={isGuest ? 'Create account' : 'Account settings'}
             accessibilityRole="button"
           >
             <Ionicons name="person-circle-outline" size={26} color={Colors.textSecondary} />
@@ -133,10 +139,10 @@ export default function ChatScreen() {
 
       <View style={styles.messagesContainer}>
         <MessageList 
-          ref={messageListRef} 
           messages={activeThread?.messages ?? []} 
           isLoading={isMessagesLoading}
           forceDivider={debugForceDivider}
+          threadKey={activeThread?.id ?? null}
         />
       </View>
 
@@ -167,8 +173,11 @@ export default function ChatScreen() {
 
       {/* Guest sign-up modal when thread limit reached */}
       <GuestSignUpModal
-        visible={guestLimitReached}
-        onDismiss={clearGuestLimitReached}
+        visible={guestLimitReached || showGuestSignUpModal}
+        onDismiss={() => {
+          clearGuestLimitReached();
+          setShowGuestSignUpModal(false);
+        }}
       />
     </SafeAreaView>
   );

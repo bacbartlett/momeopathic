@@ -1,11 +1,8 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { api } from '@/convex/_generated/api';
 import { useSignIn } from '@clerk/clerk-expo';
 import type { EmailCodeFactor } from '@clerk/types';
 import { Ionicons } from '@expo/vector-icons';
-import { useAction } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -35,19 +32,6 @@ export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
   const { track } = usePostHogAnalytics();
-  const { guestId, clearGuestSession } = useGuest();
-  const claimGuestAccount = useAction(api.users.claimGuestAccount);
-
-  const claimGuestIfNeeded = async () => {
-    if (guestId) {
-      try {
-        await claimGuestAccount({ guestId });
-        await clearGuestSession();
-      } catch (err) {
-        console.error('[SignIn] Failed to claim guest account:', err);
-      }
-    }
-  };
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -78,7 +62,6 @@ export default function SignInScreen() {
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         track('Sign In', { method: 'email' });
-        await claimGuestIfNeeded();
         setError(''); // Clear error on success
         try {
           router.replace('/(tabs)');
@@ -131,7 +114,6 @@ export default function SignInScreen() {
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         track('Sign In', { method: 'email', mfa: true });
-        await claimGuestIfNeeded();
         setError(''); // Clear error on success
         try {
           router.replace('/(tabs)');
@@ -266,7 +248,6 @@ export default function SignInScreen() {
       } else if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         track('Password Reset', { method: 'email_code' });
-        await claimGuestIfNeeded();
         setError(''); // Clear error on success
         try {
           router.replace('/(tabs)');

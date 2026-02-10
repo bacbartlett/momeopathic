@@ -1,10 +1,7 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useSignIn, useSignUp } from '@clerk/clerk-expo';
-import { useAction } from 'convex/react';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,8 +30,6 @@ interface GuestSignUpModalProps {
 export function GuestSignUpModal({ visible, onDismiss }: GuestSignUpModalProps) {
   const { signUp, setActive: setSignUpActive, isLoaded: isSignUpLoaded } = useSignUp();
   const { signIn, setActive: setSignInActive, isLoaded: isSignInLoaded } = useSignIn();
-  const { guestId, clearGuestSession } = useGuest();
-  const claimGuestAccount = useAction(api.users.claimGuestAccount);
   const { track } = usePostHogAnalytics();
 
   const [mode, setMode] = useState<'signup' | 'signin'>('signup');
@@ -56,15 +51,7 @@ export function GuestSignUpModal({ visible, onDismiss }: GuestSignUpModalProps) 
     setError('');
   };
 
-  const handleClaimAndNavigate = async () => {
-    if (guestId) {
-      try {
-        await claimGuestAccount({ guestId });
-        await clearGuestSession();
-      } catch (claimError) {
-        console.error('[GuestSignUpModal] Failed to claim guest account:', claimError);
-      }
-    }
+  const handleAuthComplete = () => {
     resetState();
     onDismiss();
   };
@@ -114,7 +101,7 @@ export function GuestSignUpModal({ visible, onDismiss }: GuestSignUpModalProps) 
       if (result.status === 'complete') {
         await setSignUpActive({ session: result.createdSessionId });
         track('Sign Up', { method: 'email', from_guest: true });
-        await handleClaimAndNavigate();
+        handleAuthComplete();
       } else {
         setError('Verification incomplete. Please try again.');
       }
@@ -141,7 +128,7 @@ export function GuestSignUpModal({ visible, onDismiss }: GuestSignUpModalProps) 
       if (result.status === 'complete') {
         await setSignInActive({ session: result.createdSessionId });
         track('Sign In', { method: 'email', from_guest: true });
-        await handleClaimAndNavigate();
+        handleAuthComplete();
       } else {
         setError('Sign in incomplete. Please try again.');
       }
@@ -179,6 +166,14 @@ export function GuestSignUpModal({ visible, onDismiss }: GuestSignUpModalProps) 
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
             <View style={styles.modalContainer}>
               <View style={styles.header}>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={handleDismiss}
+                  accessibilityLabel="Close sign up modal"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
                 <View style={styles.logoContainer}>
                   <Ionicons name="mail" size={28} color={Colors.primary} />
                 </View>
@@ -258,6 +253,14 @@ export function GuestSignUpModal({ visible, onDismiss }: GuestSignUpModalProps) 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <View style={styles.modalContainer}>
             <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleDismiss}
+                accessibilityLabel="Close sign up modal"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              </TouchableOpacity>
               <View style={styles.logoContainer}>
                 <Ionicons name="leaf" size={28} color={Colors.primary} />
               </View>
@@ -401,6 +404,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.bgPrimary,
   },
   logoContainer: {
     width: 56,
