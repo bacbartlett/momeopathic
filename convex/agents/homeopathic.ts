@@ -3,7 +3,8 @@ import { Agent, createTool } from "@convex-dev/agent";
 import z from "zod";
 import { api, components, internal } from "../_generated/api";
 import { SearchRAGTextResult } from "../rag";
-import { buildSkillsCatalog, skills } from "../skills";
+// Skills system commented out - dosing knowledge now in system prompt
+// import { buildSkillsCatalog, skills } from "../skills";
 import { systemPrompt } from "./systemprompt";
 
 const baseMasterPrompt = systemPrompt;
@@ -48,23 +49,23 @@ const getLearnMoreLink = createTool({
 });
 
 // ============================================
-// SKILLS TOOL
+// SKILLS TOOL (Commented out - dosing knowledge now in system prompt)
 // ============================================
 
-const loadSkill = createTool({
-  description:
-    "Load a specialized knowledge skill into context. Call this BEFORE answering questions about dosing, potency, administration, or other skill topics. The skill content will guide your detailed responses.",
-  args: z.object({
-    skillName: z.string().describe("The name of the skill to load (e.g., 'dosing')"),
-  }),
-  handler: async (_ctx, args): Promise<string> => {
-    const skill = skills[args.skillName];
-    if (!skill) {
-      return `Skill "${args.skillName}" not found. Available skills: ${Object.keys(skills).join(", ")}`;
-    }
-    return skill.content;
-  },
-});
+// const loadSkill = createTool({
+//   description:
+//     "Load a specialized knowledge skill into context. Call this BEFORE answering questions about dosing, potency, administration, or other skill topics. The skill content will guide your detailed responses.",
+//   args: z.object({
+//     skillName: z.string().describe("The name of the skill to load (e.g., 'dosing')"),
+//   }),
+//   handler: async (_ctx, args): Promise<string> => {
+//     const skill = skills[args.skillName];
+//     if (!skill) {
+//       return `Skill "${args.skillName}" not found. Available skills: ${Object.keys(skills).join(", ")}`;
+//     }
+//     return skill.content;
+//   },
+// });
 
 // ============================================
 // NOTES TOOLS - Memory System
@@ -277,8 +278,8 @@ const tools = {
   // Materia Medica
   searchMateriaMedica,
   getLearnMoreLink,
-  // Skills
-  loadSkill,
+  // Skills - commented out, dosing now in system prompt
+  // loadSkill,
   // Notes - Reading
   getNotes,
   getProfile,
@@ -293,7 +294,8 @@ const tools = {
 export const homeopathicAgent = new Agent(components.agent, {
   name: "Homeopathic Assistant",
   languageModel: openrouter.chat("anthropic/claude-sonnet-4.5"),
-  instructions: baseMasterPrompt + buildSkillsCatalog(),
+  // Skills catalog removed - dosing knowledge now in system prompt
+  instructions: baseMasterPrompt,
   maxSteps: 20,
   tools,
 });
