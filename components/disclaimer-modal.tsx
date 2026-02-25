@@ -89,7 +89,10 @@ interface DisclaimerModalProps {
 
 export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: DisclaimerModalProps) {
   const [isFullText, setIsFullText] = useState(false);
+  const { isAuthenticated } = useConvexAuth();
+  const { guestId, isGuest } = useGuest();
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
+  const acceptDisclaimerAsGuest = useMutation(api.users.acceptDisclaimerAsGuest);
   const router = useRouter();
   const { track } = usePostHogAnalytics();
 
@@ -105,14 +108,15 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
       // Save to AsyncStorage (works for both guests and authenticated users)
       await AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, 'true');
 
-      // Save to database if user is authenticated (skip for guests)
+      // Save to database
       try {
-        await acceptDisclaimer();
-      } catch (dbError) {
-        // If user is not authenticated (guest), that's okay - AsyncStorage handles it
-        if (dbError instanceof Error && !dbError.message.includes('authentication')) {
-          console.error('Failed to save disclaimer to database:', dbError);
+        if (isAuthenticated) {
+          await acceptDisclaimer();
+        } else if (isGuest && guestId) {
+          await acceptDisclaimerAsGuest({ guestId });
         }
+      } catch (dbError) {
+        console.error('Failed to save disclaimer to database:', dbError);
       }
 
       // Track disclaimer accepted (only when user clicks agree, not dismiss)

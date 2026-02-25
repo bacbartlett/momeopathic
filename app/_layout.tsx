@@ -28,6 +28,7 @@ import { ChatProvider } from '@/context/chat-context';
 import { GuestProvider } from '@/context/guest-context';
 import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
 import { RevenueCatProvider } from '@/context/revenue-cat-context';
+import { TrialProvider } from '@/context/trial-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
 import { initializeDatabase } from '@/lib/db/init';
@@ -189,9 +190,10 @@ export default function RootLayout() {
                   <PostHogErrorBoundary>
                     <AppOpenedTracker>
                       <RevenueCatProvider>
-                        <ThemeProvider value={NavigationTheme}>
-                          <ChatProvider>
-                            <Stack>
+                        <TrialProvider>
+                          <ThemeProvider value={NavigationTheme}>
+                            <ChatProvider>
+                              <Stack>
                               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                               <Stack.Screen
@@ -244,12 +246,13 @@ export default function RootLayout() {
                                   },
                                 }}
                               />
-                            </Stack>
-                            <StatusBar style="dark" />
-                            <DisclaimerManager />
-                            <FeedbackManager />
-                          </ChatProvider>
-                        </ThemeProvider>
+                              </Stack>
+                              <StatusBar style="dark" />
+                              <DisclaimerManager />
+                              <FeedbackManager />
+                            </ChatProvider>
+                          </ThemeProvider>
+                        </TrialProvider>
                       </RevenueCatProvider>
                     </AppOpenedTracker>
                   </PostHogErrorBoundary>

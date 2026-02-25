@@ -21,6 +21,11 @@ const userReturnValidator = v.object({
   // Greeting system fields
   lastActivityAt: v.optional(v.number()),
   timezone: v.optional(v.string()),
+  // Trial fields
+  firstAppOpen: v.optional(v.number()),
+  trialStarted: v.optional(v.number()),
+  trialEndDate: v.optional(v.number()),
+  deviceFingerprint: v.optional(v.string()),
 });
 
 /**
@@ -172,6 +177,27 @@ export const hasAcceptedDisclaimer = query({
       .unique();
 
     return user?.disclaimerAccepted ?? false;
+  },
+});
+
+/**
+ * Accept disclaimer for a guest user (no auth required, uses guestId).
+ */
+export const acceptDisclaimerAsGuest = mutation({
+  args: { guestId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_guestId", (q) => q.eq("guestId", args.guestId))
+      .unique();
+
+    if (!user) {
+      throw new Error("Guest user not found");
+    }
+
+    await ctx.db.patch(user._id, { disclaimerAccepted: true });
+    return null;
   },
 });
 

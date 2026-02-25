@@ -17,6 +17,20 @@ import {
 import { homeopathicAgent } from "./agents/homeopathic";
 
 const MAX_GUEST_THREADS = 3;
+const FIRST_TIME_GREETING = `Hi! I'm your homeopathy study partner.
+
+I'm here to help you find the right remedy when you're not sure what to reach for, whether it's 2 PM or 2 AM.
+
+I'm trained on Boericke's Materia Medica (the classic reference since 1927), and I'm built for moms (and dads!) like you who want to help their families naturally but don't have years to study.
+
+You can ask me things like:
+- "My toddler has a runny nose and won't stop whining"
+- "What's the difference between Belladonna and Aconite?"
+- "Help, teething is destroying us"
+
+I'm not a doctor, and I'll try to tell you when something needs real medical attention. But when you're wondering which remedy to reach for, I've got you.
+
+Try it - what's going on today?`;
 const userDocValidator = v.object({
   _id: v.id("users"),
   _creationTime: v.number(),
@@ -34,6 +48,10 @@ const userDocValidator = v.object({
   guestThreadCount: v.optional(v.number()),
   lastActivityAt: v.optional(v.number()),
   timezone: v.optional(v.string()),
+  firstAppOpen: v.optional(v.number()),
+  trialStarted: v.optional(v.number()),
+  trialEndDate: v.optional(v.number()),
+  deviceFingerprint: v.optional(v.string()),
 });
 const threadDocValidator = v.object({
   _creationTime: v.number(),
@@ -457,8 +475,10 @@ export const getOrCreate = action({
       title: "Chat",
     });
 
-    const initialGreeting =
-      "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?";
+    const shouldUseFirstTimeGreeting = !user.isGuest && typeof user.trialStarted !== "number";
+    const initialGreeting = shouldUseFirstTimeGreeting
+      ? FIRST_TIME_GREETING
+      : "Hello! I'm here to help you find the right homeopathic remedies for your family. What's going on?";
 
     // Add initial greeting message
     await saveMessage(ctx, components.agent, {

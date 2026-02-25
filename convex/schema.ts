@@ -29,10 +29,16 @@ export default defineSchema({
     lastActivityAt: v.optional(v.number()),
     // User's timezone (for time-aware greetings) - e.g., "America/New_York"
     timezone: v.optional(v.string()),
+    // Trial tracking
+    firstAppOpen: v.optional(v.number()),
+    trialStarted: v.optional(v.number()),
+    trialEndDate: v.optional(v.number()),
+    deviceFingerprint: v.optional(v.string()),
   })
     .index("by_token", ["tokenIdentifier"])
     .index("by_guestId", ["guestId"])
-    .index("by_lastActivity", ["lastActivityAt"]),
+    .index("by_lastActivity", ["lastActivityAt"])
+    .index("by_deviceFingerprint", ["deviceFingerprint"]),
 
   // ============================================
   // NOTES SYSTEM - 4 types of persistent memory

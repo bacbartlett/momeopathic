@@ -8,18 +8,24 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ViewStyle,
 } from 'react-native';
 
 interface ComposerProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  containerStyle?: ViewStyle;
 }
 
 export interface ComposerHandle {
   blur: () => void;
 }
 
-export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, disabled = false }, ref) => {
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
+  onSend,
+  disabled = false,
+  containerStyle,
+}, ref) => {
   const [text, setText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -78,7 +84,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({ onSend, dis
   const canSend = text.trim().length > 0 && !disabled;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerStyle]}>
       <View style={styles.inputContainer}>
         <TextInput
           ref={inputRef}

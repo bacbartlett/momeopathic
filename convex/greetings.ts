@@ -26,6 +26,10 @@ const userDocValidator = v.object({
   guestThreadCount: v.optional(v.number()),
   lastActivityAt: v.optional(v.number()),
   timezone: v.optional(v.string()),
+  firstAppOpen: v.optional(v.number()),
+  trialStarted: v.optional(v.number()),
+  trialEndDate: v.optional(v.number()),
+  deviceFingerprint: v.optional(v.string()),
 });
 
 const greetingCacheDocValidator = v.object({

@@ -1,10 +1,14 @@
 import { Composer, ComposerHandle } from '@/components/chat/composer';
 import { MessageList } from '@/components/chat/message-list';
 import { GuestSignUpModal } from '@/components/guest-signup-modal';
-import { Paywall } from '@/components/paywall';
+import { PaywallModal } from '@/components/paywall-modal';
+import { TrialIndicator } from '@/components/trial-indicator';
+import { TrialLockoutModal } from '@/components/trial-lockout-modal';
+import { TrialStartModal } from '@/components/trial-start-modal';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
-import { useRevenueCat, useSubscription } from '@/context/revenue-cat-context';
+import { useSubscription } from '@/context/revenue-cat-context';
+import { useTrialContext } from '@/context/trial-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
@@ -36,11 +40,21 @@ export default function ChatScreen() {
     debugForceDivider,
   } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
-  const { isInitialized } = useRevenueCat();
+  const {
+    isLoading: isTrialLoading,
+    shouldShowTrialModal,
+    isInTrial,
+    trialDaysRemaining,
+    trialExpired,
+    canUseApp,
+    startTrial,
+  } = useTrialContext();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [keyboardKey, setKeyboardKey] = useState(0);
   const composerRef = useRef<ComposerHandle>(null);
   const [showGuestSignUpModal, setShowGuestSignUpModal] = useState(false);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [showLockoutModal, setShowLockoutModal] = useState(true);
 
   // Thread initialization is now handled by chat-context via getOrCreate
 
@@ -59,9 +73,15 @@ export default function ChatScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (trialExpired && !isSubscribed) {
+      setShowLockoutModal(true);
+    }
+  }, [trialExpired, isSubscribed]);
+
   // Show loading while checking auth or subscription status
   // For guests, skip the currentUser and subscription checks
-  if (isLoading || (!isGuest && (isSubscriptionLoading || (isAuthenticated && currentUser === undefined)))) {
+  if (isLoading || (!isGuest && (isSubscriptionLoading || isTrialLoading || (isAuthenticated && currentUser === undefined)))) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -73,10 +93,9 @@ export default function ChatScreen() {
   // Check if user has noPaywall flag set to true
   const hasNoPaywall = currentUser?.noPaywall === true;
 
-  // Show paywall only for authenticated (non-guest) users who are not subscribed
-  if (isAuthenticated && !isGuest && !isSubscribed && isInitialized && !hasNoPaywall) {
-    return <Paywall />;
-  }
+  const shouldUseTrialUI = isAuthenticated && !isGuest && !hasNoPaywall;
+  const canUseChat = shouldUseTrialUI ? canUseApp : true;
+  const showTrialIndicator = shouldUseTrialUI && isInTrial && !isSubscribed && trialDaysRemaining !== null;
 
   const content = (
     <>
@@ -108,17 +127,24 @@ export default function ChatScreen() {
             <Text style={styles.headerTitle}>My Materia</Text>
           </View>
 
-          {/* Materia Medica button (right) */}
-          <TouchableOpacity
-            style={styles.headerActionButton}
-            onPress={() => router.push('/materia-medica' as '/account')}
-            activeOpacity={0.7}
-            accessibilityLabel="Open Materia Medica"
-            accessibilityRole="button"
-            accessibilityHint="Opens the remedy reference library"
-          >
-            <Ionicons name="book-outline" size={24} color={Colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerRightSection}>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              onPress={() => router.push('/materia-medica' as '/account')}
+              activeOpacity={0.7}
+              accessibilityLabel="Open Materia Medica"
+              accessibilityRole="button"
+              accessibilityHint="Opens the remedy reference library"
+            >
+              <Ionicons name="book-outline" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+            {showTrialIndicator && trialDaysRemaining !== null && (
+              <TrialIndicator
+                trialDaysRemaining={trialDaysRemaining}
+                onPress={() => setShowPaywallModal(true)}
+              />
+            )}
+          </View>
         </View>
 
         {/* Guest banner */}
@@ -146,7 +172,12 @@ export default function ChatScreen() {
         />
       </View>
 
-      <Composer ref={composerRef} onSend={sendMessage} disabled={!activeThread} />
+      <Composer
+        ref={composerRef}
+        onSend={sendMessage}
+        disabled={!activeThread || !canUseChat}
+        containerStyle={!canUseChat ? styles.disabledComposer : undefined}
+      />
     </>
   );
 
@@ -178,6 +209,22 @@ export default function ChatScreen() {
           clearGuestLimitReached();
           setShowGuestSignUpModal(false);
         }}
+      />
+
+      <TrialStartModal
+        visible={shouldUseTrialUI && shouldShowTrialModal}
+        onStartTrial={startTrial}
+      />
+
+      <TrialLockoutModal
+        visible={shouldUseTrialUI && trialExpired && !isSubscribed && showLockoutModal}
+        onViewPlans={() => setShowPaywallModal(true)}
+        onMaybeLater={() => setShowLockoutModal(false)}
+      />
+
+      <PaywallModal
+        visible={showPaywallModal}
+        onClose={() => setShowPaywallModal(false)}
       />
     </SafeAreaView>
   );
@@ -251,6 +298,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: Radius.md,
   },
+  headerRightSection: {
+    alignItems: 'flex-end',
+  },
   guestBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -279,5 +329,9 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
+  },
+  disabledComposer: {
+    opacity: 0.5,
+    backgroundColor: '#f0f0f0',
   },
 });

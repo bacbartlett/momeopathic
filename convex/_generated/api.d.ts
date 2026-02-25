@@ -23,6 +23,7 @@ import type * as rag from "../rag.js";
 import type * as rateLimit from "../rateLimit.js";
 import type * as skills_index from "../skills/index.js";
 import type * as threads from "../threads.js";
+import type * as trial from "../trial.js";
 import type * as users from "../users.js";
 
 import type {
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   rateLimit: typeof rateLimit;
   "skills/index": typeof skills_index;
   threads: typeof threads;
+  trial: typeof trial;
   users: typeof users;
 }>;
 

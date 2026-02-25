@@ -7,10 +7,12 @@ import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
 import { useClerk, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { useAction, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearDeviceFingerprint } from '@/lib/device-fingerprint';
 import { api } from '../convex/_generated/api';
 import {
     ActivityIndicator,
@@ -26,6 +28,8 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed';
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -49,6 +53,8 @@ export default function AccountScreen() {
   const { activeThread, debugForceDivider, setDebugForceDivider } = useChat();
   const testGreetingTier = useAction(api.debug.testGreetingTier);
   const insertDebugMessage = useAction(api.debug.insertDebugMessage);
+  const simulateTrialLockout = useMutation(api.trial.debugSimulateLockout);
+  const resetTrialForTesting = useAction(api.trial.debugResetTrial);
   const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
   const rawMessages = useQuery(
     api.debug.listRawMessagesForThread, 
@@ -80,6 +86,29 @@ export default function AccountScreen() {
       Alert.alert("Debug", result.message);
     } catch (error) {
       Alert.alert("Error", String(error));
+    }
+  };
+
+  const handleSimulateTrialLockout = async () => {
+    try {
+      await simulateTrialLockout({});
+      Alert.alert('Debug', 'Trial lockout simulated. Return to chat to verify lockout behavior.');
+    } catch (error) {
+      Alert.alert('Error', String(error));
+    }
+  };
+
+  const handleResetTrial = async () => {
+    try {
+      await clearDeviceFingerprint();
+      await AsyncStorage.removeItem(DISCLAIMER_AGREED_KEY);
+      await resetTrialForTesting({});
+      Alert.alert(
+        'Debug',
+        'Trial + onboarding cache reset. Fully close and reopen the app to test first-open flow.',
+      );
+    } catch (error) {
+      Alert.alert('Error', String(error));
     }
   };
 
@@ -687,6 +716,24 @@ export default function AccountScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.debugHint}>Divider needs at least 2 messages to show a split.</Text>
+
+            <Text style={styles.debugSubtitle}>Trial Testing:</Text>
+            <View style={styles.debugButtonRow}>
+              <TouchableOpacity
+                style={styles.debugButton}
+                onPress={handleSimulateTrialLockout}
+              >
+                <Text style={styles.debugButtonText}>Simulate Trial Lockout</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.debugButtonRow}>
+              <TouchableOpacity
+                style={styles.debugButton}
+                onPress={handleResetTrial}
+              >
+                <Text style={styles.debugButtonText}>Reset Trial (Testing)</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Footer */}
