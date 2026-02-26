@@ -1,6 +1,8 @@
 import { Composer, ComposerHandle } from '@/components/chat/composer';
 import { MessageList } from '@/components/chat/message-list';
+import { useHasAcceptedDisclaimer } from '@/components/disclaimer-modal';
 import { GuestSignUpModal } from '@/components/guest-signup-modal';
+import { OnboardingChat } from '@/components/onboarding-chat';
 import { PaywallModal } from '@/components/paywall-modal';
 import { TrialIndicator } from '@/components/trial-indicator';
 import { TrialLockoutModal } from '@/components/trial-lockout-modal';
@@ -55,6 +57,8 @@ export default function ChatScreen() {
   const [showGuestSignUpModal, setShowGuestSignUpModal] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [showLockoutModal, setShowLockoutModal] = useState(true);
+  const hasAcceptedDisclaimer = useHasAcceptedDisclaimer();
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   // Thread initialization is now handled by chat-context via getOrCreate
 
@@ -163,21 +167,28 @@ export default function ChatScreen() {
         )}
       </View>
 
-      <View style={styles.messagesContainer}>
-        <MessageList 
-          messages={activeThread?.messages ?? []} 
-          isLoading={isMessagesLoading}
-          forceDivider={debugForceDivider}
-          threadKey={activeThread?.id ?? null}
-        />
-      </View>
+      {/* Show onboarding chat if disclaimer not yet accepted */}
+      {hasAcceptedDisclaimer === false && !onboardingComplete ? (
+        <OnboardingChat onComplete={() => setOnboardingComplete(true)} />
+      ) : (
+        <>
+          <View style={styles.messagesContainer}>
+            <MessageList 
+              messages={activeThread?.messages ?? []} 
+              isLoading={isMessagesLoading}
+              forceDivider={debugForceDivider}
+              threadKey={activeThread?.id ?? null}
+            />
+          </View>
 
-      <Composer
-        ref={composerRef}
-        onSend={sendMessage}
-        disabled={!activeThread || !canUseChat}
-        containerStyle={!canUseChat ? styles.disabledComposer : undefined}
-      />
+          <Composer
+            ref={composerRef}
+            onSend={sendMessage}
+            disabled={!activeThread || !canUseChat}
+            containerStyle={!canUseChat ? styles.disabledComposer : undefined}
+          />
+        </>
+      )}
     </>
   );
 

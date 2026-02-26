@@ -20,7 +20,8 @@ import {
 import { ConvexReactClient, useConvexAuth, useMutation } from 'convex/react';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 
-import { DisclaimerManager } from '@/components/disclaimer-modal';
+// DisclaimerModal is now only used from account settings (see account.tsx)
+// Onboarding is handled by OnboardingChat in the chat screen
 import { FeedbackManager } from '@/components/feedback-modal';
 import { SessionManager } from '@/components/session-manager';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
@@ -248,7 +249,6 @@ export default function RootLayout() {
                               />
                               </Stack>
                               <StatusBar style="dark" />
-                              <DisclaimerManager />
                               <FeedbackManager />
                             </ChatProvider>
                           </ThemeProvider>
