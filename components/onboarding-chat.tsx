@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   assistantBubble: {
     backgroundColor: Colors.bgSurface,
     borderRadius: Radius.lg,
-    borderTopLeftRadius: Radius.xs,
+    borderTopLeftRadius: Radius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
     ...Shadows.sm,
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   userBubble: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.lg,
-    borderTopRightRadius: Radius.xs,
+    borderTopRightRadius: Radius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
     ...Shadows.sm,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: Colors.bgSurface,
     borderRadius: Radius.lg,
-    borderTopLeftRadius: Radius.xs,
+    borderTopLeftRadius: Radius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     gap: 6,
