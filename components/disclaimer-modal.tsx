@@ -24,16 +24,14 @@ const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed';
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 const SUMMARY_TEXT_PARTS = {
-  intro: `This AI chatbot helps you explore Boericke's Materia Medica through conversation - it's an educational tool, not medical advice.
+  intro: `I'm here to help you explore homeopathic remedies from Boericke's Materia Medica — think of me as a study partner, not a doctor.
 
-Keep in Mind:
+A few things worth knowing:
 
-• AI can make mistakes and provide inaccurate information
-• This is not a substitute for professional healthcare
-• Always consult qualified healthcare providers for health concerns
-• Not for diagnosing, treating, or curing any condition
-• You assume full responsibility for any actions you take
-• For educational purposes only. 18+ or parental permission required.
+• I'm an AI, so I can get things wrong sometimes — always double-check what matters
+• I'm for learning and exploring, not for medical advice
+• For anything serious, please talk to a real healthcare provider
+• You'll need to be 18+ (or have a parent's okay)
 
 By continuing, you agree to our `,
   termsLink: 'Terms and Conditions',
@@ -43,38 +41,34 @@ By continuing, you agree to our `,
 };
 
 const FULL_TEXT_PARTS = {
-  intro: `What This Tool Is:
+  intro: `What I am:
 
-This is an educational resource that makes William Boericke's Materia Medica more accessible through a conversational interface. It uses AI to help you explore homeopathic remedies described in classical texts.
+I'm an educational tool that makes William Boericke's Materia Medica easier to explore through conversation. I use AI to help you learn about homeopathic remedies described in classical texts — like having a knowledgeable study partner available whenever you need one.
 
-What This Tool Is NOT
+What I'm not:
 
-• Not a doctor or healthcare provider
-• Not medical advice, diagnosis, or treatment
-• Not a substitute for professional medical care
-• Not authoritative - it's a learning tool based on historical texts
+• I'm not a doctor or healthcare provider
+• Nothing I say is medical advice, diagnosis, or treatment
+• I'm not a substitute for professional medical care
+• I'm a learning tool based on historical texts — not an authority
 
-Important Limitations
+I make mistakes:
 
-AI makes mistakes. This chatbot can misunderstand symptoms, provide inaccurate information, or suggest inappropriate remedies. The information provided may be incomplete, outdated, or incorrect.
+I'm an AI, which means I can misunderstand symptoms, share inaccurate information, or suggest remedies that don't fit. What I share may be incomplete or incorrect. Please always double-check anything important.
 
-Always consult qualified healthcare professionals for any health concerns. If you have a medical emergency, contact emergency services immediately.
+For any real health concerns, talk to a qualified healthcare professional. In a medical emergency, contact emergency services right away.
 
-Your Responsibility
+By using me, you're agreeing that:
 
-By using this tool, you acknowledge that:
+• This is for educational exploration only
+• You won't rely on me as medical advice
+• You take responsibility for any actions based on what I share
+• You'll talk to a healthcare provider before using any remedies
+• You're 18 or older (or have a parent's permission)
 
-• You understand this is for educational exploration only
-• You will not rely on this as medical advice
-• You assume full responsibility for any actions you take based on information provided
-• You will consult appropriate healthcare providers before using any remedies
-• You are 18 years or older (or have parental permission)
+This service is provided as-is, without warranties of any kind. I can't guarantee accuracy, completeness, or fitness for any particular purpose.
 
-No Warranty
-
-This service is provided "as is" without any warranties. We make no guarantees about accuracy, completeness, or fitness for any particular purpose.
-
-By clicking "I Understand and Agree," you acknowledge that you have read and accept our `,
+By tapping "Got it, let's go!" you're confirming you've read and accept our `,
   termsLink: 'Terms and Conditions',
   and: ' and ',
   privacyLink: 'Privacy Policy',
@@ -179,7 +173,7 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
 
             <MaskedView
               maskElement={
-                <Text style={styles.title}>Welcome</Text>
+                <Text style={styles.title}>Hey, welcome! 👋</Text>
               }
             >
               <LinearGradient
@@ -188,10 +182,10 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
                 end={{ x: 1, y: 0 }}
                 style={styles.titleGradient}
               >
-                <Text style={[styles.title, { opacity: 0 }]}>Welcome</Text>
+                <Text style={[styles.title, { opacity: 0 }]}>Hey, welcome! 👋</Text>
               </LinearGradient>
             </MaskedView>
-            <Text style={styles.subTitle}>A better path to health starts here</Text>
+            <Text style={styles.subTitle}>Let's get you set up.</Text>
 
           </View>
 
@@ -227,7 +221,7 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
               onPress={handleAgree}
               activeOpacity={0.8}
             >
-              <Text style={styles.agreeButtonText}>I Understand and Agree</Text>
+              <Text style={styles.agreeButtonText}>Got it, let's go!</Text>
             </TouchableOpacity>
           </View>
         </View>
