@@ -5,9 +5,9 @@ import { api, components, internal } from "../_generated/api";
 import { SearchRAGTextResult } from "../rag";
 // Skills system commented out - dosing knowledge now in system prompt
 // import { buildSkillsCatalog, skills } from "../skills";
-import { systemPrompt } from "./systemprompt";
+import { systemPromptBase } from "./systemprompt";
 
-const baseMasterPrompt = systemPrompt;
+const baseMasterPrompt = systemPromptBase;
 
 // Create OpenAI-compatible client pointing to OpenRouter
 const openrouter = createOpenAI({

@@ -80,7 +80,27 @@ export const recordFirstAppOpen = mutation({
     trialEndDate: v.union(v.number(), v.null()),
   }),
   handler: async (ctx, args) => {
-    const user = await getCurrentUserFromMutation(ctx);
+    // User record may not exist yet during guest-to-auth conversion.
+    // Return a safe default so the client can retry once the user is stored.
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Authentication required");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!user) {
+      return {
+        isFirstOpen: false,
+        alreadyUsedTrial: false,
+        firstAppOpen: Date.now(),
+        trialStarted: null,
+        trialEndDate: null,
+      };
+    }
 
     if (typeof user.firstAppOpen === "number") {
       if (!user.deviceFingerprint) {

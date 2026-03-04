@@ -693,24 +693,35 @@ export const generateGreeting = internalAction({
     });
 
     // Build the generation prompt
+    const hasAnyContext = context.profile || context.activeCases || context.recentHistory.length > 0;
+    const awayDuration = args.tier === "1week" ? "about a week" : args.tier === "4hour" ? "a few hours" : "a little while";
+
     let prompt = `Generate a warm, personalized greeting for a returning user. `;
-    prompt += `They've been away for ${args.tier === "1week" ? "about a week" : args.tier === "4hour" ? "a few hours" : "a little while"}. `;
+    prompt += `They've been away for ${awayDuration}. `;
 
-    if (context.activeCases) {
-      prompt += `\n\nTheir active cases: ${context.activeCases}`;
-    }
-    if (context.recentHistory.length > 0) {
-      prompt += `\n\nRecent case history: ${context.recentHistory.slice(0, 2).join("; ")}`;
-    }
-    if (context.profile) {
-      prompt += `\n\nFamily profile: ${context.profile}`;
+    if (hasAnyContext) {
+      prompt += `\n\nHere is EVERYTHING known about this user. ONLY reference information listed here — do not assume or invent any details about their family, children, or situation:\n`;
+
+      if (context.profile) {
+        prompt += `\nProfile: ${context.profile}`;
+      }
+      if (context.activeCases) {
+        prompt += `\nActive cases: ${context.activeCases}`;
+      }
+      if (context.recentHistory.length > 0) {
+        prompt += `\nRecent history: ${context.recentHistory.slice(0, 2).join("; ")}`;
+      }
+    } else {
+      prompt += `\n\nNo information is known about this user yet — this is essentially a new relationship. Keep the greeting general and welcoming. Do NOT assume they have children or any specific family situation.`;
     }
 
-    prompt += `\n\nGenerate ONLY the greeting body (1-2 sentences). Do NOT include a time-based prefix like "Good morning" - that will be added separately. `;
-    prompt += `Be warm and reference relevant context if available. If they had active cases, ask a natural follow-up about how things are going.`;
-    prompt += `While being warm, remember that someone is probably coming to this app to seek help, so do not use any exclamation marks or anything that would feel overly excited about them coming back.`;
-    prompt += `It should feel like a warm receptionist at a doctors office who deeply cares and knows you well.`;
-    prompt += `Jump right to the main content. Do not say "Good to see you" or "Good to hear from you"`;
+    prompt += `\n\nRules:`;
+    prompt += `\n- Generate ONLY the greeting body (1-2 sentences). Do NOT include a time-based prefix like "Good morning" — that will be added separately.`;
+    prompt += `\n- ONLY reference details explicitly listed above. If no profile or children are mentioned, do NOT mention children or family.`;
+    prompt += `\n- If they had active cases, ask a natural follow-up about how things are going.`;
+    prompt += `\n- No exclamation marks. Someone coming to this app is probably seeking help — keep the tone calm and caring.`;
+    prompt += `\n- It should feel like a warm receptionist at a doctor's office who deeply cares and knows you well.`;
+    prompt += `\n- Jump right to the main content. Do not say "Good to see you" or "Good to hear from you".`;
 
     try {
       // Use a lightweight approach - create temp thread, generate, cleanup

@@ -2,7 +2,7 @@ import { ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
 import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
@@ -32,6 +32,7 @@ import { RevenueCatProvider } from '@/context/revenue-cat-context';
 import { TrialProvider } from '@/context/trial-context';
 import { api } from '@/convex/_generated/api';
 import { tokenCache } from '@/lib/clerk-token-cache';
+import * as SecureStore from 'expo-secure-store';
 import { initializeDatabase } from '@/lib/db/init';
 import { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
 
@@ -74,9 +75,25 @@ function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
     startupLog('[STARTUP] StoreUserInDatabase: useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
     // Only store user when Convex auth is ready and authenticated
     if (!isLoading && isAuthenticated) {
-      startupLog('[STARTUP] StoreUserInDatabase: Storing user in database');
-      storeUser().catch((error) => {
-        console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', error);
+      // Check if there's a pending guest claim. If so, skip — claimGuestAccount
+      // in GuestProvider will handle creating/upgrading the user record.
+      // This prevents a race where store() creates a new user while
+      // claimGuestAccount() is trying to upgrade the guest in-place.
+      SecureStore.getItemAsync('guest_id').then((guestId) => {
+        if (guestId) {
+          startupLog('[STARTUP] StoreUserInDatabase: Skipping store — guest claim pending');
+          return;
+        }
+        startupLog('[STARTUP] StoreUserInDatabase: Storing user in database');
+        storeUser().catch((error) => {
+          console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', error);
+        });
+      }).catch((error) => {
+        // SecureStore read failed — fall back to storing user to be safe
+        console.error('[STARTUP] StoreUserInDatabase: SecureStore read failed, storing user anyway:', error);
+        storeUser().catch((storeError) => {
+          console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', storeError);
+        });
       });
     }
   }, [isLoading, isAuthenticated, storeUser]);

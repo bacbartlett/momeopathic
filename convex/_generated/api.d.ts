@@ -10,6 +10,7 @@
 
 import type * as agents_homeopathic from "../agents/homeopathic.js";
 import type * as agents_systemprompt from "../agents/systemprompt.js";
+import type * as agents_systemprompt_old from "../agents/systemprompt_old.js";
 import type * as agents_titleGenerator from "../agents/titleGenerator.js";
 import type * as appOpen from "../appOpen.js";
 import type * as debug from "../debug.js";
@@ -35,6 +36,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "agents/homeopathic": typeof agents_homeopathic;
   "agents/systemprompt": typeof agents_systemprompt;
+  "agents/systemprompt_old": typeof agents_systemprompt_old;
   "agents/titleGenerator": typeof agents_titleGenerator;
   appOpen: typeof appOpen;
   debug: typeof debug;

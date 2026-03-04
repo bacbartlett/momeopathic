@@ -1,14 +1,21 @@
-import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useGuest } from '@/context/guest-context';
-import { usePostHogAnalytics } from '@/context/posthog-context';
-import { api } from '@/convex/_generated/api';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { useConvexAuth, useMutation, useQuery } from 'convex/react';
-import { LinearGradient } from 'expo-linear-gradient';
-import { usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import {
+  Colors,
+  Fonts,
+  Radius,
+  Shadows,
+  Spacing,
+  Typography,
+} from "@/constants/theme";
+import { useGuest } from "@/context/guest-context";
+import { usePostHogAnalytics } from "@/context/posthog-context";
+import { api } from "@/convex/_generated/api";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import MaskedView from "@react-native-masked-view/masked-view";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { LinearGradient } from "expo-linear-gradient";
+import { usePathname, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   Modal,
@@ -18,10 +25,10 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
-const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed';
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+const DISCLAIMER_AGREED_KEY = "disclaimer_agreed";
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 const SUMMARY_TEXT_PARTS = {
   intro: `I'm here to help you explore homeopathic remedies from Boericke's Materia Medica — think of me as a study partner, not a doctor.
@@ -34,10 +41,10 @@ A few things worth knowing:
 • You'll need to be 18+ (or have a parent's okay)
 
 By continuing, you agree to our `,
-  termsLink: 'Terms and Conditions',
-  and: ' and ',
-  privacyLink: 'Privacy Policy',
-  period: '.',
+  termsLink: "Terms and Conditions",
+  and: " and ",
+  privacyLink: "Privacy Policy",
+  period: ".",
 };
 
 const FULL_TEXT_PARTS = {
@@ -69,10 +76,10 @@ By using me, you're agreeing that:
 This service is provided as-is, without warranties of any kind. I can't guarantee accuracy, completeness, or fitness for any particular purpose.
 
 By tapping "Got it, let's go!" you're confirming you've read and accept our `,
-  termsLink: 'Terms and Conditions',
-  and: ' and ',
-  privacyLink: 'Privacy Policy',
-  period: '.',
+  termsLink: "Terms and Conditions",
+  and: " and ",
+  privacyLink: "Privacy Policy",
+  period: ".",
 };
 
 interface DisclaimerModalProps {
@@ -81,26 +88,32 @@ interface DisclaimerModalProps {
   allowDismiss?: boolean; // If true, allows closing without agreeing (for viewing from account page)
 }
 
-export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: DisclaimerModalProps) {
+export function DisclaimerModal({
+  visible,
+  onAgree,
+  allowDismiss = false,
+}: DisclaimerModalProps) {
   const [isFullText, setIsFullText] = useState(false);
   const { isAuthenticated } = useConvexAuth();
   const { guestId, isGuest } = useGuest();
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
-  const acceptDisclaimerAsGuest = useMutation(api.users.acceptDisclaimerAsGuest);
+  const acceptDisclaimerAsGuest = useMutation(
+    api.users.acceptDisclaimerAsGuest,
+  );
   const router = useRouter();
   const { track } = usePostHogAnalytics();
 
   // Track disclaimer viewed when modal becomes visible
   useEffect(() => {
     if (visible) {
-      track('Disclaimer Viewed', { allow_dismiss: allowDismiss });
+      track("Disclaimer Viewed", { allow_dismiss: allowDismiss });
     }
   }, [visible, allowDismiss, track]);
 
   const handleAgree = async () => {
     try {
       // Save to AsyncStorage (works for both guests and authenticated users)
-      await AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, 'true');
+      await AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, "true");
 
       // Save to database
       try {
@@ -110,17 +123,17 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
           await acceptDisclaimerAsGuest({ guestId });
         }
       } catch (dbError) {
-        console.error('Failed to save disclaimer to database:', dbError);
+        console.error("Failed to save disclaimer to database:", dbError);
       }
 
       // Track disclaimer accepted (only when user clicks agree, not dismiss)
       if (!allowDismiss) {
-        track('Disclaimer Accepted');
+        track("Disclaimer Accepted");
       }
 
       onAgree();
     } catch (error) {
-      console.error('Failed to save disclaimer agreement:', error);
+      console.error("Failed to save disclaimer agreement:", error);
       // Still call onAgree even if storage fails
       onAgree();
     }
@@ -133,11 +146,11 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
   };
 
   const handleTermsPress = () => {
-    router.push('/terms');
+    router.push("/terms");
   };
 
   const handlePrivacyPress = () => {
-    router.push('/privacy');
+    router.push("/privacy");
   };
 
   const renderTextWithLinks = (parts: typeof SUMMARY_TEXT_PARTS) => {
@@ -170,23 +183,25 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
         />
         <View style={styles.modalContainer}>
           <View style={styles.header}>
-
             <MaskedView
-              maskElement={
-                <Text style={styles.title}>Hey, welcome! 👋</Text>
-              }
+              maskElement={<Text style={styles.title}>Hey, welcome! 👋</Text>}
             >
               <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight, Colors.primaryDark]}
+                colors={[
+                  Colors.primary,
+                  Colors.primaryLight,
+                  Colors.primaryDark,
+                ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.titleGradient}
               >
-                <Text style={[styles.title, { opacity: 0 }]}>Hey, welcome! 👋</Text>
+                <Text style={[styles.title, { opacity: 0 }]}>
+                  Hey, welcome! 👋
+                </Text>
               </LinearGradient>
             </MaskedView>
-            <Text style={styles.subTitle}>Let's get you set up.</Text>
-
+            {/* <Text style={styles.subTitle}>Let's get you set up.</Text> */}
           </View>
 
           <ScrollView
@@ -207,12 +222,12 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
               activeOpacity={0.7}
             >
               <Ionicons
-                name={isFullText ? 'chevron-up' : 'chevron-down'}
+                name={isFullText ? "chevron-up" : "chevron-down"}
                 size={20}
                 color={Colors.primary}
               />
               <Text style={styles.toggleText}>
-                {isFullText ? 'Show Summary' : 'Show Full Text'}
+                {isFullText ? "Show Summary" : "Show Full Text"}
               </Text>
             </TouchableOpacity>
 
@@ -233,9 +248,9 @@ export function DisclaimerModal({ visible, onAgree, allowDismiss = false }: Disc
 export async function hasAgreedToDisclaimer(): Promise<boolean> {
   try {
     const agreed = await AsyncStorage.getItem(DISCLAIMER_AGREED_KEY);
-    return agreed === 'true';
+    return agreed === "true";
   } catch (error) {
-    console.error('Failed to check disclaimer agreement:', error);
+    console.error("Failed to check disclaimer agreement:", error);
     return false;
   }
 }
@@ -255,7 +270,7 @@ export function useHasAcceptedDisclaimer() {
     // Check AsyncStorage
     AsyncStorage.getItem(DISCLAIMER_AGREED_KEY)
       .then((value) => {
-        setLocalAccepted(value === 'true');
+        setLocalAccepted(value === "true");
       })
       .catch(() => {
         setLocalAccepted(false);
@@ -265,7 +280,7 @@ export function useHasAcceptedDisclaimer() {
   // Sync database status to AsyncStorage if database says accepted but local doesn't
   useEffect(() => {
     if (dbAccepted === true && localAccepted === false) {
-      AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, 'true').catch(() => {
+      AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, "true").catch(() => {
         // Ignore errors
       });
       setLocalAccepted(true);
@@ -316,7 +331,7 @@ export function DisclaimerManager() {
     }
 
     // Don't show disclaimer on terms or privacy policy pages
-    if (pathname === '/terms' || pathname === '/privacy') {
+    if (pathname === "/terms" || pathname === "/privacy") {
       setShowDisclaimer(false);
       setInitialized(true);
       return;
@@ -331,7 +346,14 @@ export function DisclaimerManager() {
 
     setShowDisclaimer(!hasAccepted);
     setInitialized(true);
-  }, [isAuthenticated, isAuthLoading, isGuest, isGuestLoading, hasAccepted, pathname]);
+  }, [
+    isAuthenticated,
+    isAuthLoading,
+    isGuest,
+    isGuestLoading,
+    hasAccepted,
+    pathname,
+  ]);
 
   const handleAgree = () => {
     setShowDisclaimer(false);
@@ -348,13 +370,13 @@ export function DisclaimerManager() {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(61, 57, 53, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(61, 57, 53, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: Spacing.lg,
   },
   overlayPressable: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -363,42 +385,42 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: Colors.bgSurface,
     borderRadius: Radius.xl,
-    width: '100%',
+    width: "100%",
     maxWidth: 500,
-    maxHeight: '85%',
+    maxHeight: "85%",
     ...Shadows.lg,
-    overflow: 'hidden',
-    flexDirection: 'column',
+    overflow: "hidden",
+    flexDirection: "column",
     zIndex: 1,
   },
   header: {
     padding: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    alignItems: 'center',
+    alignItems: "center",
     flexShrink: 0,
   },
   iconContainer: {
     marginBottom: Spacing.md,
   },
   title: {
-    fontFamily: Fonts?.headingBold ?? 'System',
-    fontSize: Typography['3xl'],
+    fontFamily: Fonts?.headingBold ?? "System",
+    fontSize: Typography["3xl"],
     fontWeight: Typography.bold,
-    color: '#3D3935', // Explicit color to ensure visibility
-    textAlign: 'center',
+    color: "#3D3935", // Explicit color to ensure visibility
+    textAlign: "center",
   },
   titleGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   subTitle: {
-    fontFamily: Fonts?.headingBold ?? 'System',
+    fontFamily: Fonts?.headingBold ?? "System",
     fontSize: Typography.base,
     fontWeight: Typography.medium,
-    color: '#3D3935', // Explicit color to ensure visibility
-    textAlign: 'center',
+    color: "#3D3935", // Explicit color to ensure visibility
+    textAlign: "center",
   },
   scrollView: {
     maxHeight: SCREEN_HEIGHT * 0.5,
@@ -410,14 +432,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   contentText: {
-    fontFamily: Fonts?.body ?? 'System',
+    fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.base,
     lineHeight: Typography.base * Typography.relaxed,
-    color: '#3D3935', // Explicit color to ensure visibility
+    color: "#3D3935", // Explicit color to ensure visibility
   },
   linkText: {
     color: Colors.primary,
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
     fontWeight: Typography.medium,
   },
   footer: {
@@ -427,14 +449,14 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   toggleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: Spacing.sm,
     gap: Spacing.xs,
   },
   toggleText: {
-    fontFamily: Fonts?.body ?? 'System',
+    fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.sm,
     color: Colors.primary,
     fontWeight: Typography.medium,
@@ -444,11 +466,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
-    alignItems: 'center',
+    alignItems: "center",
     ...Shadows.sm,
   },
   agreeButtonText: {
-    fontFamily: Fonts?.heading ?? 'System',
+    fontFamily: Fonts?.heading ?? "System",
     fontSize: Typography.base,
     fontWeight: Typography.semibold,
     color: Colors.textInverse,

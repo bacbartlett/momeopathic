@@ -5,6 +5,7 @@ import { components, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { action, ActionCtx, query, QueryCtx } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
+import { buildSystemPromptWithNotes } from "./agents/systemprompt";
 import { generateConversationTitle } from "./agents/titleGenerator";
 
 /**
@@ -178,10 +179,16 @@ export const send = action({
     // Check if this is the first user message (thread title is still default)
     const isFirstUserMessage = !thread.title || thread.title === "New Chat";
 
+    // Pre-load user notes into the system prompt so the AI always knows who it's talking to
+    const notes = await ctx.runQuery(internal.notes.getNotes, {
+      userId: user._id as string,
+    });
+    const personalizedPrompt = buildSystemPromptWithNotes(notes);
+
     const result = await homeopathicAgent.generateText(
       ctx,
       { threadId: args.threadId, userId: thread.userId },
-      { prompt: args.content }
+      { prompt: args.content, system: personalizedPrompt }
     );
 
     // Generate and update thread title if this is the first user message

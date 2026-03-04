@@ -44,12 +44,22 @@ export const store = mutation({
     }
 
     // Check if user already exists
-    const user = await ctx.db
+    const users = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
         q.eq("tokenIdentifier", identity.tokenIdentifier)
       )
-      .unique();
+      .collect();
+
+    // Clean up duplicates if they exist (keep the oldest record)
+    if (users.length > 1) {
+      const [keep, ...duplicates] = users;
+      for (const dup of duplicates) {
+        await ctx.db.delete(dup._id);
+      }
+    }
+
+    const user = users[0] ?? null;
 
     if (user !== null) {
       // User exists - update their profile if anything changed
