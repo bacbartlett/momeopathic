@@ -185,10 +185,26 @@ export const send = action({
     });
     const personalizedPrompt = buildSystemPromptWithNotes(notes);
 
+    // Dynamic context window: include all of today's messages (min 10)
+    const recentMsgs = await listMessages(ctx, components.agent, {
+      threadId: args.threadId,
+      paginationOpts: { cursor: null, numItems: 200 },
+    });
+
+    const startOfTodayUTC = new Date();
+    startOfTodayUTC.setUTCHours(0, 0, 0, 0);
+    const todayStart = startOfTodayUTC.getTime();
+
+    const todayCount = recentMsgs.page.filter(
+      (m: Record<string, any>) => m._creationTime >= todayStart
+    ).length;
+    const recentMessages = Math.max(todayCount, 10);
+
     const result = await homeopathicAgent.generateText(
       ctx,
       { threadId: args.threadId, userId: thread.userId },
-      { prompt: args.content, system: personalizedPrompt }
+      { prompt: args.content, system: personalizedPrompt },
+      { contextOptions: { recentMessages, excludeToolMessages: true } }
     );
 
     // Generate and update thread title if this is the first user message
@@ -206,8 +222,8 @@ export const send = action({
       }
     }
 
-    // Record activity for greeting system
-    await ctx.runMutation(internal.greetings.recordActivity, {
+    // Update last activity for greeting system
+    await ctx.runMutation(internal.greetings.updateLastActivity, {
       userId: user._id,
     });
 

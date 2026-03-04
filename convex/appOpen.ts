@@ -1,18 +1,13 @@
-import { saveMessage } from "@convex-dev/agent";
+/**
+ * @deprecated This module is no longer used by the frontend.
+ * Live greeting generation is now handled by greetings.triggerGreeting.
+ * Kept for backwards compatibility — safe to delete once no clients reference it.
+ */
+
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { action, ActionCtx, query, QueryCtx } from "./_generated/server";
-
-/**
- * App Open Flow
- *
- * When the app is opened/foregrounded, this handles:
- * 1. Check inactivity tier (30min, 4hour, 1week)
- * 2. Get cached greeting if available
- * 3. Push greeting to the user's current thread
- * 4. Return info for UI (should show divider, etc.)
- */
 
 /**
  * Resolve user from action context.
@@ -107,46 +102,8 @@ export const handleAppOpen = action({
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
-    // Check inactivity tier
-    const tier: string | null = await ctx.runQuery(internal.greetings.checkInactivityTier, {
-      userId: user._id,
-    }) as string | null;
-
-    if (!tier) {
-      // No significant inactivity, nothing to do
-      return { action: "none" };
-    }
-
-    // Try to get cached greeting
-    const cached = await ctx.runMutation(internal.greetings.consumeGreeting, {
-      userId: user._id,
-    }) as { greeting: string; tier: string } | null;
-
-    if (!cached) {
-      // No cached greeting available - generate one on-demand
-      // This is the fallback path if the scheduled job didn't run
-      // For now, return none and let the user initiate
-      return { action: "none" };
-    }
-
-    // Push greeting to the thread
-    await saveMessage(ctx, components.agent, {
-      threadId: args.threadId,
-      userId: user._id,
-      message: {
-        role: "assistant",
-        content: cached.greeting,
-      },
-    });
-
-    // Determine if we should show a divider (4hour+ gap)
-    const showDivider: boolean = tier === "4hour" || tier === "1week";
-
-    return {
-      action: showDivider ? "greeting_with_divider" : "greeting",
-      greeting: cached.greeting,
-      tier: cached.tier,
-    };
+    // Deprecated: greeting cache system removed. Use greetings.triggerGreeting instead.
+    return { action: "none" };
   },
 });
 
@@ -187,32 +144,13 @@ export const getAppOpenInfo = query({
       };
     }
 
-    // Check inactivity tier
-    const tier: string | null = await ctx.runQuery(internal.greetings.checkInactivityTier, {
-      userId: user._id,
-    }) as string | null;
-
-    if (!tier) {
-      return {
-        needsGreeting: false,
-        showDivider: false,
-        tier: null,
-        hasGreeting: false,
-        greeting: null,
-      };
-    }
-
-    // Check if greeting is cached
-    const cached = await ctx.runQuery(internal.greetings.getGreeting, {
-      userId: user._id,
-    }) as { greeting: string; tier: string } | null;
-
+    // Deprecated: greeting cache system removed. Use greetings.triggerGreeting instead.
     return {
-      needsGreeting: tier !== null,
-      showDivider: tier === "4hour" || tier === "1week",
-      tier,
-      hasGreeting: cached !== null,
-      greeting: cached?.greeting ?? null,
+      needsGreeting: false,
+      showDivider: false,
+      tier: null,
+      hasGreeting: false,
+      greeting: null,
     };
   },
 });

@@ -16,6 +16,7 @@ import {
 } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 
+
 const MAX_GUEST_THREADS = 3;
 const FIRST_TIME_GREETING = `Hi! I'm your homeopathy study partner.
 
@@ -393,13 +394,6 @@ export const create = action({
 // Single-Thread Model: Get or Create
 // ============================================================
 
-// Type for greeting info from internal query
-interface GreetingInfo {
-  greeting: string;
-  tier: string;
-  showDivider: boolean;
-}
-
 // Return type for getOrCreate
 interface GetOrCreateResult {
   threadId: string;
@@ -434,35 +428,9 @@ export const getOrCreate = action({
       },
     );
 
-    // If user has a thread, return it with greeting info
+    // If user has a thread, return it
     if (threadsResult.page.length > 0) {
       const thread = threadsResult.page[0];
-
-      // Get greeting info (explicit cast to avoid circular type inference)
-      const greetingInfo = (await ctx.runQuery(
-        internal.greetings.getGreetingForThread,
-        {
-          userId: user._id,
-        },
-      )) as GreetingInfo | null;
-
-      // If there's a greeting, INSERT it as a message so it shows via sync
-      if (greetingInfo?.greeting) {
-        await saveMessage(ctx, components.agent, {
-          threadId: thread._id,
-          userId: user._id,
-          message: {
-            role: "assistant",
-            content: greetingInfo.greeting,
-          },
-        });
-
-        // Clear the cached greeting so it doesn't repeat
-        await ctx.runMutation(internal.greetings.clearGreetingCache, {
-          userId: user._id,
-        });
-      }
-
       return {
         threadId: thread._id as string,
         isNew: false,

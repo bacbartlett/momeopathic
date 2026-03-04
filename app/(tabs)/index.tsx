@@ -14,7 +14,7 @@ import { useTrialContext } from '@/context/trial-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Keyboard,
@@ -39,7 +39,7 @@ export default function ChatScreen() {
     guestLimitReached,
     clearGuestLimitReached,
     sendMessage,
-    debugForceDivider,
+    isGreetingGenerating,
   } = useChat();
   const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const {
@@ -96,6 +96,22 @@ export default function ChatScreen() {
 
   // Check if user has noPaywall flag set to true
   const hasNoPaywall = currentUser?.noPaywall === true;
+
+  // Build display messages: append a synthetic pending message when greeting is generating
+  const displayMessages = useMemo(() => {
+    const msgs = activeThread?.messages ?? [];
+    if (!isGreetingGenerating) return msgs;
+    return [
+      ...msgs,
+      {
+        id: '__greeting_pending__',
+        role: 'assistant' as const,
+        content: '',
+        timestamp: Date.now(),
+        status: 'pending' as const,
+      },
+    ];
+  }, [activeThread?.messages, isGreetingGenerating]);
 
   const shouldUseTrialUI = isAuthenticated && !isGuest && !hasNoPaywall;
   const canUseChat = shouldUseTrialUI ? canUseApp : true;
@@ -173,10 +189,9 @@ export default function ChatScreen() {
       ) : (
         <>
           <View style={styles.messagesContainer}>
-            <MessageList 
-              messages={activeThread?.messages ?? []} 
+            <MessageList
+              messages={displayMessages}
               isLoading={isMessagesLoading}
-              forceDivider={debugForceDivider}
               threadKey={activeThread?.id ?? null}
             />
           </View>

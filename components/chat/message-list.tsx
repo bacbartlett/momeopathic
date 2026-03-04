@@ -2,15 +2,12 @@ import { ChatColors, Colors, Fonts, Radius, Spacing, Typography } from '@/consta
 import { useChat } from '@/context/chat-context';
 import { Message } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, NativeScrollEvent, NativeSyntheticEvent, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import { Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MessageBubble } from './message-bubble';
 
 // 4 hours in milliseconds - threshold for showing time dividers
 const TIME_DIVIDER_THRESHOLD_MS = 4 * 60 * 60 * 1000;
-
-// Pull threshold for revealing old messages
-const PULL_THRESHOLD = 100;
 
 // Time divider component
 function TimeDivider({ timestamp }: { timestamp: number }) {
@@ -27,8 +24,8 @@ function TimeDivider({ timestamp }: { timestamp: number }) {
     } else if (isYesterday) {
       return `Yesterday at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     } else {
-      return date.toLocaleDateString([], { 
-        month: 'short', 
+      return date.toLocaleDateString([], {
+        month: 'short',
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit'
@@ -49,14 +46,13 @@ function TimeDivider({ timestamp }: { timestamp: number }) {
 }
 
 // Item type for FlatList - either a message or a divider
-type ListItem = 
+type ListItem =
   | { type: 'message'; message: Message }
   | { type: 'divider'; timestamp: number; key: string };
 
 interface MessageListProps {
   messages: Message[];
   isLoading?: boolean;
-  forceDivider?: boolean;
   threadKey?: string | null;
 }
 
@@ -130,79 +126,15 @@ function MessageListSkeleton() {
   );
 }
 
-/**
- * Best practice for chat scrolling based on React Native community recommendations:
- * - Use inverted FlatList (renders messages bottom-to-top like iMessage/WhatsApp)
- * - Use maintainVisibleContentPosition to prevent scroll jumping
- * - Auto-scroll only when user is at bottom (viewing latest messages)
- */
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
-  function MessageList({ messages, isLoading = false, forceDivider = false, threadKey = null }, ref) {
+  function MessageList({ messages, isLoading = false, threadKey = null }, ref) {
   const flatListRef = useRef<FlatList<ListItem>>(null);
   const { sendError, retryLastMessage, clearSendError } = useChat();
-  
-  // Pull-to-reveal state for 4h+ gaps
-  const [oldMessagesRevealed, setOldMessagesRevealed] = useState(false);
-  const pullProgress = useRef(new Animated.Value(0)).current;
-  const [isPullReady, setIsPullReady] = useState(false);
-  const revealAnimation = useRef(new Animated.Value(0)).current;
-  const [contentHeight, setContentHeight] = useState(0);
-  const [layoutHeight, setLayoutHeight] = useState(0);
-  const isAtTopRef = useRef(false);
-
-  const updateIsAtTop = useCallback((nextIsAtTop: boolean) => {
-    isAtTopRef.current = nextIsAtTop;
-  }, []);
 
   const sortedByOldest = useMemo(() => {
     return [...messages].sort((a, b) => a.timestamp - b.timestamp);
   }, [messages]);
 
-  const dividerIndex = useMemo(() => {
-    if (sortedByOldest.length < 2) return null;
-    let index: number | null = null;
-    for (let i = 1; i < sortedByOldest.length; i++) {
-      if (sortedByOldest[i].timestamp - sortedByOldest[i - 1].timestamp >= TIME_DIVIDER_THRESHOLD_MS) {
-        index = i;
-      }
-    }
-    if (forceDivider) {
-      // Debug mode: keep the last two messages as the "new" segment.
-      return Math.max(sortedByOldest.length - 2, 1);
-    }
-    return index;
-  }, [sortedByOldest, forceDivider]);
-
-  const showDivider = dividerIndex !== null;
-  const oldSegment = dividerIndex !== null ? sortedByOldest.slice(0, dividerIndex) : [];
-  const newSegment = dividerIndex !== null ? sortedByOldest.slice(dividerIndex) : sortedByOldest;
-
-  // Determine if we should use pull-to-reveal mode
-  // Only when: showDivider is true (4h+ gap), messages exist, and not yet revealed
-  // Activate pull-to-reveal when: 4h+ gap, old messages exist, and not yet revealed
-  const shouldUsePullToReveal = showDivider && oldSegment.length > 0 && !oldMessagesRevealed;
-
-  // Reset reveal state when thread changes or showDivider changes
-  useEffect(() => {
-    if (!showDivider) {
-      setOldMessagesRevealed(true); // No 4h+ gap, show all messages
-    } else {
-      setOldMessagesRevealed(false); // 4h+ gap, start hidden
-      revealAnimation.setValue(0);
-    }
-  }, [showDivider, threadKey, revealAnimation]);
-  
-  // Debug: force divider should always reset reveal state
-  useEffect(() => {
-    if (forceDivider) {
-      setOldMessagesRevealed(false);
-      revealAnimation.setValue(0);
-    }
-  }, [forceDivider, revealAnimation]);
-
-  /**
-   * Expose scroll method to parent
-   */
   useImperativeHandle(ref, () => ({
     scrollToBottom: (animated = true) => {
       if (messages.length > 0 && flatListRef.current) {
@@ -211,9 +143,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     },
   }), [messages.length]);
 
-  /**
-   * Scroll to bottom when messages first load (thread switch)
-   */
+  // Scroll to bottom when messages first load (thread switch)
   useEffect(() => {
     if (!isLoading && messages.length > 0) {
       const timer = setTimeout(() => {
@@ -223,103 +153,14 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
     }
   }, [isLoading, messages.length, threadKey]);
 
-  /**
-   * Handle scroll for pull-to-reveal
-   */
-  const getPullDistance = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset } = event.nativeEvent;
-    return Math.max(0, Math.abs(contentOffset.y));
-  }, []);
-
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset } = event.nativeEvent;
-    const maxOffset = Math.max(0, contentHeight - layoutHeight);
-    const atTop = contentOffset.y >= maxOffset - 8;
-    updateIsAtTop(atTop);
-    if (!shouldUsePullToReveal || !atTop) {
-      pullProgress.setValue(0);
-      setIsPullReady(false);
-      return;
-    }
-
-    const pullDistance = getPullDistance(event);
-    
-    pullProgress.setValue(pullDistance);
-    setIsPullReady(pullDistance >= PULL_THRESHOLD);
-  }, [shouldUsePullToReveal, pullProgress, getPullDistance, contentHeight, layoutHeight, updateIsAtTop]);
-
-  /**
-   * Handle scroll end - trigger reveal if threshold met
-   */
-  const handleScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!shouldUsePullToReveal || !isAtTopRef.current) return;
-
-    const pullDistance = getPullDistance(event);
-
-    if (pullDistance >= PULL_THRESHOLD) {
-      // Trigger reveal animation
-      setOldMessagesRevealed(true);
-      Animated.spring(revealAnimation, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 7,
-      }).start();
-    }
-
-    // Reset pull progress
-    Animated.timing(pullProgress, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-    setIsPullReady(false);
-  }, [shouldUsePullToReveal, pullProgress, revealAnimation, getPullDistance]);
-
-  const panResponder = useMemo(() => {
-    return PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        if (!shouldUsePullToReveal || !isAtTopRef.current) return false;
-        return Math.abs(gestureState.dy) > 6 && Math.abs(gestureState.dx) < 6;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (!shouldUsePullToReveal || !isAtTopRef.current) return;
-        const pullDistance = Math.max(0, Math.abs(gestureState.dy));
-        pullProgress.setValue(pullDistance);
-        setIsPullReady(pullDistance >= PULL_THRESHOLD);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (!shouldUsePullToReveal || !isAtTopRef.current) return;
-        const pullDistance = Math.max(0, Math.abs(gestureState.dy));
-        if (pullDistance >= PULL_THRESHOLD) {
-          setOldMessagesRevealed(true);
-          Animated.spring(revealAnimation, {
-            toValue: 1,
-            useNativeDriver: true,
-            tension: 50,
-            friction: 7,
-          }).start();
-        }
-        Animated.timing(pullProgress, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: false,
-        }).start();
-        setIsPullReady(false);
-      },
-    });
-  }, [shouldUsePullToReveal, pullProgress, revealAnimation]);
-
-  // Build list items - show only the new segment until revealed
+  // Build list items with time dividers
   const listItems = useMemo((): ListItem[] => {
     const items: ListItem[] = [];
-    
-    const visibleMessages = shouldUsePullToReveal ? newSegment : sortedByOldest;
-    
-    for (let i = 0; i < visibleMessages.length; i++) {
-      const msg = visibleMessages[i];
-      const prevMsg = i > 0 ? visibleMessages[i - 1] : null;
-      
+
+    for (let i = 0; i < sortedByOldest.length; i++) {
+      const msg = sortedByOldest[i];
+      const prevMsg = i > 0 ? sortedByOldest[i - 1] : null;
+
       // Check if we need a divider before this message
       if (prevMsg && msg.timestamp - prevMsg.timestamp >= TIME_DIVIDER_THRESHOLD_MS) {
         items.push({
@@ -328,13 +169,13 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
           key: `divider-${msg.id}`,
         });
       }
-      
+
       items.push({ type: 'message', message: msg });
     }
-    
+
     // Reverse for inverted FlatList (newest first)
     return items.reverse();
-  }, [shouldUsePullToReveal, newSegment, sortedByOldest]);
+  }, [sortedByOldest]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'divider') {
@@ -351,22 +192,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   const keyExtractor = useCallback((item: ListItem) => {
     return item.type === 'divider' ? item.key : item.message.id;
   }, []);
-
-  const pullIndicatorHeight = useMemo(() => {
-    return pullProgress.interpolate({
-      inputRange: [0, PULL_THRESHOLD],
-      outputRange: [0, 64],
-      extrapolate: 'clamp',
-    });
-  }, [pullProgress]);
-
-  const pullIndicatorOpacity = useMemo(() => {
-    return pullProgress.interpolate({
-      inputRange: [0, 20, PULL_THRESHOLD],
-      outputRange: [0, 0.6, 1],
-      extrapolate: 'clamp',
-    });
-  }, [pullProgress]);
 
   // Show skeleton while loading messages for a thread switch
   if (isLoading) {
@@ -417,7 +242,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
   }
 
   return (
-    <View style={styles.listWrapper} {...panResponder.panHandlers}>
+    <View style={styles.listWrapper}>
       {/* Error banner */}
       {sendError && (
         <View style={styles.errorBanner}>
@@ -448,34 +273,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         </View>
       )}
 
-      {/* Pull-to-reveal indicator (classic pull-to-refresh style) */}
-      {shouldUsePullToReveal && (
-        <Animated.View
-          style={[
-            pullIndicatorStyles.container,
-            { height: pullIndicatorHeight, opacity: pullIndicatorOpacity },
-          ]}
-        >
-          <View style={pullIndicatorStyles.breakLine} />
-          <View style={pullIndicatorStyles.content}>
-            <Ionicons
-              name={isPullReady ? "checkmark-circle" : "arrow-up-circle-outline"}
-              size={18}
-              color={isPullReady ? Colors.primary : Colors.textMuted}
-            />
-            <Text style={[pullIndicatorStyles.text, isPullReady && pullIndicatorStyles.textReady]}>
-              {isPullReady ? "Release to load previous messages" : "Pull up to see previous messages"}
-            </Text>
-          </View>
-        </Animated.View>
-      )}
-      {shouldUsePullToReveal && (
-        <View style={pullIndicatorStyles.staticBanner}>
-          <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
-          <Text style={pullIndicatorStyles.staticText}>Previous messages hidden</Text>
-        </View>
-      )}
-
       <FlatList
         ref={flatListRef}
         data={listItems}
@@ -491,25 +288,9 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
           minIndexForVisible: 0,
           autoscrollToTopThreshold: 10,
         }}
-        // Pull-to-reveal handlers
-        onScroll={handleScroll}
-        onScrollEndDrag={handleScrollEndDrag}
         scrollEventThrottle={16}
-        // Allow overscroll for pull gesture
         bounces={true}
         alwaysBounceVertical={true}
-        overScrollMode="always"
-        onContentSizeChange={(_, height) => {
-          setContentHeight(height);
-          const maxOffset = Math.max(0, height - layoutHeight);
-          updateIsAtTop(maxOffset === 0);
-        }}
-        onLayout={(event) => {
-          const height = event.nativeEvent.layout.height;
-          setLayoutHeight(height);
-          const maxOffset = Math.max(0, contentHeight - height);
-          updateIsAtTop(maxOffset === 0);
-        }}
         // Performance optimizations
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}
@@ -755,47 +536,5 @@ const dividerStyles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
     color: Colors.textMuted,
-  },
-});
-
-const pullIndicatorStyles = StyleSheet.create({
-  container: {
-    overflow: 'hidden',
-    justifyContent: 'flex-end',
-    paddingHorizontal: Spacing.md,
-  },
-  staticBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.xs,
-  },
-  staticText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.textMuted,
-  },
-  breakLine: {
-    height: 1,
-    backgroundColor: Colors.borderLight,
-    opacity: 0.6,
-    marginBottom: Spacing.xs,
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.xs,
-  },
-  text: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.textMuted,
-  },
-  textReady: {
-    color: Colors.primary,
-    fontWeight: '600',
   },
 });

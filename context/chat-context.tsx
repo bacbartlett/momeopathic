@@ -52,6 +52,7 @@ interface ChatContextType {
   isAuthenticated: boolean;
   isGuest: boolean;
   guestLimitReached: boolean;
+  isGreetingGenerating: boolean;
   sendError: string | null;
   createThreadError: string | null;
   deleteThreadError: string | null;
@@ -64,8 +65,6 @@ interface ChatContextType {
   clearCreateThreadError: () => void;
   clearDeleteThreadError: () => void;
   clearGuestLimitReached: () => void;
-  debugForceDivider: boolean;
-  setDebugForceDivider: (value: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -79,7 +78,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<FailedMessageRetry | null>(null);
   const [guestLimitReached, setGuestLimitReached] = useState(false);
-  const [debugForceDivider, setDebugForceDivider] = useState(false);
+  const [isGreetingGenerating, setIsGreetingGenerating] = useState(false);
   const [threadInitialized, setThreadInitialized] = useState(false);
   const { track, incrementUserProperty } = usePostHogAnalytics();
 
@@ -130,6 +129,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const deleteThreadAction = useAction(api.threads.remove);
   const sendMessageAction = useAction(api.messages.send);
   const incrementFeedbackThreadCount = useMutation(api.feedback.incrementThreadCount);
+  const triggerGreetingAction = useAction(api.greetings.triggerGreeting);
 
   // Transform Convex threads to UI threads
   const threads = useMemo((): Thread[] => {
@@ -192,19 +192,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   React.useEffect(() => {
     const initializeThread = async () => {
       if (!canQuery || threadInitialized || isCreatingThread) return;
-      
+
       setIsCreatingThread(true);
       try {
         const actionArgs = isAuthenticated ? {} : { guestId: guestId! };
         const result = await getOrCreateThreadAction(actionArgs);
-        
+
         if (mountedRef.current) {
           setActiveThreadId(result.threadId);
           setThreadInitialized(true);
-          
+
           if (result.isNew) {
             track('Thread Created', { thread_id: result.threadId, is_guest: isGuest });
             incrementUserProperty('threads_created');
+          } else {
+            // Existing thread: trigger live greeting generation
+            setIsGreetingGenerating(true);
+            try {
+              const greetingArgs = isAuthenticated
+                ? { threadId: result.threadId }
+                : { threadId: result.threadId, guestId: guestId! };
+              await triggerGreetingAction(greetingArgs);
+            } catch (err) {
+              console.debug('Greeting generation failed:', err);
+            } finally {
+              if (mountedRef.current) {
+                setIsGreetingGenerating(false);
+              }
+            }
           }
         }
       } catch (error) {
@@ -222,7 +237,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!isLoading && canQuery && !activeThreadId && !threadInitialized) {
       initializeThread();
     }
-  }, [isLoading, canQuery, activeThreadId, threadInitialized, isAuthenticated, isGuest, guestId, isCreatingThread, getOrCreateThreadAction, track, incrementUserProperty]);
+  }, [isLoading, canQuery, activeThreadId, threadInitialized, isAuthenticated, isGuest, guestId, isCreatingThread, getOrCreateThreadAction, triggerGreetingAction, track, incrementUserProperty]);
 
   // Legacy: Auto-select first thread if none selected (fallback for existing threads)
   React.useEffect(() => {
@@ -420,6 +435,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         isGuest,
         guestLimitReached,
+        isGreetingGenerating,
         sendError,
         createThreadError,
         deleteThreadError,
@@ -432,8 +448,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearCreateThreadError,
         clearDeleteThreadError,
         clearGuestLimitReached,
-        debugForceDivider,
-        setDebugForceDivider,
       }}
     >
       {children}

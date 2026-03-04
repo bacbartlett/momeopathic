@@ -102,14 +102,9 @@ export const testGreetingTier = action({
       tier: args.tier,
     });
 
-    await ctx.scheduler.runAfter(0, internal.greetings.generateGreeting, {
-      userId: user._id,
-      tier: args.tier,
-    });
-
-    return { 
-      success: true, 
-      message: `Simulated ${args.tier} inactivity. Close and reopen the app to see the greeting.`
+    return {
+      success: true,
+      message: `Simulated ${args.tier} inactivity. Close and reopen the app to trigger a live greeting.`
     };
   },
 });
