@@ -59,13 +59,20 @@ export function TrialProvider({ children }: { children: ReactNode }) {
       const fingerprint = await getDeviceFingerprint();
       setDeviceFingerprint(fingerprint);
       const result = await recordFirstAppOpen({ deviceFingerprint: fingerprint });
+      if (result.userNotFound) {
+        // User record doesn't exist yet (guest-to-auth conversion in progress).
+        // Allow retry on next effect cycle. Keep isInitializing true so we
+        // show loading instead of the lockout state.
+        didRecordFirstOpenRef.current = false;
+        return;
+      }
       if (result.isFirstOpen) {
         setSuppressTrialModalForSession(true);
       }
+      setIsInitializing(false);
     } catch (error) {
       console.error('Failed to record first app open:', error);
       didRecordFirstOpenRef.current = false;
-    } finally {
       setIsInitializing(false);
     }
   }, [recordFirstAppOpen, shouldQueryTrial]);
@@ -76,7 +83,9 @@ export function TrialProvider({ children }: { children: ReactNode }) {
         console.error('Trial initialization failed:', error);
       });
     }
-  }, [recordFirstOpen, shouldQueryTrial]);
+    // Re-run when trialStatus changes (e.g. user record is created by StoreUserInDatabase)
+    // so that recordFirstOpen can retry if it previously got userNotFound.
+  }, [recordFirstOpen, shouldQueryTrial, trialStatus]);
 
   useEffect(() => {
     if (!shouldQueryTrial) {

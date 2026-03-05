@@ -40,49 +40,6 @@ const greetingTierValidator = v.union(
   v.literal("1week"),
 );
 
-// ============================================
-// TIME BUCKETS & PREFIXES
-// ============================================
-
-const TIME_BUCKETS = {
-  lateNight: { start: 22, end: 4 },
-  earlyMorning: { start: 4, end: 7 },
-  morning: { start: 7, end: 12 },
-  afternoon: { start: 12, end: 17 },
-  evening: { start: 17, end: 22 },
-} as const;
-
-const TIME_PREFIXES: Record<string, string[]> = {
-  lateNight: [
-    "Burning the midnight oil?",
-    "Late night check-in —",
-    "Quiet hours, I know —",
-    "Can't sleep?",
-    "Night owl mode activated —",
-  ],
-  earlyMorning: [
-    "Early bird!",
-    "Up before the sun —",
-    "Early start today?",
-    "Dawn patrol —",
-  ],
-  morning: [
-    "Good morning!",
-    "Morning!",
-    "Hope your morning's off to a good start —",
-  ],
-  afternoon: [
-    "Good afternoon!",
-    "Afternoon check-in —",
-    "Hope your day's going well —",
-  ],
-  evening: [
-    "Good evening!",
-    "Evening!",
-    "Winding down?",
-    "Hope your evening is going smoothly —",
-  ],
-};
 
 // Inactivity tiers (in milliseconds)
 const INACTIVITY_TIERS = {
@@ -94,35 +51,6 @@ const INACTIVITY_TIERS = {
 // ============================================
 // HELPERS
 // ============================================
-
-function getTimeBucket(hour: number): keyof typeof TIME_BUCKETS {
-  if (hour >= 22 || hour < 4) return "lateNight";
-  if (hour >= 4 && hour < 7) return "earlyMorning";
-  if (hour >= 7 && hour < 12) return "morning";
-  if (hour >= 12 && hour < 17) return "afternoon";
-  return "evening";
-}
-
-function getRandomPrefix(bucket: keyof typeof TIME_BUCKETS): string {
-  const prefixes = TIME_PREFIXES[bucket];
-  return prefixes[Math.floor(Math.random() * prefixes.length)];
-}
-
-function getUserLocalHour(timezone?: string): number {
-  try {
-    const tz = timezone || "America/New_York";
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      hour: "numeric",
-      hour12: false,
-    });
-    const parts = formatter.formatToParts(new Date());
-    const hourPart = parts.find((p) => p.type === "hour");
-    return hourPart ? parseInt(hourPart.value, 10) : 12;
-  } catch {
-    return 12;
-  }
-}
 
 // OpenRouter client for greeting generation (same as titleGenerator)
 const openrouter = createOpenAI({
@@ -318,11 +246,6 @@ export const triggerGreeting = action({
     const hasAnyContext = context.profile || context.activeCases || context.recentHistory.length > 0;
     const awayDuration = tier === "1week" ? "about a week" : tier === "4hour" ? "a few hours" : "a little while";
 
-    // Build time prefix
-    const hour = getUserLocalHour(user.timezone);
-    const bucket = getTimeBucket(hour);
-    const prefix = getRandomPrefix(bucket);
-
     let prompt = `You're texting a friend who you also help with homeopathy. They just opened the app after being away for ${awayDuration}. Write a short, natural check-in message (1-2 sentences max).`;
 
     if (hasAnyContext) {
@@ -355,7 +278,7 @@ export const triggerGreeting = action({
     prompt += `\n- Talk like a real friend, not a customer service agent. Think: how would you text a close friend you bumped into?`;
     prompt += `\n- If they had something going on, ask about it directly: "How is [thing]?" or "Is [thing] feeling better?" — NOT "I see you were dealing with..." or "I noticed you mentioned..."`;
     prompt += `\n- No exclamation marks. Calm, warm, human.`;
-    prompt += `\n- Do NOT include a time-based prefix like "Good morning" — that gets added separately.`;
+    prompt += `\n- Do NOT reference the time of day ("Good morning", "Good evening", etc.) — you don't know the user's timezone.`;
     prompt += `\n- Jump right in. No "Welcome back", "Good to see you", "Hope you're doing well", or other filler.`;
     prompt += `\n- Generate ONLY the message body (1-2 sentences).`;
 
@@ -365,8 +288,7 @@ export const triggerGreeting = action({
         prompt,
       });
 
-      const greetingBody = result.text.trim();
-      const fullGreeting = `${prefix} ${greetingBody}`;
+      const fullGreeting = result.text.trim();
 
       // Save as assistant message to the thread
       await saveMessage(ctx, components.agent, {

@@ -628,11 +628,10 @@ export default function AccountScreen() {
             <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
           </TouchableOpacity>
 
-          {/* Debug Section - REMOVE BEFORE PRODUCTION */}
+          {/* Debug Section - commented out for production
           <View style={styles.debugSection}>
             <Text style={styles.debugSectionTitle}>🐛 Debug (Remove before build)</Text>
-            
-            {/* Thread & Message Info */}
+
             <View style={styles.debugInfo}>
               <Text style={styles.debugText}>Thread ID: {activeThread?.id ?? 'none'}</Text>
               <Text style={styles.debugText}>Messages in thread: {activeThread?.messages?.length ?? 0}</Text>
@@ -640,7 +639,6 @@ export default function AccountScreen() {
               <Text style={styles.debugText}>Messages loaded: {(activeThread?.messages?.length ?? 0) > 1 ? 'YES' : 'NO'}</Text>
             </View>
 
-            {/* Raw Messages Preview */}
             {rawMessages?.messages && rawMessages.messages.length > 0 && (
               <View style={styles.debugInfo}>
                 <Text style={styles.debugSubtitle}>Raw Messages:</Text>
@@ -652,7 +650,6 @@ export default function AccountScreen() {
               </View>
             )}
 
-            {/* Greeting State Info */}
             {greetingState && !('error' in greetingState) && (
               <View style={styles.debugInfo}>
                 <Text style={styles.debugSubtitle}>Greeting State:</Text>
@@ -662,7 +659,6 @@ export default function AccountScreen() {
               </View>
             )}
 
-            {/* Test Greeting Buttons */}
             <Text style={styles.debugSubtitle}>Simulate Inactivity:</Text>
             <View style={styles.debugButtonRow}>
               <TouchableOpacity
@@ -716,6 +712,7 @@ export default function AccountScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          */}
 
           {/* Footer */}
           <View style={styles.footer}>

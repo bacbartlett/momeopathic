@@ -75,6 +75,7 @@ export const recordFirstAppOpen = mutation({
   returns: v.object({
     isFirstOpen: v.boolean(),
     alreadyUsedTrial: v.boolean(),
+    userNotFound: v.boolean(),
     firstAppOpen: v.number(),
     trialStarted: v.union(v.number(), v.null()),
     trialEndDate: v.union(v.number(), v.null()),
@@ -96,6 +97,7 @@ export const recordFirstAppOpen = mutation({
       return {
         isFirstOpen: false,
         alreadyUsedTrial: false,
+        userNotFound: true,
         firstAppOpen: Date.now(),
         trialStarted: null,
         trialEndDate: null,
@@ -109,6 +111,7 @@ export const recordFirstAppOpen = mutation({
       return {
         isFirstOpen: false,
         alreadyUsedTrial: false,
+        userNotFound: false,
         firstAppOpen: user.firstAppOpen,
         trialStarted: user.trialStarted ?? null,
         trialEndDate: user.trialEndDate ?? null,
@@ -135,23 +138,28 @@ export const recordFirstAppOpen = mutation({
       return {
         isFirstOpen: true,
         alreadyUsedTrial: true,
+        userNotFound: false,
         firstAppOpen: now,
         trialStarted: now - TRIAL_DURATION_MS,
         trialEndDate: now - 1,
       };
     }
 
+    const trialEndDate = now + TRIAL_DURATION_MS;
     await ctx.db.patch(user._id, {
       firstAppOpen: now,
+      trialStarted: now,
+      trialEndDate,
       deviceFingerprint: args.deviceFingerprint,
     });
 
     return {
       isFirstOpen: true,
       alreadyUsedTrial: false,
+      userNotFound: false,
       firstAppOpen: now,
-      trialStarted: null,
-      trialEndDate: null,
+      trialStarted: now,
+      trialEndDate,
     };
   },
 });
