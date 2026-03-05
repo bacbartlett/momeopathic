@@ -44,7 +44,12 @@ export function GuestProvider({ children }: { children: ReactNode }) {
           setGuestId(existingId);
 
           try {
-            await claimGuestAccount({ guestId: existingId });
+            const result = await claimGuestAccount({ guestId: existingId });
+            if (!result.success) {
+              console.error('[GuestProvider] Claim returned success=false, will retry on next app open');
+              setGuestId(null);
+              return;
+            }
             await SecureStore.deleteItemAsync(GUEST_ID_KEY);
             setGuestId(null);
             track('Guest Account Claimed');

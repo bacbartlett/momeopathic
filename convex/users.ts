@@ -464,7 +464,10 @@ export const claimGuestAccount = action({
       // This is not a guest account — someone is trying to claim a real user's data.
       return { success: false };
     }
-    if (guestUser.tokenIdentifier && guestUser.tokenIdentifier !== identity.tokenIdentifier) {
+    // Check if another real (non-guest) user already claimed this guest account.
+    // Guest users have synthetic tokenIdentifiers like "guest:abc-123" — skip those.
+    const hasRealToken = guestUser.tokenIdentifier && !guestUser.tokenIdentifier.startsWith("guest:");
+    if (hasRealToken && guestUser.tokenIdentifier !== identity.tokenIdentifier) {
       // Guest was already claimed by a different authenticated user.
       return { success: false };
     }

@@ -100,8 +100,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Get guest state
   const { guestId, isGuest, isGuestLoading, isClaimInProgress } = useGuest();
 
-  // Determine if we can make queries
-  const canQuery = isAuthenticated || isGuest;
+  // Determine if we can make queries.
+  // During a guest→auth claim, skip queries to avoid stale results (the user record
+  // is being upgraded and queries by tokenIdentifier would return empty).
+  const canQuery = (isAuthenticated && !isClaimInProgress) || isGuest;
 
   // Fetch threads from Convex
   const threadsResult = useQuery(
