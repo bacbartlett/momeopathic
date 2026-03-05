@@ -140,11 +140,6 @@ async function resolveUserFromMutation(
 
 /**
  * Resolve user from action context. Tries Clerk auth first, falls back to guestId.
- *
- * If the user is authenticated (has a valid identity) but no user record exists
- * yet, this will auto-create the record. This makes the system resilient to
- * race conditions during sign-up/sign-in where multiple frontend effects may
- * fire before StoreUserInDatabase or claimGuestAccount has created the record.
  */
 async function resolveUserFromAction(
   ctx: ActionCtx,
@@ -157,19 +152,6 @@ async function resolveUserFromAction(
       tokenIdentifier: identity.tokenIdentifier,
     });
     if (user) return user;
-
-    // Authenticated but no user record yet — auto-provision.
-    // storeInternal is idempotent (checks for existing record first).
-    const userId = await ctx.runMutation(internal.users.storeInternal, {
-      tokenIdentifier: identity.tokenIdentifier,
-      name: identity.name ?? "Anonymous",
-      email: identity.email,
-      imageUrl: identity.pictureUrl,
-    });
-    const newUser = await ctx.runQuery(internal.threads.getUserById, {
-      userId,
-    });
-    if (newUser) return newUser;
   }
 
   // Fall back to guestId
@@ -215,18 +197,6 @@ export const getGuestUserByGuestId = internalQuery({
       .query("users")
       .withIndex("by_guestId", (q) => q.eq("guestId", args.guestId))
       .unique();
-  },
-});
-
-/**
- * Internal query to get user by ID.
- * Used by resolveUserFromAction after auto-provisioning.
- */
-export const getUserById = internalQuery({
-  args: { userId: v.id("users") },
-  returns: v.union(v.null(), userDocValidator),
-  handler: async (ctx, args): Promise<Doc<"users"> | null> => {
-    return await ctx.db.get(args.userId);
   },
 });
 

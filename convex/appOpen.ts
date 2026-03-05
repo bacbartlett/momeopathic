@@ -10,9 +10,7 @@ import { Doc } from "./_generated/dataModel";
 import { action, ActionCtx, query, QueryCtx } from "./_generated/server";
 
 /**
- * Resolve user from action context.
- * Auto-provisions user record if authenticated but record doesn't exist yet
- * (handles race conditions during sign-up/sign-in transitions).
+ * Resolve user from action context. Tries Clerk auth first, falls back to guestId.
  */
 async function resolveUserFromAction(
   ctx: ActionCtx,
@@ -24,18 +22,6 @@ async function resolveUserFromAction(
       tokenIdentifier: identity.tokenIdentifier,
     });
     if (user) return user;
-
-    // Authenticated but no user record yet — auto-provision.
-    const userId = await ctx.runMutation(internal.users.storeInternal, {
-      tokenIdentifier: identity.tokenIdentifier,
-      name: identity.name ?? "Anonymous",
-      email: identity.email,
-      imageUrl: identity.pictureUrl,
-    });
-    const newUser = await ctx.runQuery(internal.threads.getUserById, {
-      userId,
-    });
-    if (newUser) return newUser;
   }
 
   if (guestId) {
