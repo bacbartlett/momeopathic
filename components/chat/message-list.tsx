@@ -279,6 +279,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         // CRITICAL: Inverted list for chat (newest at bottom)

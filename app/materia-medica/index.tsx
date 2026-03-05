@@ -225,6 +225,7 @@ export default function MateriaMedicaListScreen() {
         keyExtractor={keyExtractor}
         style={styles.list}
         contentContainerStyle={styles.listContent}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

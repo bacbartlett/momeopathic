@@ -135,6 +135,8 @@ export const Radius = {
   xl: 20,
   '2xl': 24,
   full: 9999,
+  /** Apple's continuous corner curve (squircle). Apply alongside borderRadius. */
+  continuous: 'continuous' as const,
 };
 
 // =============================================================================
@@ -143,32 +145,20 @@ export const Radius = {
 
 export const Shadows = {
   sm: {
-    shadowColor: '#3D3935',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    boxShadow: '0px 2px 8px rgba(61, 57, 53, 0.06)',
+    borderCurve: 'continuous' as const,
   },
   md: {
-    shadowColor: '#3D3935',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
+    boxShadow: '0px 4px 16px rgba(61, 57, 53, 0.08)',
+    borderCurve: 'continuous' as const,
   },
   lg: {
-    shadowColor: '#3D3935',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
-    shadowRadius: 32,
-    elevation: 8,
+    boxShadow: '0px 8px 32px rgba(61, 57, 53, 0.10)',
+    borderCurve: 'continuous' as const,
   },
   glow: {
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 6,
+    boxShadow: '0px 0px 20px rgba(123, 160, 133, 0.15)',
+    borderCurve: 'continuous' as const,
   },
 };
 

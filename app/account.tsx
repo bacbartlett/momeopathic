@@ -7,13 +7,13 @@ import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useRevenueCat } from '@/context/revenue-cat-context';
 import { useClerk, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { useAction, useMutation, useQuery } from 'convex/react';
+// import { useAction, useMutation, useQuery } from 'convex/react'; // debug only
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearDeviceFingerprint } from '@/lib/device-fingerprint';
-import { api } from '../convex/_generated/api';
+// import AsyncStorage from '@react-native-async-storage/async-storage'; // debug only
+// import { clearDeviceFingerprint } from '@/lib/device-fingerprint'; // debug only
+// import { api } from '../convex/_generated/api'; // debug only
 import {
     ActivityIndicator,
     Alert,
@@ -29,7 +29,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed';
+// const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed'; // debug only
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -47,70 +47,70 @@ export default function AccountScreen() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
-  // Debug state
-  const [debugTesting, setDebugTesting] = useState<string | null>(null);
+  // Debug state — commented out for production (endpoints are now internal-only)
+  // const [debugTesting, setDebugTesting] = useState<string | null>(null);
   const { guestId } = useGuest();
   const { activeThread } = useChat();
-  const testGreetingTier = useAction(api.debug.testGreetingTier);
-  const insertDebugMessage = useAction(api.debug.insertDebugMessage);
-  const simulateTrialLockout = useMutation(api.trial.debugSimulateLockout);
-  const resetTrialForTesting = useAction(api.trial.debugResetTrial);
-  const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
-  const rawMessages = useQuery(
-    api.debug.listRawMessagesForThread, 
-    activeThread?.id ? { threadId: activeThread.id, guestId: guestId ?? undefined } : "skip"
-  );
+  // const testGreetingTier = useAction(api.debug.testGreetingTier);
+  // const insertDebugMessage = useAction(api.debug.insertDebugMessage);
+  // const simulateTrialLockout = useMutation(api.trial.debugSimulateLockout);
+  // const resetTrialForTesting = useAction(api.trial.debugResetTrial);
+  // const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
+  // const rawMessages = useQuery(
+  //   api.debug.listRawMessagesForThread,
+  //   activeThread?.id ? { threadId: activeThread.id, guestId: guestId ?? undefined } : "skip"
+  // );
 
-  const handleTestGreeting = async (tier: "30min" | "4hour" | "1week") => {
-    setDebugTesting(tier);
-    try {
-      const result = await testGreetingTier({ tier, guestId: guestId ?? undefined });
-      Alert.alert("Debug", result.message);
-    } catch (error) {
-      Alert.alert("Error", String(error));
-    } finally {
-      setDebugTesting(null);
-    }
-  };
+  // const handleTestGreeting = async (tier: "30min" | "4hour" | "1week") => {
+  //   setDebugTesting(tier);
+  //   try {
+  //     const result = await testGreetingTier({ tier, guestId: guestId ?? undefined });
+  //     Alert.alert("Debug", result.message);
+  //   } catch (error) {
+  //     Alert.alert("Error", String(error));
+  //   } finally {
+  //     setDebugTesting(null);
+  //   }
+  // };
 
-  const handleInsertDebugMessage = async () => {
-    if (!activeThread?.id) {
-      Alert.alert("Debug", "No active thread found.");
-      return;
-    }
-    try {
-      const result = await insertDebugMessage({
-        threadId: activeThread.id,
-        guestId: guestId ?? undefined,
-      });
-      Alert.alert("Debug", result.message);
-    } catch (error) {
-      Alert.alert("Error", String(error));
-    }
-  };
+  // const handleInsertDebugMessage = async () => {
+  //   if (!activeThread?.id) {
+  //     Alert.alert("Debug", "No active thread found.");
+  //     return;
+  //   }
+  //   try {
+  //     const result = await insertDebugMessage({
+  //       threadId: activeThread.id,
+  //       guestId: guestId ?? undefined,
+  //     });
+  //     Alert.alert("Debug", result.message);
+  //   } catch (error) {
+  //     Alert.alert("Error", String(error));
+  //   }
+  // };
 
-  const handleSimulateTrialLockout = async () => {
-    try {
-      await simulateTrialLockout({});
-      Alert.alert('Debug', 'Trial lockout simulated. Return to chat to verify lockout behavior.');
-    } catch (error) {
-      Alert.alert('Error', String(error));
-    }
-  };
+  // const handleSimulateTrialLockout = async () => {
+  //   try {
+  //     await simulateTrialLockout({});
+  //     Alert.alert('Debug', 'Trial lockout simulated. Return to chat to verify lockout behavior.');
+  //   } catch (error) {
+  //     Alert.alert('Error', String(error));
+  //   }
+  // };
 
-  const handleResetTrial = async () => {
-    try {
-      await clearDeviceFingerprint();
-      await AsyncStorage.removeItem(DISCLAIMER_AGREED_KEY);
-      await resetTrialForTesting({});
-      Alert.alert(
-        'Debug',
-        'Trial + onboarding cache reset. Fully close and reopen the app to test first-open flow.',
-      );
-    } catch (error) {
-      Alert.alert('Error', String(error));
-    }
-  };
+  // const handleResetTrial = async () => {
+  //   try {
+  //     await clearDeviceFingerprint();
+  //     await AsyncStorage.removeItem(DISCLAIMER_AGREED_KEY);
+  //     await resetTrialForTesting({});
+  //     Alert.alert(
+  //       'Debug',
+  //       'Trial + onboarding cache reset. Fully close and reopen the app to test first-open flow.',
+  //     );
+  //   } catch (error) {
+  //     Alert.alert('Error', String(error));
+  //   }
+  // };
 
   // Track page view
   useEffect(() => {

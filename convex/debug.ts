@@ -8,7 +8,7 @@
 import { listMessages, saveMessage } from "@convex-dev/agent";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
-import { action, internalMutation, query } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 
 // Check if we're in dev mode
 const isDevMode = () => process.env.DEV_MODE === "true";
@@ -20,7 +20,7 @@ const PROD_DISABLED = { success: false, message: "Debug endpoints disabled in pr
  * Debug: Get raw messages for a thread (bypasses toUIMessages transform)
  * This helps us see exactly what's stored in the agent's message table
  */
-export const getRawMessages = query({
+export const getRawMessages = internalQuery({
   args: { threadId: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -68,7 +68,7 @@ export const simulateInactivity = internalMutation({
  * Debug: Public action to trigger inactivity simulation
  * Call this from the UI to test greeting tiers
  */
-export const testGreetingTier = action({
+export const testGreetingTier = internalAction({
   args: {
     tier: v.union(v.literal("30min"), v.literal("4hour"), v.literal("1week")),
     guestId: v.optional(v.string()),
@@ -113,7 +113,7 @@ export const testGreetingTier = action({
  * Debug: Insert a synthetic assistant message into a thread.
  * Useful for testing divider behavior with multiple messages.
  */
-export const insertDebugMessage = action({
+export const insertDebugMessage = internalAction({
   args: {
     threadId: v.string(),
     guestId: v.optional(v.string()),
@@ -161,7 +161,7 @@ export const insertDebugMessage = action({
 /**
  * Debug: List messages for a thread showing raw format
  */
-export const listRawMessagesForThread = query({
+export const listRawMessagesForThread = internalQuery({
   args: { 
     threadId: v.string(),
     guestId: v.optional(v.string()) 
@@ -195,7 +195,7 @@ export const listRawMessagesForThread = query({
 /**
  * Debug: Check what greeting state exists for current user
  */
-export const checkGreetingState = query({
+export const checkGreetingState = internalQuery({
   args: { guestId: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => {

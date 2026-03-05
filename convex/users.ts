@@ -123,6 +123,7 @@ export const current = query({
 
 /**
  * Get a user by their database ID.
+ * Restricted to the authenticated user's own record.
  */
 export const getById = query({
   args: {
@@ -130,7 +131,19 @@ export const getById = query({
   },
   returns: v.union(userReturnValidator, v.null()),
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.userId);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return null;
+    }
+    // Only allow fetching your own record
+    if (user.tokenIdentifier !== identity.tokenIdentifier) {
+      return null;
+    }
+    return user;
   },
 });
 
@@ -396,6 +409,17 @@ export const claimGuestAccount = action({
         });
       }
       return { success: true };
+    }
+
+    // Validate: only allow claiming actual guest accounts that haven't been
+    // claimed by a different authenticated user already.
+    if (!guestUser.isGuest) {
+      // This is not a guest account — someone is trying to claim a real user's data.
+      return { success: false };
+    }
+    if (guestUser.tokenIdentifier && guestUser.tokenIdentifier !== identity.tokenIdentifier) {
+      // Guest was already claimed by a different authenticated user.
+      return { success: false };
     }
 
     if (!existingClerkUser) {

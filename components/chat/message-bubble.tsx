@@ -654,13 +654,7 @@ const styles = StyleSheet.create({
     // Subtle gradient effect via shadow
     ...Platform.select({
       ios: Shadows.glow,
-      android: {
-        shadowColor: "#3D3935",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 16,
-        elevation: 4,
-      },
+      android: Shadows.md,
       default: {},
     }),
   },

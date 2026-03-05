@@ -5,6 +5,7 @@ import { homeopathicAgent } from "./agents/homeopathic";
 import {
   action,
   ActionCtx,
+  internalAction,
   internalMutation,
   mutation,
   MutationCtx,
@@ -270,7 +271,7 @@ export const checkDeviceFingerprint = query({
   },
 });
 
-export const debugSimulateLockout = mutation({
+export const debugSimulateLockout = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
@@ -332,7 +333,7 @@ export const resetTrialStateInternal = internalMutation({
   },
 });
 
-export const debugResetTrial = action({
+export const debugResetTrial = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
