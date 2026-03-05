@@ -105,6 +105,11 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   // Total messages: regular messages + terms message
   const totalMessages = ONBOARDING_MESSAGES.length + 1;
 
+  // Track onboarding start
+  useEffect(() => {
+    track('Onboarding Started', { is_guest: isGuest });
+  }, [track, isGuest]);
+
   // Stream messages in one at a time
   useEffect(() => {
     if (currentIndex >= totalMessages) {
@@ -191,6 +196,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       }
 
       track('Disclaimer Accepted', { method: 'onboarding_chat' });
+      track('Onboarding Completed', { is_guest: isGuest });
 
       // Brief pause to show the agree message, then transition
       setTimeout(() => {

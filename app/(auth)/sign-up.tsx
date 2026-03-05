@@ -77,11 +77,9 @@ export default function SignUpScreen() {
       // Set pendingVerification to true to display verification form
       setPendingVerification(true);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred during sign up. Please try again.');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred during sign up. Please try again.';
+      setError(errorMessage);
+      track('Sign Up Failed', { method: 'email', error: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -116,11 +114,9 @@ export default function SignUpScreen() {
         console.error(JSON.stringify(signUpAttempt, null, 2));
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Invalid verification code. Please try again.');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'Invalid verification code. Please try again.';
+      setError(errorMessage);
+      track('Sign Up Failed', { method: 'email', step: 'verification', error: errorMessage });
     } finally {
       setIsLoading(false);
     }

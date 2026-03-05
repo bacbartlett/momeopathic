@@ -30,28 +30,59 @@ declare const ErrorUtils: {
 
 // Event types for type-safe tracking
 export type PostHogEvent =
+  // App lifecycle
   | 'App Opened'
+  // Auth
   | 'Sign In'
+  | 'Sign In Failed'
   | 'Sign Up'
+  | 'Sign Up Failed'
   | 'Sign Out'
+  | 'Password Reset'
+  | 'Password Reset Failed'
+  | 'Account Deleted'
+  | 'Guest Session Started'
+  | 'Guest Account Claimed'
+  // Chat
   | 'Thread Created'
+  | 'Thread Create Failed'
   | 'Thread Deleted'
+  | 'Thread Switched'
   | 'Message Sent'
+  | 'Message Send Failed'
+  // Materia Medica
+  | 'Materia Medica Opened'
+  | 'Remedy Searched'
+  | 'Remedy Viewed'
+  | 'Remedy Shared'
+  // Subscription
   | 'Subscription Started'
+  | 'Subscription Updated'
   | 'Subscription Cancelled'
   | 'Paywall Viewed'
   | 'Paywall Dismissed'
+  | 'Paywall Trigger'
+  | 'Restore Purchases Tapped'
+  | 'Offer Code Redeemed'
+  | 'Offer Code Failed'
+  // Navigation
+  | 'Screen Viewed'
   | 'Account Page Viewed'
   | 'Terms Viewed'
   | 'Privacy Policy Viewed'
+  // Legal
   | 'Disclaimer Accepted'
   | 'Disclaimer Viewed'
+  // Feedback
   | 'Feedback Prompt Shown'
   | 'Feedback Happy Selected'
   | 'Feedback Unhappy Selected'
   | 'Feedback Submitted'
   | 'Feedback Prompt Dismissed'
-  | 'In-App Review Requested';
+  | 'In-App Review Requested'
+  // Onboarding
+  | 'Onboarding Started'
+  | 'Onboarding Completed';
 
 // Properties type for events
 export interface EventProperties {
@@ -87,6 +118,8 @@ interface PostHogContextType {
   track: (event: PostHogEvent | string, properties?: EventProperties) => void;
   /** Set user profile properties */
   setUserProperties: (properties: UserProfileProperties) => void;
+  /** Set user profile properties only if not already set */
+  setUserPropertiesOnce: (properties: UserProfileProperties) => void;
   /** Increment a numeric user property */
   incrementUserProperty: (property: string, by?: number) => void;
   /** Register super properties (sent with every event) */
@@ -111,6 +144,7 @@ const disabledPostHogContextValue: PostHogContextType = {
   isReady: true,
   track: () => {},
   setUserProperties: () => {},
+  setUserPropertiesOnce: () => {},
   incrementUserProperty: () => {},
   setSuperProperties: () => {},
   timeEvent: () => {},
@@ -262,6 +296,26 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
     }
   }, [posthog]);
 
+  // Set user profile properties only if not already set ($set_once)
+  const setUserPropertiesOnce = useCallback((properties: UserProfileProperties) => {
+    if (!posthog) return;
+
+    try {
+      const currentUserId = currentIdentifiedUserRef.current;
+      if (currentUserId) {
+        posthog.identify(currentUserId, {
+          $set_once: filterUndefined(properties),
+        });
+      }
+
+      if (__DEV__) {
+        console.log('[PostHog] Set user properties once:', properties);
+      }
+    } catch (error) {
+      console.error('[PostHog] Set user properties once error:', error);
+    }
+  }, [posthog]);
+
   // Increment a numeric user property
   const incrementUserProperty = useCallback((property: string, by: number = 1) => {
     if (!posthog) return;
@@ -404,6 +458,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
         isReady,
         track,
         setUserProperties,
+        setUserPropertiesOnce,
         incrementUserProperty,
         setSuperProperties,
         timeEvent,

@@ -9,12 +9,13 @@ import { TrialLockoutModal } from '@/components/trial-lockout-modal';
 import { TrialStartModal } from '@/components/trial-start-modal';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useSubscription } from '@/context/revenue-cat-context';
 import { useTrialContext } from '@/context/trial-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Keyboard,
@@ -57,6 +58,12 @@ export default function ChatScreen() {
   const [showGuestSignUpModal, setShowGuestSignUpModal] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [showLockoutModal, setShowLockoutModal] = useState(true);
+  const { track } = usePostHogAnalytics();
+
+  const openPaywall = useCallback((trigger: string) => {
+    track('Paywall Trigger', { trigger_reason: trigger });
+    setShowPaywallModal(true);
+  }, [track]);
   const hasAcceptedDisclaimer = useHasAcceptedDisclaimer();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
@@ -161,7 +168,7 @@ export default function ChatScreen() {
             {showTrialIndicator && trialDaysRemaining !== null && (
               <TrialIndicator
                 trialDaysRemaining={trialDaysRemaining}
-                onPress={() => setShowPaywallModal(true)}
+                onPress={() => openPaywall('trial_indicator')}
               />
             )}
           </View>
@@ -244,7 +251,7 @@ export default function ChatScreen() {
 
       <TrialLockoutModal
         visible={shouldUseTrialUI && trialExpired && !isSubscribed && showLockoutModal}
-        onViewPlans={() => setShowPaywallModal(true)}
+        onViewPlans={() => openPaywall('trial_lockout')}
         onMaybeLater={() => setShowLockoutModal(false)}
       />
 

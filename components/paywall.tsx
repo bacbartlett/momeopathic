@@ -213,7 +213,10 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
           price: selectedPackage.product.priceString,
           period: selectedPackage.product.subscriptionPeriod ?? 'lifetime',
         });
-        setUserProperties({ subscription_status: 'premium' });
+        setUserProperties({
+          subscription_status: 'premium',
+          subscription_plan: selectedPackage.product.subscriptionPeriod ?? 'lifetime',
+        });
         // Close modal after successful purchase
         if (onClose) {
           onClose();
@@ -232,10 +235,13 @@ export function Paywall({ isModal = false, onClose, showCloseButton = false }: P
   const handleRestore = async () => {
     setIsRestoring(true);
     setLocalError(null);
+    track('Restore Purchases Tapped');
 
     try {
       const success = await restorePurchases();
-      if (!success) {
+      if (success) {
+        setUserProperties({ subscription_status: 'premium' });
+      } else {
         setLocalError('No active subscription found to restore.');
       }
     } catch {

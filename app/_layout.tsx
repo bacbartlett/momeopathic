@@ -1,8 +1,8 @@
 import { ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
 import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
@@ -124,6 +124,24 @@ function AppOpenedTracker({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Component that tracks screen views when the user navigates.
+ * Must be rendered inside PostHogProviderWrapper and a NavigationContainer.
+ */
+function ScreenTracker({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { track, isReady } = usePostHogAnalytics();
+  const previousPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isReady || !pathname || pathname === previousPathRef.current) return;
+    previousPathRef.current = pathname;
+    track('Screen Viewed', { screen_name: pathname });
+  }, [isReady, pathname, track]);
+
+  return <>{children}</>;
+}
+
+/**
  * Component that initializes the Materia Medica SQLite database.
  * This seeds the database on first launch with all remedy data.
  */
@@ -200,17 +218,18 @@ export default function RootLayout() {
       <ClerkLoaded>
         <SessionManager />
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          <GuestProvider>
           <StoreUserInDatabase>
             <MateriaMedicaInitializer>
               <PostHogProviderWrapper>
                 <PostHogCrashReporter>
                   <PostHogErrorBoundary>
                     <AppOpenedTracker>
+                      <GuestProvider>
                       <RevenueCatProvider>
                         <TrialProvider>
                           <ThemeProvider value={NavigationTheme}>
                             <ChatProvider>
+                              <ScreenTracker>
                               <Stack>
                               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -265,19 +284,20 @@ export default function RootLayout() {
                                 }}
                               />
                               </Stack>
+                              </ScreenTracker>
                               <StatusBar style="dark" />
                               <FeedbackManager />
                             </ChatProvider>
                           </ThemeProvider>
                         </TrialProvider>
                       </RevenueCatProvider>
+                      </GuestProvider>
                     </AppOpenedTracker>
                   </PostHogErrorBoundary>
                 </PostHogCrashReporter>
               </PostHogProviderWrapper>
             </MateriaMedicaInitializer>
           </StoreUserInDatabase>
-          </GuestProvider>
         </ConvexProviderWithClerk>
       </ClerkLoaded>
     </ClerkProvider>

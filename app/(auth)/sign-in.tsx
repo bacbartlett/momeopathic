@@ -89,11 +89,9 @@ export default function SignInScreen() {
         setError('Sign in incomplete. Please try again.');
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred during sign in. Please try again.');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred during sign in. Please try again.';
+      setError(errorMessage);
+      track('Sign In Failed', { method: 'email', error: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -124,11 +122,9 @@ export default function SignInScreen() {
         setError('Verification incomplete. Please try again.');
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Invalid verification code. Please try again.');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'Invalid verification code. Please try again.';
+      setError(errorMessage);
+      track('Sign In Failed', { method: 'email', mfa: true, error: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -258,11 +254,9 @@ export default function SignInScreen() {
         setError('Password reset incomplete. Please try again.');
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to reset password. Please try again.');
-      }
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reset password. Please try again.';
+      setError(errorMessage);
+      track('Password Reset Failed', { method: 'email_code', error: errorMessage });
     } finally {
       setIsLoading(false);
     }

@@ -222,6 +222,7 @@ export default function AccountScreen() {
   // Handle restore purchases
   const handleRestorePurchases = useCallback(async () => {
     setIsRestoring(true);
+    track('Restore Purchases Tapped');
     try {
       const success = await restorePurchases();
       if (success) {
@@ -234,7 +235,7 @@ export default function AccountScreen() {
     } finally {
       setIsRestoring(false);
     }
-  }, [restorePurchases]);
+  }, [restorePurchases, track]);
 
   // Open subscription management in App Store / Play Store
   const handleManageSubscription = useCallback(() => {

@@ -7,6 +7,7 @@ import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants
 import { useRemediesList, type RemedyListItem } from '@/hooks/useMateriaMedica';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -69,6 +70,7 @@ const RemedyItem = React.memo(function RemedyItem({ item, onPress }: RemedyItemP
 
 export default function MateriaMedicaListScreen() {
   const router = useRouter();
+  const { track, incrementUserProperty } = usePostHogAnalytics();
   const {
     remedies,
     searchQuery,
@@ -78,27 +80,52 @@ export default function MateriaMedicaListScreen() {
     handleSearch,
     clearSearch,
   } = useRemediesList();
-  
+
   const [inputValue, setInputValue] = useState('');
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTrackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
+
+  // Track page open
+  useEffect(() => {
+    track('Materia Medica Opened');
+  }, [track]);
 
   // Debounced search
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
-    
+
     searchTimeoutRef.current = setTimeout(() => {
       handleSearch(inputValue);
     }, SEARCH_DEBOUNCE_MS);
-    
+
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
     };
   }, [inputValue, handleSearch]);
+
+  // Track searches (debounced longer to capture final query)
+  useEffect(() => {
+    if (!inputValue.trim()) return;
+    if (searchTrackRef.current) {
+      clearTimeout(searchTrackRef.current);
+    }
+    searchTrackRef.current = setTimeout(() => {
+      track('Remedy Searched', {
+        query: inputValue.trim(),
+        result_count: remedies.length,
+      });
+    }, 1000);
+    return () => {
+      if (searchTrackRef.current) {
+        clearTimeout(searchTrackRef.current);
+      }
+    };
+  }, [inputValue, remedies.length, track]);
 
   const handleClearSearch = useCallback(() => {
     setInputValue('');
@@ -108,12 +135,18 @@ export default function MateriaMedicaListScreen() {
 
   const handleRemedyPress = useCallback((remedy: RemedyListItem) => {
     Keyboard.dismiss();
+    track('Remedy Viewed', {
+      remedy_id: remedy.id,
+      remedy_name: remedy.remedy_name,
+      source: isFiltered ? 'search' : 'browse',
+    });
+    incrementUserProperty('total_remedies_viewed');
     // Using type assertion for route as expo-router types are generated dynamically
     router.push({
       pathname: '/materia-medica/[id]' as '/account',
       params: { id: remedy.id, name: remedy.remedy_name },
     });
-  }, [router]);
+  }, [router, track, incrementUserProperty, isFiltered]);
 
   const renderItem = useCallback(({ item }: { item: RemedyListItem }) => (
     <RemedyItem

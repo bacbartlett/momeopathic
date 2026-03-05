@@ -1,4 +1,5 @@
 import { api } from '@/convex/_generated/api';
+import { usePostHogAnalytics } from '@/context/posthog-context';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { useAction, useConvexAuth, useMutation } from 'convex/react';
@@ -21,6 +22,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const createGuestUser = useMutation(api.users.createGuestUser);
   const claimGuestAccount = useAction(api.users.claimGuestAccount);
+  const { track } = usePostHogAnalytics();
 
   useEffect(() => {
     // Wait for auth to settle
@@ -43,6 +45,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
             await claimGuestAccount({ guestId: existingId });
             await SecureStore.deleteItemAsync(GUEST_ID_KEY);
             setGuestId(null);
+            track('Guest Account Claimed');
           } catch (error) {
             console.error('[GuestProvider] Failed to claim guest account, will retry later:', error);
           }
@@ -83,6 +86,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
         }
 
         setGuestId(newGuestId);
+        track('Guest Session Started');
       } catch (error) {
         console.error('[GuestProvider] Error initializing guest session:', error);
       } finally {
@@ -91,7 +95,7 @@ export function GuestProvider({ children }: { children: ReactNode }) {
     };
 
     initGuest();
-  }, [isAuthLoading, isAuthenticated, createGuestUser, claimGuestAccount]);
+  }, [isAuthLoading, isAuthenticated, createGuestUser, claimGuestAccount, track]);
 
   const clearGuestSession = useCallback(async () => {
     try {

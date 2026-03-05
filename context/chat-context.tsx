@@ -80,7 +80,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [guestLimitReached, setGuestLimitReached] = useState(false);
   const [isGreetingGenerating, setIsGreetingGenerating] = useState(false);
   const [threadInitialized, setThreadInitialized] = useState(false);
-  const { track, incrementUserProperty } = usePostHogAnalytics();
+  const { track, incrementUserProperty, setUserPropertiesOnce } = usePostHogAnalytics();
 
   // Use refs for race condition prevention
   const isSendingRef = useRef(false);
@@ -224,8 +224,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to initialize thread:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to initialize';
+        track('Thread Create Failed', { error: errorMessage, is_guest: isGuest });
         if (mountedRef.current) {
-          setCreateThreadError(error instanceof Error ? error.message : 'Failed to initialize');
+          setCreateThreadError(errorMessage);
         }
       } finally {
         if (mountedRef.current) {
@@ -311,6 +313,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create thread';
       console.error('Failed to create thread:', error);
+      track('Thread Create Failed', { error: errorMessage, is_guest: isGuest });
       if (mountedRef.current) {
         if (errorMessage === 'GUEST_LIMIT_REACHED') {
           setGuestLimitReached(true);
@@ -326,9 +329,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [canQuery, isAuthenticated, isGuest, guestId, isCreatingThread, createThreadAction, track, incrementUserProperty]);
 
   // Select thread
+  const activeThreadIdRef = useRef(activeThreadId);
+  activeThreadIdRef.current = activeThreadId;
   const selectThread = useCallback((threadId: string) => {
+    if (threadId !== activeThreadIdRef.current) {
+      track('Thread Switched', { thread_id: threadId, is_guest: isGuest });
+    }
     setActiveThreadId(threadId);
-  }, []);
+  }, [isGuest, track]);
 
   // Delete thread
   const deleteThread = useCallback(async (threadId: string) => {
@@ -388,6 +396,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           is_guest: isGuest,
         });
         incrementUserProperty('messages_sent');
+        setUserPropertiesOnce({ first_message_date: new Date().toISOString() });
         // Increment feedback thread count for review prompt tracking (only for authenticated users)
         if (isAuthenticated) {
           incrementFeedbackThreadCount().catch((err) => {
@@ -398,6 +407,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
       console.error('Failed to send message:', error);
+      track('Message Send Failed', {
+        thread_id: activeThreadId,
+        error: errorMessage,
+        is_guest: isGuest,
+      });
       if (mountedRef.current) {
         setSendError(errorMessage);
         setLastFailedMessage({
@@ -411,7 +425,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsSending(false);
       }
     }
-  }, [activeThreadId, canQuery, isAuthenticated, isGuest, guestId, sendMessageAction, track, incrementUserProperty, incrementFeedbackThreadCount]);
+  }, [activeThreadId, canQuery, isAuthenticated, isGuest, guestId, sendMessageAction, track, incrementUserProperty, setUserPropertiesOnce, incrementFeedbackThreadCount]);
 
   // Retry last failed message
   const retryLastMessage = useCallback(async () => {
