@@ -198,7 +198,7 @@ export const send = action({
     const todayCount = recentMsgs.page.filter(
       (m: Record<string, any>) => m._creationTime >= todayStart
     ).length;
-    const recentMessages = Math.max(todayCount, 10);
+    const recentMessages = Math.min(Math.max(todayCount, 10), 40);
 
     const result = await homeopathicAgent.generateText(
       ctx,

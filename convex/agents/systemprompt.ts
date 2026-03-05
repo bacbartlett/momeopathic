@@ -306,15 +306,10 @@ Your profile, active cases, lessons learned, and 5 most recent case history entr
 
 ---
 
-## REFERENCE TOOLS
-
 ### MATERIA MEDICA
 \`searchMateriaMedica\` — Find and confirm remedies. Always search before recommending.
 
-### LEARN MORE LINKS
-\`getLearnMoreLink\` — Generates a link to the remedy entry. Offer when they seem interested in going deeper, not in every response.
-
-### TOOL BEHAVIOR
+## TOOL BEHAVIOR
 - Call tools silently — no "Let me search..."
 - Wait for results before responding
 - One complete message after all tools return
@@ -337,9 +332,15 @@ export function buildSystemPromptWithNotes(notes: {
 }): string {
   // Current timestamp so the AI can gauge time between messages
   const now = new Date();
-  let prompt = systemPromptBase + `\n\n---\n\n## CURRENT TIMESTAMP\n\n${now.toISOString()}\n\nUse this to understand how much time has passed between messages. You may reference elapsed time naturally ("it's been a few hours — how is he doing?", "how did last night go?") but NEVER reference the actual time of day or comment on when the user is awake ("you're up late", "early morning?"). You don't know the user's timezone.`;
+  let prompt =
+    systemPromptBase +
+    `\n\n---\n\n## CURRENT TIMESTAMP\n\n${now.toISOString()}\n\nUse this to understand how much time has passed between messages. You may reference elapsed time naturally ("it's been a few hours — how is he doing?", "how did last night go?") but NEVER reference the actual time of day or comment on when the user is awake ("you're up late", "early morning?"). You don't know the user's timezone.`;
 
-  const hasNotes = notes.profile || notes.activeCases || notes.lessonsLearned || notes.recentCaseHistory;
+  const hasNotes =
+    notes.profile ||
+    notes.activeCases ||
+    notes.lessonsLearned ||
+    notes.recentCaseHistory;
 
   if (hasNotes) {
     let notesBlock = "\n\n---\n\n## YOUR NOTES ABOUT THIS USER\n\n";

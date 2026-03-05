@@ -36,7 +36,7 @@ const searchMateriaMedica = createTool({
 
 const getLearnMoreLink = createTool({
   description:
-    "Generate a link to learn more about a remedy. Returns an internal app link to view the remedy in the local Materia Medica. Call this when making a remedy recommendation.",
+    "Generate a link to learn more about a remedy. Returns an internal app link to view the remedy in the local Materia Medica. Only use when the user seems interested in going deeper — not on every recommendation.",
   args: z.object({
     nameOfRemedy: z
       .string()
@@ -247,6 +247,6 @@ export const homeopathicAgent = new Agent(components.agent, {
   languageModel: openrouter.chat("anthropic/claude-sonnet-4.6"),
   // Skills catalog removed - dosing knowledge now in system prompt
   instructions: baseMasterPrompt,
-  maxSteps: 20,
+  maxSteps: 10,
   tools,
 });
