@@ -16,9 +16,13 @@ export const getNotes = internalQuery({
     profile: v.union(v.string(), v.null()),
     activeCases: v.union(v.string(), v.null()),
     lessonsLearned: v.union(v.array(v.string()), v.null()),
+    recentCaseHistory: v.union(
+      v.array(v.object({ entry: v.string(), createdAt: v.number() })),
+      v.null(),
+    ),
   }),
   handler: async (ctx, args) => {
-    const [profile, activeCases, lessons] = await Promise.all([
+    const [profile, activeCases, lessons, recentCases] = await Promise.all([
       ctx.db
         .query("userProfiles")
         .withIndex("by_userId", (q) => q.eq("userId", args.userId))
@@ -31,12 +35,21 @@ export const getNotes = internalQuery({
         .query("lessonsLearned")
         .withIndex("by_userId", (q) => q.eq("userId", args.userId))
         .collect(),
+      ctx.db
+        .query("caseHistory")
+        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+        .order("desc")
+        .take(5),
     ]);
 
     return {
       profile: profile?.content ?? null,
       activeCases: activeCases?.content ?? null,
       lessonsLearned: lessons.length > 0 ? lessons.map((l) => l.lesson) : null,
+      recentCaseHistory:
+        recentCases.length > 0
+          ? recentCases.map((r) => ({ entry: r.entry, createdAt: r.createdAt }))
+          : null,
     };
   },
 });

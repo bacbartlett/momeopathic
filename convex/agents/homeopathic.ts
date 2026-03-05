@@ -76,70 +76,11 @@ const getLearnMoreLink = createTool({
 // ============================================
 
 /**
- * Get all essential notes at conversation start.
- */
-const getNotes = createTool({
-  description:
-    "Retrieve all essential notes about this user. CALL THIS AT THE START OF EVERY CONVERSATION. Returns their profile (family info, preferences), active cases (current issues), and lessons learned (what works for them).",
-  args: z.object({}),
-  handler: async (ctx): Promise<string> => {
-    const userId = ctx.userId;
-    if (!userId) {
-      return "No user context available.";
-    }
-
-    const notes = await ctx.runQuery(internal.notes.getNotes, { userId });
-
-    if (!notes.profile && !notes.activeCases && !notes.lessonsLearned) {
-      return "No notes saved for this user yet. This appears to be a new user.";
-    }
-
-    let result = "";
-
-    if (notes.profile) {
-      result += `## Profile\n${notes.profile}\n\n`;
-    }
-
-    if (notes.activeCases) {
-      result += `## Active Cases\n${notes.activeCases}\n\n`;
-    }
-
-    if (notes.lessonsLearned && notes.lessonsLearned.length > 0) {
-      result += `## Lessons Learned\n${notes.lessonsLearned.map((l: string) => `- ${l}`).join("\n")}\n`;
-    }
-
-    return result || "No notes saved for this user yet.";
-  },
-});
-
-/**
- * Get only the user's profile.
- */
-const getProfile = createTool({
-  description:
-    "Retrieve the user's profile only (family info, preferences). Use this when you need to check names, ages, or preferences without fetching active cases or lessons.",
-  args: z.object({}),
-  handler: async (ctx): Promise<string> => {
-    const userId = ctx.userId;
-    if (!userId) {
-      return "No user context available.";
-    }
-
-    const notes = await ctx.runQuery(internal.notes.getNotes, { userId });
-    if (!notes.profile) {
-      return "No profile saved for this user yet.";
-    }
-
-    return notes.profile;
-  },
-});
-
-/**
- * Get case history for pattern matching.
+ * Get full case history for pattern matching (beyond the 5 most recent pre-loaded in the system prompt).
  */
 const getCaseHistory = createTool({
   description:
-    "Retrieve past case history for this user. Use this when looking for patterns, checking what remedies have worked before, or making recommendations based on history. Returns cases with most recent first.",
+    "Retrieve the full case history for this user. The 5 most recent cases are already in your notes above — use this only when you need older history for deeper pattern matching. Returns cases with most recent first.",
   args: z.object({
     limit: z
       .number()
@@ -175,12 +116,12 @@ const getCaseHistory = createTool({
  */
 const saveProfile = createTool({
   description:
-    "Save or update the user's profile. Use this to remember family details (names, ages), chronic conditions, preferences (pellets vs water, where they buy remedies), and experience level. Overwrites the existing profile.",
+    "Save or update the user's profile. Use this to remember personal details (names, ages, who they're caring for), chronic conditions, preferences (pellets vs water, where they buy remedies), and experience level. Overwrites the existing profile.",
   args: z.object({
     content: z
       .string()
       .describe(
-        "The complete profile content. Include: children's names and ages, chronic conditions, preferences, experience level with homeopathy.",
+        "The complete profile content. Include: names and ages of people they care for, chronic conditions, preferences, experience level with homeopathy.",
       ),
   }),
   handler: async (ctx, args): Promise<string> => {
@@ -259,7 +200,7 @@ const appendCaseHistory = createTool({
  */
 const saveLesson = createTool({
   description:
-    "Save a lesson learned about this family. Use this when you discover a pattern: a remedy that works particularly well for someone, a sensitivity to note, or an insight worth remembering. Lessons accumulate over time.",
+    "Save a lesson learned about this user. Use this when you discover a pattern: a remedy that works particularly well for someone, a sensitivity to note, or an insight worth remembering. Lessons accumulate over time.",
   args: z.object({
     lesson: z
       .string()
@@ -292,9 +233,7 @@ const tools = {
   getLearnMoreLink,
   // Skills - commented out, dosing now in system prompt
   // loadSkill,
-  // Notes - Reading
-  getNotes,
-  getProfile,
+  // Notes - Reading (profile, active cases, lessons, and last 5 cases are pre-loaded in the system prompt)
   getCaseHistory,
   // Notes - Writing
   saveProfile,
