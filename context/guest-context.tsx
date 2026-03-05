@@ -11,6 +11,8 @@ interface GuestContextType {
   guestId: string | null;
   isGuest: boolean;
   isGuestLoading: boolean;
+  /** True when an authenticated user has a pending guest claim (guest→auth transition). */
+  isClaimInProgress: boolean;
   clearGuestSession: () => Promise<void>;
 }
 
@@ -47,7 +49,10 @@ export function GuestProvider({ children }: { children: ReactNode }) {
             setGuestId(null);
             track('Guest Account Claimed');
           } catch (error) {
-            console.error('[GuestProvider] Failed to claim guest account, will retry later:', error);
+            console.error('[GuestProvider] Failed to claim guest account, will retry on next app open:', error);
+            // Clear guestId from memory so the app can proceed as a fresh authenticated user.
+            // SecureStore still has the key, so the claim retries on next app open.
+            setGuestId(null);
           }
         } catch (error) {
           console.error('[GuestProvider] Error recovering guest session:', error);
@@ -108,12 +113,19 @@ export function GuestProvider({ children }: { children: ReactNode }) {
 
   const isGuest = !isAuthenticated && guestId !== null;
 
+  // Computed synchronously: true when authenticated but guestId still set (claim pending).
+  // This is NOT a state variable — it derives from existing state in the SAME render,
+  // so it's immediately true when auth flips, unlike setState which is async.
+  // It becomes false when setGuestId(null) is called after claim completes (or fails).
+  const isClaimInProgress = isAuthenticated && guestId !== null;
+
   return (
     <GuestContext.Provider
       value={{
         guestId,
         isGuest,
         isGuestLoading,
+        isClaimInProgress,
         clearGuestSession,
       }}
     >

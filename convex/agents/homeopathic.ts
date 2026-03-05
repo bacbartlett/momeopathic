@@ -22,7 +22,9 @@ const openrouter = createOpenAI({
 const searchMateriaMedica = createTool({
   description: `Search the Materia Medica for remedies matching symptoms, conditions, or remedy names. Use this to find and confirm remedy recommendations.`,
   args: z.object({
-    query: z.string().describe("The symptom picture, condition, or remedy name to search for"),
+    query: z
+      .string()
+      .describe("The symptom picture, condition, or remedy name to search for"),
   }),
   handler: async (ctx, args): Promise<SearchRAGTextResult> => {
     return await ctx.runAction(api.rag.searchRAGText, {
@@ -36,7 +38,9 @@ const getLearnMoreLink = createTool({
   description:
     "Generate a link to learn more about a remedy. Returns an internal app link to view the remedy in the local Materia Medica. Call this when making a remedy recommendation.",
   args: z.object({
-    nameOfRemedy: z.string().describe("The name of the homeopathic remedy to link to"),
+    nameOfRemedy: z
+      .string()
+      .describe("The name of the homeopathic remedy to link to"),
   }),
   handler: async (__, args): Promise<string> => {
     const normalizedName = args.nameOfRemedy.toUpperCase().trim();
@@ -173,9 +177,11 @@ const saveProfile = createTool({
   description:
     "Save or update the user's profile. Use this to remember family details (names, ages), chronic conditions, preferences (pellets vs water, where they buy remedies), and experience level. Overwrites the existing profile.",
   args: z.object({
-    content: z.string().describe(
-      "The complete profile content. Include: children's names and ages, chronic conditions, preferences, experience level with homeopathy."
-    ),
+    content: z
+      .string()
+      .describe(
+        "The complete profile content. Include: children's names and ages, chronic conditions, preferences, experience level with homeopathy.",
+      ),
   }),
   handler: async (ctx, args): Promise<string> => {
     const userId = ctx.userId;
@@ -199,9 +205,11 @@ const saveActiveCases = createTool({
   description:
     "Save or update active cases. Use this to track current issues being worked on, including: who has what, last remedy given, when, and what follow-up is needed. Overwrites existing active cases.",
   args: z.object({
-    content: z.string().describe(
-      "The current active cases. Format: 'Name (age) - issue, remedy given, date, follow-up needed'. Include all active cases, or write 'No active cases' if resolved."
-    ),
+    content: z
+      .string()
+      .describe(
+        "The current active cases. Format: 'Name (age) - issue, remedy given, date, follow-up needed'. Include all active cases, or write 'No active cases' if resolved.",
+      ),
   }),
   handler: async (ctx, args): Promise<string> => {
     const userId = ctx.userId;
@@ -225,9 +233,11 @@ const appendCaseHistory = createTool({
   description:
     "Log a case to history. Call this when a case resolves or reaches a meaningful conclusion. This is an append-only log — entries are never overwritten. Include: who, what issue, what remedy, outcome.",
   args: z.object({
-    entry: z.string().describe(
-      "The case entry to log. Format: 'Name - issue - remedy - outcome'. Example: 'Timmy - fever - Belladonna 30C - resolved after 2 doses'"
-    ),
+    entry: z
+      .string()
+      .describe(
+        "The case entry to log. Format: 'Name - issue - remedy - outcome'. Example: 'Timmy - fever - Belladonna 30C - resolved after 2 doses'",
+      ),
   }),
   handler: async (ctx, args): Promise<string> => {
     const userId = ctx.userId;
@@ -251,9 +261,11 @@ const saveLesson = createTool({
   description:
     "Save a lesson learned about this family. Use this when you discover a pattern: a remedy that works particularly well for someone, a sensitivity to note, or an insight worth remembering. Lessons accumulate over time.",
   args: z.object({
-    lesson: z.string().describe(
-      "The lesson to remember. Example: 'Timmy responds better to Pulsatilla than Chamomilla for teething' or 'Mom prefers water dosing for the baby'"
-    ),
+    lesson: z
+      .string()
+      .describe(
+        "The lesson to remember. Example: 'Timmy responds better to Pulsatilla than Chamomilla for teething' or 'Mom prefers water dosing for the baby'",
+      ),
   }),
   handler: async (ctx, args): Promise<string> => {
     const userId = ctx.userId;
@@ -293,7 +305,7 @@ const tools = {
 
 export const homeopathicAgent = new Agent(components.agent, {
   name: "Homeopathic Assistant",
-  languageModel: openrouter.chat("anthropic/claude-sonnet-4.5"),
+  languageModel: openrouter.chat("anthropic/claude-sonnet-4.6"),
   // Skills catalog removed - dosing knowledge now in system prompt
   instructions: baseMasterPrompt,
   maxSteps: 20,

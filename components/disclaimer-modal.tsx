@@ -292,11 +292,16 @@ export function useHasAcceptedDisclaimer() {
     return localAccepted;
   }
 
-  // For authenticated users, database is source of truth
+  // For authenticated users, database is source of truth — but also trust
+  // local acceptance. During guest→auth transitions the DB may temporarily
+  // return false (user record doesn't exist yet or hasn't been upgraded).
+  // If the user already accepted as a guest (stored in AsyncStorage), honor
+  // that to prevent the onboarding from flashing during the transition.
+  if (dbAccepted === true || localAccepted === true) {
+    return true;
+  }
+
   if (dbAccepted !== undefined) {
-    if (dbAccepted === true) {
-      return true;
-    }
     return false;
   }
 

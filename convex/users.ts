@@ -375,6 +375,53 @@ export const deleteUser = internalMutation({
 });
 
 /**
+ * Merge important fields from a guest record into an authenticated user record.
+ * Called during the merge path of claimGuestAccount when the guest record will be deleted.
+ * Only copies fields that the target user doesn't already have set.
+ */
+export const mergeGuestFieldsIntoUser = internalMutation({
+  args: {
+    targetUserId: v.id("users"),
+    disclaimerAccepted: v.optional(v.boolean()),
+    lastActivityAt: v.optional(v.number()),
+    timezone: v.optional(v.string()),
+    firstAppOpen: v.optional(v.number()),
+    trialStarted: v.optional(v.number()),
+    trialEndDate: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const target = await ctx.db.get(args.targetUserId);
+    if (!target) return null;
+
+    const patch: Record<string, unknown> = {};
+    if (args.disclaimerAccepted && !target.disclaimerAccepted) {
+      patch.disclaimerAccepted = args.disclaimerAccepted;
+    }
+    if (args.lastActivityAt && !target.lastActivityAt) {
+      patch.lastActivityAt = args.lastActivityAt;
+    }
+    if (args.timezone && !target.timezone) {
+      patch.timezone = args.timezone;
+    }
+    if (args.firstAppOpen && !target.firstAppOpen) {
+      patch.firstAppOpen = args.firstAppOpen;
+    }
+    if (args.trialStarted && !target.trialStarted) {
+      patch.trialStarted = args.trialStarted;
+    }
+    if (args.trialEndDate && !target.trialEndDate) {
+      patch.trialEndDate = args.trialEndDate;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.targetUserId, patch);
+    }
+    return null;
+  },
+});
+
+/**
  * Claim a guest account after signing in/up with Clerk.
  * Requires Clerk auth. Handles both happy path (upgrade in-place) and edge case (migrate threads).
  */
@@ -448,6 +495,17 @@ export const claimGuestAccount = action({
           patch: { userId: existingClerkUser._id },
         });
       }
+
+      // Preserve important fields from guest record before deleting it
+      await ctx.runMutation(internal.users.mergeGuestFieldsIntoUser, {
+        targetUserId: existingClerkUser._id,
+        disclaimerAccepted: guestUser.disclaimerAccepted,
+        lastActivityAt: guestUser.lastActivityAt,
+        timezone: guestUser.timezone,
+        firstAppOpen: guestUser.firstAppOpen,
+        trialStarted: guestUser.trialStarted,
+        trialEndDate: guestUser.trialEndDate,
+      });
 
       // Delete the guest record
       await ctx.runMutation(internal.users.deleteUser, {

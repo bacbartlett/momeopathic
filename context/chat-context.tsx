@@ -98,7 +98,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
   // Get guest state
-  const { guestId, isGuest, isGuestLoading } = useGuest();
+  const { guestId, isGuest, isGuestLoading, isClaimInProgress } = useGuest();
 
   // Determine if we can make queries
   const canQuery = isAuthenticated || isGuest;
@@ -182,8 +182,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     activeThreadId,
   }), [threads, activeThreadId, activeThreadMessages]);
 
-  // Loading state - include auth loading and guest loading
-  const isLoading = isAuthLoading || isGuestLoading || (canQuery && threadsResult === undefined);
+  // Loading state - include auth loading, guest loading, and guest→auth claim
+  const isLoading = isAuthLoading || isGuestLoading || isClaimInProgress || (canQuery && threadsResult === undefined);
 
   // Messages loading state
   const isMessagesLoading = Boolean(activeThreadId && canQuery && messagesResult === undefined);
