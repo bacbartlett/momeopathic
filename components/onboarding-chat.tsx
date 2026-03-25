@@ -1,5 +1,4 @@
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,7 +65,7 @@ function TypingIndicator() {
 
 // The onboarding messages Rosemary will send
 const ONBOARDING_MESSAGES = [
-  "Hi, I'm Rosemary! 🌿 I'm here to help you explore homeopathic remedies from Boericke's Materia Medica.",
+  "Hi, I'm Rosemary! 🌿 Welcome to the Momeopath's Insider Circle Acute Care App. I'm here to help you explore homeopathic remedies from Boericke's Materia Medica.",
   "Think of me as a study partner — I can help you learn about remedies, but I'm not a doctor.",
   "I'm an AI, so I can get things wrong sometimes. For anything serious, always talk to a real healthcare provider.",
   "You'll need to be 18+ to use this app (or have a parent's okay).",
@@ -96,9 +95,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const { isAuthenticated } = useConvexAuth();
-  const { guestId, isGuest } = useGuest();
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
-  const acceptDisclaimerAsGuest = useMutation(api.users.acceptDisclaimerAsGuest);
   const router = useRouter();
   const { track } = usePostHogAnalytics();
 
@@ -107,8 +104,8 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
 
   // Track onboarding start
   useEffect(() => {
-    track('Onboarding Started', { is_guest: isGuest });
-  }, [track, isGuest]);
+    track('Onboarding Started');
+  }, [track]);
 
   // Stream messages in one at a time
   useEffect(() => {
@@ -188,15 +185,13 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       try {
         if (isAuthenticated) {
           await acceptDisclaimer();
-        } else if (isGuest && guestId) {
-          await acceptDisclaimerAsGuest({ guestId });
         }
       } catch (dbError) {
         console.error('Failed to save disclaimer to database:', dbError);
       }
 
       track('Disclaimer Accepted', { method: 'onboarding_chat' });
-      track('Onboarding Completed', { is_guest: isGuest });
+      track('Onboarding Completed');
 
       // Brief pause to show the agree message, then transition
       setTimeout(() => {
@@ -206,7 +201,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       console.error('Failed to save disclaimer agreement:', error);
       onComplete();
     }
-  }, [isAuthenticated, isGuest, guestId, acceptDisclaimer, acceptDisclaimerAsGuest, track, onComplete]);
+  }, [isAuthenticated, acceptDisclaimer, track, onComplete]);
 
   const renderMessage = useCallback(({ item }: { item: OnboardingMessage }) => {
     if (item.role === 'user') {

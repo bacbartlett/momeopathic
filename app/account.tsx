@@ -1,24 +1,17 @@
 import { DisclaimerModal } from '@/components/disclaimer-modal';
-import { PaywallModal } from '@/components/paywall-modal';
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useChat } from '@/context/chat-context';
-import { useGuest } from '@/context/guest-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { useRevenueCat } from '@/context/revenue-cat-context';
-import { useClerk, useUser } from '@clerk/clerk-expo';
+import { api } from '@/convex/_generated/api';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useMutation, useQuery } from 'convex/react';
 import { Ionicons } from '@expo/vector-icons';
-// import { useAction, useMutation, useQuery } from 'convex/react'; // debug only
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-// import AsyncStorage from '@react-native-async-storage/async-storage'; // debug only
-// import { clearDeviceFingerprint } from '@/lib/device-fingerprint'; // debug only
-// import { api } from '../convex/_generated/api'; // debug only
 import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
-    Linking,
     Platform,
     ScrollView,
     StyleSheet,
@@ -29,88 +22,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed'; // debug only
-
 export default function AccountScreen() {
   const router = useRouter();
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const user = useQuery(api.users.current);
+  const updateProfile = useMutation(api.users.updateProfile);
+  const { signOut } = useAuthActions();
   const { track } = usePostHogAnalytics();
-  const { isSubscribed, customerInfo, restorePurchases, isLoading: isSubscriptionLoading } = useRevenueCat();
 
   const [isEditing, setIsEditing] = useState(false);
-  const [firstName, setFirstName] = useState(user?.firstName || '');
-  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
-  const [showPaywallModal, setShowPaywallModal] = useState(false);
-
-  // Debug state — commented out for production (endpoints are now internal-only)
-  // const [debugTesting, setDebugTesting] = useState<string | null>(null);
-  const { guestId } = useGuest();
-  const { activeThread } = useChat();
-  // const testGreetingTier = useAction(api.debug.testGreetingTier);
-  // const insertDebugMessage = useAction(api.debug.insertDebugMessage);
-  // const simulateTrialLockout = useMutation(api.trial.debugSimulateLockout);
-  // const resetTrialForTesting = useAction(api.trial.debugResetTrial);
-  // const greetingState = useQuery(api.debug.checkGreetingState, { guestId: guestId ?? undefined });
-  // const rawMessages = useQuery(
-  //   api.debug.listRawMessagesForThread,
-  //   activeThread?.id ? { threadId: activeThread.id, guestId: guestId ?? undefined } : "skip"
-  // );
-
-  // const handleTestGreeting = async (tier: "30min" | "4hour" | "1week") => {
-  //   setDebugTesting(tier);
-  //   try {
-  //     const result = await testGreetingTier({ tier, guestId: guestId ?? undefined });
-  //     Alert.alert("Debug", result.message);
-  //   } catch (error) {
-  //     Alert.alert("Error", String(error));
-  //   } finally {
-  //     setDebugTesting(null);
-  //   }
-  // };
-
-  // const handleInsertDebugMessage = async () => {
-  //   if (!activeThread?.id) {
-  //     Alert.alert("Debug", "No active thread found.");
-  //     return;
-  //   }
-  //   try {
-  //     const result = await insertDebugMessage({
-  //       threadId: activeThread.id,
-  //       guestId: guestId ?? undefined,
-  //     });
-  //     Alert.alert("Debug", result.message);
-  //   } catch (error) {
-  //     Alert.alert("Error", String(error));
-  //   }
-  // };
-
-  // const handleSimulateTrialLockout = async () => {
-  //   try {
-  //     await simulateTrialLockout({});
-  //     Alert.alert('Debug', 'Trial lockout simulated. Return to chat to verify lockout behavior.');
-  //   } catch (error) {
-  //     Alert.alert('Error', String(error));
-  //   }
-  // };
-
-  // const handleResetTrial = async () => {
-  //   try {
-  //     await clearDeviceFingerprint();
-  //     await AsyncStorage.removeItem(DISCLAIMER_AGREED_KEY);
-  //     await resetTrialForTesting({});
-  //     Alert.alert(
-  //       'Debug',
-  //       'Trial + onboarding cache reset. Fully close and reopen the app to test first-open flow.',
-  //     );
-  //   } catch (error) {
-  //     Alert.alert('Error', String(error));
-  //   }
-  // };
 
   // Track page view
   useEffect(() => {
@@ -120,8 +44,9 @@ export default function AccountScreen() {
   // Reset form when user data changes
   useEffect(() => {
     if (user) {
-      setFirstName(user.firstName || '');
-      setLastName(user.lastName || '');
+      const nameParts = (user.name || '').split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
     }
   }, [user]);
 
@@ -130,7 +55,7 @@ export default function AccountScreen() {
 
     setIsSaving(true);
     try {
-      await user.update({
+      await updateProfile({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
       });
@@ -145,11 +70,14 @@ export default function AccountScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [user, firstName, lastName]);
+  }, [user, firstName, lastName, updateProfile]);
 
   const handleCancel = useCallback(() => {
-    setFirstName(user?.firstName || '');
-    setLastName(user?.lastName || '');
+    if (user) {
+      const nameParts = (user.name || '').split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
+    }
     setIsEditing(false);
   }, [user]);
 
@@ -179,19 +107,20 @@ export default function AccountScreen() {
   }, [signOut, router, track]);
 
   const getInitials = useCallback(() => {
-    const first = user?.firstName || '';
-    const last = user?.lastName || '';
+    const nameParts = (user?.name || '').split(' ');
+    const first = nameParts[0] || '';
+    const last = nameParts.slice(1).join(' ') || '';
     if (first && last) {
       return `${first[0]}${last[0]}`.toUpperCase();
     }
     if (first) {
       return first.slice(0, 2).toUpperCase();
     }
-    const email = user?.primaryEmailAddress?.emailAddress || '';
+    const email = user?.email || '';
     return email.slice(0, 2).toUpperCase();
   }, [user]);
 
-  const formatDate = useCallback((date: Date | null | undefined) => {
+  const formatDate = useCallback((date: number | null | undefined) => {
     if (!date) return 'Unknown';
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -200,58 +129,7 @@ export default function AccountScreen() {
     });
   }, []);
 
-  // Get subscription expiration date from customer info
-  const getSubscriptionExpirationDate = useCallback(() => {
-    if (!customerInfo) return null;
-    
-    // Get the first active entitlement's expiration date
-    const activeEntitlements = Object.values(customerInfo.entitlements.active);
-    if (activeEntitlements.length > 0) {
-      const expDate = activeEntitlements[0].expirationDate;
-      if (expDate) {
-        return new Date(expDate).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        });
-      }
-    }
-    return null;
-  }, [customerInfo]);
-
-  // Handle restore purchases
-  const handleRestorePurchases = useCallback(async () => {
-    setIsRestoring(true);
-    track('Restore Purchases Tapped');
-    try {
-      const success = await restorePurchases();
-      if (success) {
-        Alert.alert('Success', 'Your subscription has been restored!');
-      } else {
-        Alert.alert('No Subscription Found', 'We couldn\'t find an active subscription to restore.');
-      }
-    } catch {
-      Alert.alert('Error', 'Failed to restore purchases. Please try again.');
-    } finally {
-      setIsRestoring(false);
-    }
-  }, [restorePurchases, track]);
-
-  // Open subscription management in App Store / Play Store
-  const handleManageSubscription = useCallback(() => {
-    const url = Platform.select({
-      ios: 'https://apps.apple.com/account/subscriptions',
-      android: 'https://play.google.com/store/account/subscriptions',
-    });
-    
-    if (url) {
-      Linking.openURL(url).catch(() => {
-        Alert.alert('Error', 'Could not open subscription management. Please manage your subscription in the App Store or Google Play.');
-      });
-    }
-  }, []);
-
-  if (!isLoaded) {
+  if (user === undefined) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -261,7 +139,7 @@ export default function AccountScreen() {
     );
   }
 
-  if (!user) {
+  if (user === null) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -270,6 +148,10 @@ export default function AccountScreen() {
       </SafeAreaView>
     );
   }
+
+  const nameParts = (user.name || '').split(' ');
+  const displayFirstName = nameParts[0] || '';
+  const displayLastName = nameParts.slice(1).join(' ') || '';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -321,10 +203,10 @@ export default function AccountScreen() {
             {!isEditing && (
               <View style={styles.nameDisplay}>
                 <Text style={styles.displayName}>
-                  {user.fullName || user.firstName || 'User'}
+                  {user.name || 'User'}
                 </Text>
                 <Text style={styles.displayEmail}>
-                  {user.primaryEmailAddress?.emailAddress}
+                  {user.email}
                 </Text>
               </View>
             )}
@@ -408,12 +290,12 @@ export default function AccountScreen() {
               <View style={styles.infoList}>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>First Name</Text>
-                  <Text style={styles.infoValue}>{user.firstName || '—'}</Text>
+                  <Text style={styles.infoValue}>{displayFirstName || '—'}</Text>
                 </View>
                 <View style={styles.divider} />
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Last Name</Text>
-                  <Text style={styles.infoValue}>{user.lastName || '—'}</Text>
+                  <Text style={styles.infoValue}>{displayLastName || '—'}</Text>
                 </View>
               </View>
             )}
@@ -432,115 +314,16 @@ export default function AccountScreen() {
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Email</Text>
                 <Text style={styles.infoValue}>
-                  {user.primaryEmailAddress?.emailAddress || '—'}
+                  {user.email || '—'}
                 </Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Member Since</Text>
-                <Text style={styles.infoValue}>{formatDate(user.createdAt)}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Last Sign In</Text>
-                <Text style={styles.infoValue}>{formatDate(user.lastSignInAt)}</Text>
+                <Text style={styles.infoValue}>{formatDate(user._creationTime)}</Text>
               </View>
             </View>
           </View>
-
-          {/* Subscription Card */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleRow}>
-                <Ionicons name="diamond-outline" size={20} color={Colors.primary} />
-                <Text style={styles.cardTitle}>Subscription</Text>
-              </View>
-            </View>
-
-            <View style={styles.infoList}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Status</Text>
-                <View style={styles.securityStatus}>
-                  {isSubscriptionLoading ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
-                  ) : isSubscribed ? (
-                    <>
-                      <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                      <Text style={[styles.statusText, styles.securityEnabled]}>Active</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
-                      <Text style={[styles.statusText, styles.securityDisabled]}>Inactive</Text>
-                    </>
-                  )}
-                </View>
-              </View>
-              
-              {isSubscribed && getSubscriptionExpirationDate() && (
-                <>
-                  <View style={styles.divider} />
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Renews</Text>
-                    <Text style={styles.infoValue}>{getSubscriptionExpirationDate()}</Text>
-                  </View>
-                </>
-              )}
-              
-              <View style={styles.divider} />
-              
-              {isSubscribed && (
-                <>
-                  <TouchableOpacity
-                    style={styles.infoRow}
-                    onPress={handleManageSubscription}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.infoRowContent}>
-                      <Ionicons name="settings-outline" size={18} color={Colors.primary} />
-                      <Text style={styles.infoLabel}>Manage Subscription</Text>
-                    </View>
-                    <Ionicons name="open-outline" size={20} color={Colors.textMuted} />
-                  </TouchableOpacity>
-                  <View style={styles.divider} />
-                </>
-              )}
-              <TouchableOpacity
-                style={styles.infoRow}
-                onPress={() => {
-                  track(isSubscribed ? 'Update Subscription Clicked' : 'Choose Plan Clicked');
-                  setShowPaywallModal(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.infoRowContent}>
-                  <Ionicons name={isSubscribed ? 'swap-horizontal-outline' : 'diamond-outline'} size={18} color={Colors.primary} />
-                  <Text style={styles.infoLabel}>{isSubscribed ? 'Update Subscription' : 'Choose a Plan'}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-              </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.infoRow}
-                onPress={handleRestorePurchases}
-                activeOpacity={0.7}
-                disabled={isRestoring}
-              >
-                <View style={styles.infoRowContent}>
-                  <Ionicons name="refresh-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.infoLabel}>Restore Purchases</Text>
-                </View>
-                {isRestoring ? (
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                ) : (
-                  <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-    
-          
 
           {/* Legal & Terms Card */}
           <View style={styles.card}>
@@ -587,18 +370,6 @@ export default function AccountScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
               </TouchableOpacity>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.infoRow}
-                onPress={() => router.push('/revenuecat-logs')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.infoRowContent}>
-                  <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.infoLabel}>Revenue Cat Logs</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -629,110 +400,20 @@ export default function AccountScreen() {
             <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
           </TouchableOpacity>
 
-          {/* Debug Section - commented out for production
-          <View style={styles.debugSection}>
-            <Text style={styles.debugSectionTitle}>🐛 Debug (Remove before build)</Text>
-
-            <View style={styles.debugInfo}>
-              <Text style={styles.debugText}>Thread ID: {activeThread?.id ?? 'none'}</Text>
-              <Text style={styles.debugText}>Messages in thread: {activeThread?.messages?.length ?? 0}</Text>
-              <Text style={styles.debugText}>Raw messages (backend): {rawMessages?.count ?? 'loading...'}</Text>
-              <Text style={styles.debugText}>Messages loaded: {(activeThread?.messages?.length ?? 0) > 1 ? 'YES' : 'NO'}</Text>
-            </View>
-
-            {rawMessages?.messages && rawMessages.messages.length > 0 && (
-              <View style={styles.debugInfo}>
-                <Text style={styles.debugSubtitle}>Raw Messages:</Text>
-                {rawMessages.messages.slice(0, 3).map((msg: any, i: number) => (
-                  <Text key={i} style={styles.debugText}>
-                    {i + 1}. {msg.role}: {msg.text || msg.contentPreview || '(no text)'}
-                  </Text>
-                ))}
-              </View>
-            )}
-
-            {greetingState && !('error' in greetingState) && (
-              <View style={styles.debugInfo}>
-                <Text style={styles.debugSubtitle}>Greeting State:</Text>
-                <Text style={styles.debugText}>Tier: {greetingState.tier}</Text>
-                <Text style={styles.debugText}>Gap: {greetingState.gapMinutes} minutes</Text>
-                <Text style={styles.debugText}>Cached: {greetingState.cachedGreetings?.length ?? 0}</Text>
-              </View>
-            )}
-
-            <Text style={styles.debugSubtitle}>Simulate Inactivity:</Text>
-            <View style={styles.debugButtonRow}>
-              <TouchableOpacity
-                style={[styles.debugButton, debugTesting === '30min' && styles.debugButtonActive]}
-                onPress={() => handleTestGreeting('30min')}
-                disabled={!!debugTesting}
-              >
-                <Text style={styles.debugButtonText}>30 min</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.debugButton, debugTesting === '4hour' && styles.debugButtonActive]}
-                onPress={() => handleTestGreeting('4hour')}
-                disabled={!!debugTesting}
-              >
-                <Text style={styles.debugButtonText}>4 hour</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.debugButton, debugTesting === '1week' && styles.debugButtonActive]}
-                onPress={() => handleTestGreeting('1week')}
-                disabled={!!debugTesting}
-              >
-                <Text style={styles.debugButtonText}>1 week</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.debugHint}>After pressing, close and reopen the app to see the greeting.</Text>
-
-            <View style={styles.debugButtonRow}>
-              <TouchableOpacity
-                style={styles.debugButton}
-                onPress={handleInsertDebugMessage}
-              >
-                <Text style={styles.debugButtonText}>Add Debug Message</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.debugSubtitle}>Trial Testing:</Text>
-            <View style={styles.debugButtonRow}>
-              <TouchableOpacity
-                style={styles.debugButton}
-                onPress={handleSimulateTrialLockout}
-              >
-                <Text style={styles.debugButtonText}>Simulate Trial Lockout</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.debugButtonRow}>
-              <TouchableOpacity
-                style={styles.debugButton}
-                onPress={handleResetTrial}
-              >
-                <Text style={styles.debugButtonText}>Reset Trial (Testing)</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          */}
-
           {/* Footer */}
           <View style={styles.footer}>
             <View style={styles.footerContent}>
               <Ionicons name="leaf" size={16} color={Colors.primaryLight} />
-              <Text style={styles.footerText}>My Materia</Text>
+              <Text style={styles.footerText}>Acute Care App</Text>
             </View>
             <Text style={styles.versionText}>Version 1.0.0</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <DisclaimerModal 
-        visible={showDisclaimer} 
-        onAgree={() => setShowDisclaimer(false)} 
+      <DisclaimerModal
+        visible={showDisclaimer}
+        onAgree={() => setShowDisclaimer(false)}
         allowDismiss={true}
-      />
-      <PaywallModal
-        visible={showPaywallModal}
-        onClose={() => setShowPaywallModal(false)}
       />
     </SafeAreaView>
   );
@@ -983,22 +664,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.borderLight,
     marginHorizontal: Spacing.md,
   },
-  securityStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  statusText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    fontWeight: '500',
-  },
-  securityEnabled: {
-    color: Colors.success,
-  },
-  securityDisabled: {
-    color: Colors.textMuted,
-  },
   infoRowContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1063,69 +728,5 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.xs,
     color: Colors.textMuted,
-  },
-  // Debug styles - REMOVE BEFORE PRODUCTION
-  debugSection: {
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.xl,
-    padding: Spacing.md,
-    backgroundColor: '#FFF3CD',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#FFECB5',
-  },
-  debugSectionTitle: {
-    fontFamily: Fonts?.heading ?? 'System',
-    fontSize: Typography.base,
-    fontWeight: '700',
-    color: '#856404',
-    marginBottom: Spacing.sm,
-  },
-  debugSubtitle: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    fontWeight: '600',
-    color: '#856404',
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  debugInfo: {
-    backgroundColor: '#FFFFFF50',
-    padding: Spacing.sm,
-    borderRadius: Radius.sm,
-    marginBottom: Spacing.sm,
-  },
-  debugText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: '#856404',
-  },
-  debugButtonRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  debugButton: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: '#856404',
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-  },
-  debugButtonActive: {
-    opacity: 0.6,
-  },
-  debugButtonText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  debugHint: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.xs,
-    color: '#856404',
-    marginTop: Spacing.sm,
-    fontStyle: 'italic',
   },
 });

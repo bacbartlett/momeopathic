@@ -1,6 +1,8 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { useSignIn, useUser } from '@clerk/clerk-expo';
+import { api } from '@/convex/_generated/api';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useMutation, useQuery } from 'convex/react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -25,8 +27,9 @@ interface DeleteAccountModalProps {
 
 export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps) {
   const router = useRouter();
-  const { user } = useUser();
-  const { signIn, isLoaded: isSignInLoaded } = useSignIn();
+  const user = useQuery(api.users.current);
+  const deleteAccount = useMutation(api.users.deleteAccount);
+  const { signIn, signOut } = useAuthActions();
   const { track } = usePostHogAnalytics();
   
   const [step, setStep] = useState<'warning' | 'password'>('warning');
@@ -48,7 +51,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
   };
 
   const handleDeleteAccount = async () => {
-    if (!user || !isSignInLoaded || !signIn) {
+    if (!user) {
       setError('Unable to verify account. Please try again.');
       return;
     }
@@ -62,32 +65,29 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
     setError('');
 
     try {
-      const emailAddress = user.primaryEmailAddress?.emailAddress;
+      const emailAddress = user.email;
       if (!emailAddress) {
         throw new Error('Email address not found');
       }
 
       // Verify password by attempting to sign in
-      const result = await signIn.create({
-        identifier: emailAddress,
-        password,
-      });
+      await signIn('password', { email: emailAddress, password, flow: 'signIn' });
 
-      if (result.status === 'complete') {
-        // Password verified, proceed with deletion
-        track('Account Deleted');
-        await user.delete();
-        // Redirect to sign-in page
+      // Password verified, proceed with deletion
+      await deleteAccount();
+      track('Account Deleted');
+      // Sign out to invalidate the session, then redirect
+      await signOut();
+      try {
         router.replace('/(auth)/sign-in');
-      } else {
-        setError('Password verification failed. Please try again.');
-        setIsDeleting(false);
+      } catch (navError) {
+        console.error('Navigation error after account deletion:', navError);
       }
     } catch (err) {
       console.error('Error deleting account:', err);
       if (err instanceof Error) {
         // Check if it's a password error
-        if (err.message.includes('password') || err.message.includes('invalid')) {
+        if (err.message.includes('password') || err.message.includes('invalid') || err.message.includes('credentials')) {
           setError('Incorrect password. Please try again.');
         } else {
           setError(err.message || 'Failed to delete account. Please try again.');
@@ -137,16 +137,6 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
                     </Text>
                   </View>
 
-                  <View style={styles.infoBox}>
-                    <Ionicons name="card-outline" size={24} color={Colors.warning} />
-                    <Text style={styles.infoTitle}>Important: Subscription</Text>
-                    <Text style={styles.infoText}>
-                      Deleting your account does not automatically cancel your subscription. You must cancel your subscription separately in the App Store or Google Play Store before deleting your account.
-                    </Text>
-                    <Text style={styles.infoText}>
-                      If you have an active subscription, please cancel it first to avoid future charges.
-                    </Text>
-                  </View>
                 </ScrollView>
 
                 <View style={styles.footer}>
@@ -327,28 +317,6 @@ const styles = StyleSheet.create({
     fontSize: Typography.sm,
     color: Colors.textPrimary,
     lineHeight: Typography.base * Typography.normal,
-  },
-  infoBox: {
-    backgroundColor: Colors.warning + '10',
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.warning + '30',
-  },
-  infoTitle: {
-    fontFamily: Fonts?.heading ?? 'System',
-    fontSize: Typography.base,
-    fontWeight: Typography.semibold,
-    color: Colors.warning,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  infoText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.textPrimary,
-    lineHeight: Typography.base * Typography.normal,
-    marginBottom: Spacing.xs,
   },
   passwordContent: {
     padding: Spacing.lg,

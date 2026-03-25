@@ -1,33 +1,31 @@
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
+import { useConvexAuth } from 'convex/react';
 import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function AuthLayout() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isAuthenticated, isLoading } = useConvexAuth();
   const router = useRouter();
-  const segments = useSegments();
 
   useEffect(() => {
-    if (!isLoaded) return;
+    console.log('[AuthLayout] Auth state:', { isLoading, isAuthenticated });
+    if (isLoading) return;
 
     // If user is signed in and trying to access auth routes, redirect to tabs
-    if (isSignedIn) {
+    if (isAuthenticated) {
       try {
         router.replace('/(tabs)');
       } catch (error) {
         console.error('[AuthLayout] Navigation error:', error);
       }
     }
-  }, [isSignedIn, isLoaded, router]);
+  }, [isAuthenticated, isLoading, router]);
 
   return (
     <ErrorBoundary context="AuthLayout">
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="sign-in" />
-        <Stack.Screen name="sign-up" />
       </Stack>
     </ErrorBoundary>
   );
 }
-

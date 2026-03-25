@@ -1,14 +1,12 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { saveMessage } from "@convex-dev/agent";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
 import {
   action,
   ActionCtx,
   internalAction,
-  internalMutation,
-  internalQuery,
   mutation,
   MutationCtx,
   query,
@@ -17,7 +15,6 @@ import {
 import { homeopathicAgent } from "./agents/homeopathic";
 
 
-const MAX_GUEST_THREADS = 3;
 const FIRST_TIME_GREETING = `Hi! I'm your homeopathy study partner.
 
 I'm here to help you find the right remedy when you're not sure what to reach for, whether it's 2 PM or 2 AM.
@@ -32,28 +29,7 @@ You can ask me things like:
 I'm not a doctor, and I'll tell you when something needs real medical attention. But when you're wondering which remedy to reach for, I've got you.
 
 Try it — what's going on?`;
-const userDocValidator = v.object({
-  _id: v.id("users"),
-  _creationTime: v.number(),
-  tokenIdentifier: v.string(),
-  name: v.string(),
-  email: v.optional(v.string()),
-  imageUrl: v.optional(v.string()),
-  disclaimerAccepted: v.optional(v.boolean()),
-  noPaywall: v.optional(v.boolean()),
-  feedbackThreadCount: v.optional(v.number()),
-  feedbackDismissCount: v.optional(v.number()),
-  feedbackGiven: v.optional(v.boolean()),
-  isGuest: v.optional(v.boolean()),
-  guestId: v.optional(v.string()),
-  guestThreadCount: v.optional(v.number()),
-  lastActivityAt: v.optional(v.number()),
-  timezone: v.optional(v.string()),
-  firstAppOpen: v.optional(v.number()),
-  trialStarted: v.optional(v.number()),
-  trialEndDate: v.optional(v.number()),
-  deviceFingerprint: v.optional(v.string()),
-});
+
 const threadDocValidator = v.object({
   _creationTime: v.number(),
   _id: v.string(),
@@ -73,164 +49,35 @@ const paginatedThreadsValidator = v.object({
 });
 
 // ============================================================
-// Dual-auth user resolution helpers
+// Auth helpers
 // ============================================================
 
 /**
- * Resolve user from query context. Tries Clerk auth first, falls back to guestId.
+ * Get the authenticated user's ID or throw.
+ * Works in queries and mutations (direct db access).
  */
-async function resolveUserFromQuery(
-  ctx: QueryCtx,
-  guestId?: string,
-): Promise<Doc<"users">> {
-  // Try Clerk auth first
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-    if (user) return user;
+async function requireAuthUserId(
+  ctx: QueryCtx | MutationCtx,
+): Promise<string> {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new Error("Unauthenticated: Must be logged in");
   }
-
-  // Fall back to guestId
-  if (guestId) {
-    const guest = await ctx.db
-      .query("users")
-      .withIndex("by_guestId", (q) => q.eq("guestId", guestId))
-      .unique();
-    if (guest) return guest;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
+  return userId;
 }
 
 /**
- * Resolve user from mutation context. Tries Clerk auth first, falls back to guestId.
+ * Get the authenticated user's ID from an action context or throw.
  */
-async function resolveUserFromMutation(
-  ctx: MutationCtx,
-  guestId?: string,
-): Promise<Doc<"users">> {
-  // Try Clerk auth first
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-    if (user) return user;
-  }
-
-  // Fall back to guestId
-  if (guestId) {
-    const guest = await ctx.db
-      .query("users")
-      .withIndex("by_guestId", (q) => q.eq("guestId", guestId))
-      .unique();
-    if (guest) return guest;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
-}
-
-/**
- * Resolve user from action context. Tries Clerk auth first, falls back to guestId.
- */
-async function resolveUserFromAction(
+async function requireAuthUserIdFromAction(
   ctx: ActionCtx,
-  guestId?: string,
-): Promise<Doc<"users">> {
-  // Try Clerk auth first
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.runQuery(internal.threads.getUserByToken, {
-      tokenIdentifier: identity.tokenIdentifier,
-    });
-    if (user) return user;
+): Promise<string> {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new Error("Unauthenticated: Must be logged in");
   }
-
-  // Fall back to guestId
-  if (guestId) {
-    const user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
-      guestId,
-    });
-    if (user) return user;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
+  return userId;
 }
-
-// ============================================================
-// Internal queries used by action-context helpers
-// ============================================================
-
-/**
- * Internal query to get user by token identifier.
- * Used by actions that need to look up the current user (actions can't access db directly).
- */
-export const getUserByToken = internalQuery({
-  args: { tokenIdentifier: v.string() },
-  returns: v.union(v.null(), userDocValidator),
-  handler: async (ctx, args): Promise<Doc<"users"> | null> => {
-    return await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", args.tokenIdentifier),
-      )
-      .unique();
-  },
-});
-
-/**
- * Internal query to get guest user by guestId.
- */
-export const getGuestUserByGuestId = internalQuery({
-  args: { guestId: v.string() },
-  returns: v.union(v.null(), userDocValidator),
-  handler: async (ctx, args): Promise<Doc<"users"> | null> => {
-    return await ctx.db
-      .query("users")
-      .withIndex("by_guestId", (q) => q.eq("guestId", args.guestId))
-      .unique();
-  },
-});
-
-// ============================================================
-// Guest thread count helpers
-// ============================================================
-
-export const incrementGuestThreadCount = internalMutation({
-  args: { userId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (user && user.isGuest) {
-      await ctx.db.patch(args.userId, {
-        guestThreadCount: (user.guestThreadCount ?? 0) + 1,
-      });
-    }
-    return null;
-  },
-});
-
-export const decrementGuestThreadCount = internalMutation({
-  args: { userId: v.id("users") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (user && user.isGuest) {
-      await ctx.db.patch(args.userId, {
-        guestThreadCount: Math.max((user.guestThreadCount ?? 0) - 1, 0),
-      });
-    }
-    return null;
-  },
-});
 
 // ============================================================
 // Thread helpers
@@ -333,11 +180,10 @@ export const cleanupEmptyThreads = internalAction({
 const MAX_TITLE_LENGTH = 200;
 const MAX_SUMMARY_LENGTH = 1000;
 
-// Create a new thread for the authenticated user (or guest)
+// Create a new thread for the authenticated user
 export const create = action({
   args: {
     title: v.optional(v.string()),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     threadId: v.string(),
@@ -349,41 +195,17 @@ export const create = action({
         `Title too long. Maximum length is ${MAX_TITLE_LENGTH} characters.`,
       );
     }
-    const user = await resolveUserFromAction(ctx, args.guestId);
-
-    // Guest thread limit check
-    if (user.isGuest) {
-      if ((user.guestThreadCount ?? 0) >= MAX_GUEST_THREADS) {
-        throw new Error("GUEST_LIMIT_REACHED");
-      }
-    }
+    const userId = await requireAuthUserIdFromAction(ctx);
 
     // Create thread using the agent's createThread method
     const { threadId } = await homeopathicAgent.createThread(ctx, {
-      userId: user._id,
+      userId,
       title: args.title,
     });
 
-    // Add initial greeting message from the AI directly as an assistant message
-    // await saveMessage(ctx, components.agent, {
-    //   threadId,
-    //   userId: user._id,
-    //   message: {
-    //     role: "assistant",
-    //     content: "Hello, how can I help you today?",
-    //   },
-    // });
-
-    // Increment guest thread count
-    if (user.isGuest) {
-      await ctx.runMutation(internal.threads.incrementGuestThreadCount, {
-        userId: user._id,
-      });
-    }
-
     // Schedule cleanup of empty threads
     await ctx.scheduler.runAfter(0, internal.threads.cleanupEmptyThreads, {
-      userId: user._id,
+      userId: userId as any,
     });
 
     return { threadId };
@@ -409,21 +231,19 @@ interface GetOrCreateResult {
  * - isNew: Whether this is a brand new thread (no prior messages)
  */
 export const getOrCreate = action({
-  args: {
-    guestId: v.optional(v.string()),
-  },
+  args: {},
   returns: v.object({
     threadId: v.string(),
     isNew: v.boolean(),
   }),
   handler: async (ctx, args): Promise<GetOrCreateResult> => {
-    const user = await resolveUserFromAction(ctx, args.guestId);
+    const userId = await requireAuthUserIdFromAction(ctx);
 
     // Try to get existing thread
     const threadsResult = await ctx.runQuery(
       components.agent.threads.listThreadsByUserId,
       {
-        userId: user._id,
+        userId,
         paginationOpts: { cursor: null, numItems: 1 },
       },
     );
@@ -439,31 +259,19 @@ export const getOrCreate = action({
 
     // No existing thread - create one
     const { threadId } = await homeopathicAgent.createThread(ctx, {
-      userId: user._id,
+      userId,
       title: "Chat",
     });
-
-    const shouldUseFirstTimeGreeting = !user.isGuest && typeof user.trialStarted !== "number";
-    const initialGreeting = shouldUseFirstTimeGreeting
-      ? FIRST_TIME_GREETING
-      : "Hello! I'm here to help you find the right homeopathic remedy. What's going on?";
 
     // Add initial greeting message
     await saveMessage(ctx, components.agent, {
       threadId,
-      userId: user._id,
+      userId,
       message: {
         role: "assistant",
-        content: initialGreeting,
+        content: FIRST_TIME_GREETING,
       },
     });
-
-    // Increment guest thread count if applicable
-    if (user.isGuest) {
-      await ctx.runMutation(internal.threads.incrementGuestThreadCount, {
-        userId: user._id,
-      });
-    }
 
     // Return greeting so UI can display immediately (avoids timing issues with saveMessage)
     return {
@@ -473,18 +281,16 @@ export const getOrCreate = action({
   },
 });
 
-// List all threads for the authenticated user (or guest)
+// List all threads for the authenticated user
 export const list = query({
   args: {
     paginationOpts: v.optional(paginationOptsValidator),
-    guestId: v.optional(v.string()),
   },
   returns: paginatedThreadsValidator,
   handler: async (ctx, args) => {
-    // Try to resolve user, return empty for unauthenticated
-    let user: Doc<"users"> | null = null;
+    let userId: string | null = null;
     try {
-      user = await resolveUserFromQuery(ctx, args.guestId);
+      userId = await requireAuthUserId(ctx);
     } catch {
       return { page: [], isDone: true, continueCursor: "" };
     }
@@ -493,7 +299,7 @@ export const list = query({
     const threads = await ctx.runQuery(
       components.agent.threads.listThreadsByUserId,
       {
-        userId: user._id,
+        userId,
         paginationOpts: args.paginationOpts ?? { cursor: null, numItems: 50 },
       },
     );
@@ -505,18 +311,17 @@ export const list = query({
 export const get = query({
   args: {
     threadId: v.string(),
-    guestId: v.optional(v.string()),
   },
   returns: v.union(v.null(), threadDocValidator),
   handler: async (ctx, args) => {
-    const user = await resolveUserFromQuery(ctx, args.guestId);
+    const userId = await requireAuthUserId(ctx);
 
     const thread = await ctx.runQuery(components.agent.threads.getThread, {
       threadId: args.threadId,
     });
 
     // Verify the thread belongs to the user
-    if (thread && thread.userId !== user._id) {
+    if (thread && thread.userId !== userId) {
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
@@ -528,13 +333,12 @@ export const get = query({
 export const remove = action({
   args: {
     threadId: v.string(),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     success: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const user = await resolveUserFromAction(ctx, args.guestId);
+    const userId = await requireAuthUserIdFromAction(ctx);
 
     // Get the thread to verify ownership
     const thread = await ctx.runQuery(components.agent.threads.getThread, {
@@ -545,18 +349,11 @@ export const remove = action({
       throw new Error("Thread not found");
     }
 
-    if (thread.userId !== user._id) {
+    if (thread.userId !== userId) {
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
     await homeopathicAgent.deleteThreadSync(ctx, { threadId: args.threadId });
-
-    // Decrement guest thread count
-    if (user.isGuest) {
-      await ctx.runMutation(internal.threads.decrementGuestThreadCount, {
-        userId: user._id,
-      });
-    }
 
     return { success: true };
   },
@@ -568,7 +365,6 @@ export const updateMetadata = mutation({
     threadId: v.string(),
     title: v.optional(v.string()),
     summary: v.optional(v.string()),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     success: v.boolean(),
@@ -584,7 +380,7 @@ export const updateMetadata = mutation({
         `Summary too long. Maximum length is ${MAX_SUMMARY_LENGTH} characters.`,
       );
     }
-    const user = await resolveUserFromMutation(ctx, args.guestId);
+    const userId = await requireAuthUserId(ctx);
 
     const thread = await ctx.runQuery(components.agent.threads.getThread, {
       threadId: args.threadId,
@@ -594,7 +390,7 @@ export const updateMetadata = mutation({
       throw new Error("Thread not found");
     }
 
-    if (thread.userId !== user._id) {
+    if (thread.userId !== userId) {
       throw new Error("Access denied: Thread does not belong to current user");
     }
 

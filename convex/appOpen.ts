@@ -4,73 +4,14 @@
  * Kept for backwards compatibility — safe to delete once no clients reference it.
  */
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { components, internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
-import { action, ActionCtx, query, QueryCtx } from "./_generated/server";
-
-/**
- * Resolve user from action context. Tries Clerk auth first, falls back to guestId.
- */
-async function resolveUserFromAction(
-  ctx: ActionCtx,
-  guestId?: string
-): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.runQuery(internal.threads.getUserByToken, {
-      tokenIdentifier: identity.tokenIdentifier,
-    });
-    if (user) return user;
-  }
-
-  if (guestId) {
-    const user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
-      guestId,
-    });
-    if (user) return user;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
-}
-
-/**
- * Resolve user from query context.
- */
-async function resolveUserFromQuery(
-  ctx: QueryCtx,
-  guestId?: string
-): Promise<Doc<"users"> | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-    if (user) return user;
-  }
-
-  if (guestId) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_guestId", (q) => q.eq("guestId", guestId))
-      .unique();
-    if (user) return user;
-  }
-
-  return null;
-}
+import { components } from "./_generated/api";
+import { action, query } from "./_generated/server";
 
 /**
  * Handle app open/foreground.
  * Checks for inactivity, pushes greeting if needed.
- *
- * Returns:
- * - action: "none" | "greeting" | "greeting_with_divider"
- * - greeting: the greeting message (if any)
- * - tier: the inactivity tier that triggered this
  */
 // Return type for handleAppOpen
 interface HandleAppOpenResult {
@@ -82,7 +23,6 @@ interface HandleAppOpenResult {
 export const handleAppOpen = action({
   args: {
     threadId: v.string(),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     action: v.string(),
@@ -90,7 +30,10 @@ export const handleAppOpen = action({
     tier: v.optional(v.string()),
   }),
   handler: async (ctx, args): Promise<HandleAppOpenResult> => {
-    const user = await resolveUserFromAction(ctx, args.guestId);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Unauthenticated: Must be logged in");
+    }
 
     const thread = await ctx.runQuery(components.agent.threads.getThread, {
       threadId: args.threadId,
@@ -98,7 +41,7 @@ export const handleAppOpen = action({
     if (!thread) {
       throw new Error("Thread not found");
     }
-    if (thread.userId !== user._id) {
+    if (thread.userId !== userId) {
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
@@ -118,12 +61,9 @@ interface GetAppOpenInfoResult {
 
 /**
  * Get app open info without pushing greeting.
- * Use this to check what action is needed before committing.
  */
 export const getAppOpenInfo = query({
-  args: {
-    guestId: v.optional(v.string()),
-  },
+  args: {},
   returns: v.object({
     needsGreeting: v.boolean(),
     showDivider: v.boolean(),
@@ -132,9 +72,9 @@ export const getAppOpenInfo = query({
     greeting: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args): Promise<GetAppOpenInfoResult> => {
-    const user = await resolveUserFromQuery(ctx, args.guestId);
+    const userId = await getAuthUserId(ctx);
 
-    if (!user) {
+    if (!userId) {
       return {
         needsGreeting: false,
         showDivider: false,

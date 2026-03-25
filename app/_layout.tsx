@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
-import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import {
   Lato_400Regular,
   Lato_700Bold,
@@ -17,24 +16,16 @@ import {
   Quicksand_700Bold,
   useFonts,
 } from '@expo-google-fonts/quicksand';
-import { ConvexReactClient, useConvexAuth, useMutation } from 'convex/react';
-import { ConvexProviderWithClerk } from 'convex/react-clerk';
+import { ConvexAuthProvider } from '@convex-dev/auth/react';
+import { ConvexReactClient } from 'convex/react';
+import * as SecureStore from 'expo-secure-store';
 
-// DisclaimerModal is now only used from account settings (see account.tsx)
-// Onboarding is handled by OnboardingChat in the chat screen
 import { FeedbackManager } from '@/components/feedback-modal';
-import { SessionManager } from '@/components/session-manager';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
-import { GuestProvider } from '@/context/guest-context';
 import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
-import { RevenueCatProvider } from '@/context/revenue-cat-context';
-import { TrialProvider } from '@/context/trial-context';
-import { api } from '@/convex/_generated/api';
-import { tokenCache } from '@/lib/clerk-token-cache';
-import * as SecureStore from 'expo-secure-store';
 import { initializeDatabase } from '@/lib/db/init';
-import { EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
+import { EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
 
 const startupLog = (...args: Parameters<typeof console.log>) => {
   if (__DEV__) {
@@ -57,50 +48,32 @@ const convex = new ConvexReactClient(
   EXPO_PUBLIC_CONVEX_URL,
   {
     unsavedChangesWarning: false,
+    verbose: true,
   }
 );
 
-/**
- * Component that automatically stores the user in the database when they sign in.
- * This should be rendered inside the ConvexProviderWithClerk.
- * We use useConvexAuth to wait for Convex to have the auth token (not just Clerk's isSignedIn).
- */
-function StoreUserInDatabase({ children }: { children: React.ReactNode }) {
-  startupLog('[STARTUP] StoreUserInDatabase: Rendering');
-  // useConvexAuth tells us when Convex has received and validated the JWT token
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const storeUser = useMutation(api.users.store);
+// One-time clear of stale auth tokens from previous config
+// TODO: Remove this after first successful launch
+SecureStore.deleteItemAsync('__convexAuthJWT').catch(() => {});
+SecureStore.deleteItemAsync('__convexAuthRefreshToken').catch(() => {});
+SecureStore.deleteItemAsync('__convexAuthServerStateFetchTime').catch(() => {});
 
-  useEffect(() => {
-    startupLog('[STARTUP] StoreUserInDatabase: useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
-    // Only store user when Convex auth is ready and authenticated
-    if (!isLoading && isAuthenticated) {
-      // Check if there's a pending guest claim. If so, skip — claimGuestAccount
-      // in GuestProvider will handle creating/upgrading the user record.
-      // This prevents a race where store() creates a new user while
-      // claimGuestAccount() is trying to upgrade the guest in-place.
-      SecureStore.getItemAsync('guest_id').then((guestId) => {
-        if (guestId) {
-          startupLog('[STARTUP] StoreUserInDatabase: Skipping store — guest claim pending');
-          return;
-        }
-        startupLog('[STARTUP] StoreUserInDatabase: Storing user in database');
-        storeUser().catch((error) => {
-          console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', error);
-        });
-      }).catch((error) => {
-        // SecureStore read failed — fall back to storing user to be safe
-        console.error('[STARTUP] StoreUserInDatabase: SecureStore read failed, storing user anyway:', error);
-        storeUser().catch((storeError) => {
-          console.error('[STARTUP] StoreUserInDatabase: Failed to store user:', storeError);
-        });
-      });
-    }
-  }, [isLoading, isAuthenticated, storeUser]);
-
-  startupLog('[STARTUP] StoreUserInDatabase: Returning children');
-  return <>{children}</>;
-}
+// SecureStore-based storage adapter for Convex Auth
+const secureStorage = {
+  getItem: async (key: string) => {
+    const val = await SecureStore.getItemAsync(key);
+    console.log(`[SecureStore] getItem(${key}): ${val ? 'has value (' + val.length + ' chars)' : 'null'}`);
+    return val;
+  },
+  setItem: async (key: string, value: string) => {
+    console.log(`[SecureStore] setItem(${key}): ${value.length} chars`);
+    await SecureStore.setItemAsync(key, value);
+  },
+  removeItem: async (key: string) => {
+    console.log(`[SecureStore] removeItem(${key})`);
+    await SecureStore.deleteItemAsync(key);
+  },
+};
 
 /**
  * Component that tracks when the app is opened.
@@ -173,7 +146,7 @@ function MateriaMedicaInitializer({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   startupLog('[STARTUP] RootLayout: Component rendering');
-  
+
   const [fontsLoaded] = useFonts({
     'Quicksand-Regular': Quicksand_400Regular,
     'Quicksand-Medium': Quicksand_500Medium,
@@ -199,107 +172,81 @@ export default function RootLayout() {
     return null;
   }
 
-  const clerkPublishableKey = EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  startupLog('[STARTUP] RootLayout: Clerk key exists:', !!clerkPublishableKey);
-
-  if (!clerkPublishableKey) {
-    console.error('[STARTUP] RootLayout: Missing Clerk Publishable Key');
-    throw new Error(
-      'Missing Clerk Publishable Key'
-    );
-  }
-
-  startupLog('[STARTUP] RootLayout: Rendering provider tree - ClerkProvider -> ClerkLoaded -> ConvexProviderWithClerk -> StoreUserInDatabase -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> RevenueCatProvider -> ThemeProvider -> ChatProvider -> Stack');
+  startupLog('[STARTUP] RootLayout: Rendering provider tree - ConvexAuthProvider -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> ThemeProvider -> ChatProvider -> Stack');
   return (
-    <ClerkProvider
-      publishableKey={clerkPublishableKey}
-      tokenCache={tokenCache}
-    >
-      <ClerkLoaded>
-        <SessionManager />
-        <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          <StoreUserInDatabase>
-            <MateriaMedicaInitializer>
-              <PostHogProviderWrapper>
-                <PostHogCrashReporter>
-                  <PostHogErrorBoundary>
-                    <AppOpenedTracker>
-                      <GuestProvider>
-                      <RevenueCatProvider>
-                        <TrialProvider>
-                          <ThemeProvider value={NavigationTheme}>
-                            <ChatProvider>
-                              <ScreenTracker>
-                              <Stack>
-                              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                              <Stack.Screen
-                                name="materia-medica"
-                                options={{
-                                  headerShown: false,
-                                  animation: 'slide_from_right',
-                                }}
-                              />
-                              <Stack.Screen
-                                name="account"
-                                options={{
-                                  headerShown: false,
-                                  presentation: 'modal',
-                                  animation: 'slide_from_bottom',
-                                }}
-                              />
-                              <Stack.Screen
-                                name="terms"
-                                options={{
-                                  headerShown: false,
-                                  presentation: 'modal',
-                                  animation: 'slide_from_bottom',
-                                }}
-                              />
-                              <Stack.Screen
-                                name="privacy"
-                                options={{
-                                  headerShown: false,
-                                  presentation: 'modal',
-                                  animation: 'slide_from_bottom',
-                                }}
-                              />
-                              <Stack.Screen
-                                name="delete-account"
-                                options={{
-                                  headerShown: true,
-                                  title: 'Delete Account',
-                                  headerBackTitle: 'Back',
-                                  presentation: 'modal',
-                                  animation: 'slide_from_bottom',
-                                  headerStyle: {
-                                    backgroundColor: Colors.bgSurface,
-                                  },
-                                  headerTintColor: Colors.textPrimary,
-                                  headerTitleStyle: {
-                                    fontFamily: Fonts?.heading ?? 'System',
-                                    fontSize: Typography.lg,
-                                    fontWeight: Typography.semibold,
-                                  },
-                                }}
-                              />
-                              </Stack>
-                              </ScreenTracker>
-                              <StatusBar style="dark" />
-                              <FeedbackManager />
-                            </ChatProvider>
-                          </ThemeProvider>
-                        </TrialProvider>
-                      </RevenueCatProvider>
-                      </GuestProvider>
-                    </AppOpenedTracker>
-                  </PostHogErrorBoundary>
-                </PostHogCrashReporter>
-              </PostHogProviderWrapper>
-            </MateriaMedicaInitializer>
-          </StoreUserInDatabase>
-        </ConvexProviderWithClerk>
-      </ClerkLoaded>
-    </ClerkProvider>
+    <ConvexAuthProvider client={convex} storage={secureStorage}>
+        <MateriaMedicaInitializer>
+          <PostHogProviderWrapper>
+            <PostHogCrashReporter>
+              <PostHogErrorBoundary>
+                <AppOpenedTracker>
+                  <ThemeProvider value={NavigationTheme}>
+                    <ChatProvider>
+                      <ScreenTracker>
+                      <Stack>
+                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                      <Stack.Screen
+                        name="materia-medica"
+                        options={{
+                          headerShown: false,
+                          animation: 'slide_from_right',
+                        }}
+                      />
+                      <Stack.Screen
+                        name="account"
+                        options={{
+                          headerShown: false,
+                          presentation: 'modal',
+                          animation: 'slide_from_bottom',
+                        }}
+                      />
+                      <Stack.Screen
+                        name="terms"
+                        options={{
+                          headerShown: false,
+                          presentation: 'modal',
+                          animation: 'slide_from_bottom',
+                        }}
+                      />
+                      <Stack.Screen
+                        name="privacy"
+                        options={{
+                          headerShown: false,
+                          presentation: 'modal',
+                          animation: 'slide_from_bottom',
+                        }}
+                      />
+                      <Stack.Screen
+                        name="delete-account"
+                        options={{
+                          headerShown: true,
+                          title: 'Delete Account',
+                          headerBackTitle: 'Back',
+                          presentation: 'modal',
+                          animation: 'slide_from_bottom',
+                          headerStyle: {
+                            backgroundColor: Colors.bgSurface,
+                          },
+                          headerTintColor: Colors.textPrimary,
+                          headerTitleStyle: {
+                            fontFamily: Fonts?.heading ?? 'System',
+                            fontSize: Typography.lg,
+                            fontWeight: Typography.semibold,
+                          },
+                        }}
+                      />
+                      </Stack>
+                      </ScreenTracker>
+                      <StatusBar style="dark" />
+                      <FeedbackManager />
+                    </ChatProvider>
+                  </ThemeProvider>
+                </AppOpenedTracker>
+              </PostHogErrorBoundary>
+            </PostHogCrashReporter>
+          </PostHogProviderWrapper>
+        </MateriaMedicaInitializer>
+    </ConvexAuthProvider>
   );
 }

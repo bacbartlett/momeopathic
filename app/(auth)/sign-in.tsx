@@ -1,9 +1,7 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { useSignIn } from '@clerk/clerk-expo';
-import type { EmailCodeFactor } from '@clerk/types';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type ResetStep = 'email' | 'code' | 'password';
+type ResetStep = 'email' | 'code';
 
 /**
  * Simple email validation - checks for basic format.
@@ -29,15 +27,12 @@ function isValidEmail(email: string): boolean {
 }
 
 export default function SignInScreen() {
-  const { signIn, setActive, isLoaded } = useSignIn();
-  const router = useRouter();
+  const { signIn } = useAuthActions();
   const { track } = usePostHogAnalytics();
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showEmailCode, setShowEmailCode] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
 
   // Password reset state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -48,46 +43,19 @@ export default function SignInScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSignIn = async () => {
-    if (!isLoaded || !signIn) return;
+    if (!emailAddress || !password) return;
 
     setIsLoading(true);
     setError('');
 
     try {
-      const result = await signIn.create({
-        identifier: emailAddress,
-        password,
-      });
-
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        track('Sign In', { method: 'email' });
-        setError(''); // Clear error on success
-        try {
-          router.replace('/(tabs)');
-        } catch (navError) {
-          console.error('[SignIn] Navigation error:', navError);
-        }
-      } else if (result.status === 'needs_second_factor') {
-        // Check if email_code is a valid second factor
-        // This is required when Client Trust is enabled and the user
-        // is signing in from a new device.
-        const emailCodeFactor = result.supportedSecondFactors?.find(
-          (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
-        );
-
-        if (emailCodeFactor) {
-          await signIn.prepareSecondFactor({
-            strategy: 'email_code',
-            emailAddressId: emailCodeFactor.emailAddressId,
-          });
-          setShowEmailCode(true);
-        } else {
-          setError('Second factor authentication required but email code is not available.');
-        }
-      } else {
-        setError('Sign in incomplete. Please try again.');
-      }
+      console.log('[SignIn] Calling signIn...');
+      const result = await signIn("password", { email: emailAddress, password, flow: "signIn" });
+      console.log('[SignIn] signIn returned:', JSON.stringify(result));
+      track('Sign In', { method: 'email' });
+      setError('');
+      // Don't navigate manually — the AuthLayout's useEffect will redirect
+      // to /(tabs) once useConvexAuth() reflects isAuthenticated: true
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred during sign in. Please try again.';
       setError(errorMessage);
@@ -97,74 +65,8 @@ export default function SignInScreen() {
     }
   };
 
-  const handleVerifyCode = async () => {
-    if (!isLoaded || !signIn) return;
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const result = await signIn.attemptSecondFactor({
-        strategy: 'email_code',
-        code: verificationCode,
-      });
-
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        track('Sign In', { method: 'email', mfa: true });
-        setError(''); // Clear error on success
-        try {
-          router.replace('/(tabs)');
-        } catch (navError) {
-          console.error('[SignIn] Navigation error:', navError);
-        }
-      } else {
-        setError('Verification incomplete. Please try again.');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Invalid verification code. Please try again.';
-      setError(errorMessage);
-      track('Sign In Failed', { method: 'email', mfa: true, error: errorMessage });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendCode = async () => {
-    if (!isLoaded || !signIn) return;
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const emailCodeFactor = signIn.supportedSecondFactors?.find(
-        (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
-      );
-
-      if (emailCodeFactor) {
-        await signIn.prepareSecondFactor({
-          strategy: 'email_code',
-          emailAddressId: emailCodeFactor.emailAddressId,
-        });
-        setError(''); // Clear any previous error
-      } else {
-        setError('Unable to resend code. Please try signing in again.');
-      }
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to resend code. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Password reset handlers
   const handleSendResetCode = async () => {
-    if (!isLoaded || !signIn) return;
-
     // Validate email format
     if (!isValidEmail(forgotPasswordEmail)) {
       setError('Please enter a valid email address.');
@@ -175,10 +77,7 @@ export default function SignInScreen() {
     setError('');
 
     try {
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: forgotPasswordEmail.trim(),
-      });
+      await signIn("password", { email: forgotPasswordEmail.trim(), flow: "reset" });
       setResetStep('code');
     } catch (err) {
       if (err instanceof Error) {
@@ -191,32 +90,7 @@ export default function SignInScreen() {
     }
   };
 
-  const handleResendResetCode = async () => {
-    if (!isLoaded || !signIn) return;
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: forgotPasswordEmail,
-      });
-      setError(''); // Clear any previous error
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to resend code. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleVerifyResetCode = async () => {
-    if (!isLoaded || !signIn) return;
-
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -231,28 +105,15 @@ export default function SignInScreen() {
     setError('');
 
     try {
-      const result = await signIn.attemptFirstFactor({
-        strategy: 'reset_password_email_code',
+      await signIn("password", {
+        email: forgotPasswordEmail.trim(),
         code: resetCode,
-        password: newPassword,
+        newPassword,
+        flow: "reset-verification",
       });
-
-      if (result.status === 'needs_second_factor') {
-        // Handle 2FA if required
-        setError('Two-factor authentication is required. Please sign in normally.');
-        resetForgotPasswordState();
-      } else if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        track('Password Reset', { method: 'email_code' });
-        setError(''); // Clear error on success
-        try {
-          router.replace('/(tabs)');
-        } catch (navError) {
-          console.error('[SignIn] Navigation error:', navError);
-        }
-      } else {
-        setError('Password reset incomplete. Please try again.');
-      }
+      track('Password Reset', { method: 'email_code' });
+      setError('');
+      // AuthLayout handles redirect once authenticated
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reset password. Please try again.';
       setError(errorMessage);
@@ -271,93 +132,6 @@ export default function SignInScreen() {
     setConfirmPassword('');
     setError('');
   };
-
-  // Verification code screen
-  if (showEmailCode) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView
-          style={styles.keyboardView}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoContainer}>
-                <Ionicons name="mail" size={32} color={Colors.primary} />
-              </View>
-              <Text style={styles.title}>Verify Your Email</Text>
-              <Text style={styles.subtitle}>
-                We sent a verification code to{'\n'}
-                <Text style={styles.emailText}>{emailAddress}</Text>
-              </Text>
-            </View>
-
-            {/* Verification Form */}
-            <View style={styles.form}>
-              {error ? (
-                <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={20} color={Colors.error} />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Verification Code</Text>
-                <TextInput
-                  style={[styles.input, styles.codeInput]}
-                  value={verificationCode}
-                  onChangeText={setVerificationCode}
-                  placeholder="Enter 6-digit code"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="number-pad"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  editable={!isLoading}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.signInButton, isLoading && styles.signInButtonDisabled]}
-                onPress={handleVerifyCode}
-                disabled={isLoading || verificationCode.length < 6}
-                activeOpacity={0.7}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color={Colors.textInverse} />
-                ) : (
-                  <Text style={styles.signInButtonText}>Verify Email</Text>
-                )}
-              </TouchableOpacity>
-
-              <View style={styles.resendContainer}>
-                <Text style={styles.resendText}>Didn't receive the code?</Text>
-                <TouchableOpacity
-                  onPress={handleResendCode}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.resendLink}>Resend Code</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => {
-                  setShowEmailCode(false);
-                  setVerificationCode('');
-                  setError('');
-                }}
-                disabled={isLoading}
-              >
-                <Ionicons name="arrow-back" size={20} color={Colors.textSecondary} />
-                <Text style={styles.backButtonText}>Back to Sign In</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    );
-  }
 
   // Password reset flow
   if (showForgotPassword) {
@@ -517,16 +291,6 @@ export default function SignInScreen() {
                   )}
                 </TouchableOpacity>
 
-                <View style={styles.resendContainer}>
-                  <Text style={styles.resendText}>Didn't receive the code?</Text>
-                  <TouchableOpacity
-                    onPress={handleResendResetCode}
-                    disabled={isLoading}
-                  >
-                    <Text style={styles.resendLink}>Resend Code</Text>
-                  </TouchableOpacity>
-                </View>
-
                 <TouchableOpacity
                   style={styles.backButton}
                   onPress={() => {
@@ -627,16 +391,6 @@ export default function SignInScreen() {
               ) : (
                 <Text style={styles.signInButtonText}>Sign In</Text>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.signUpLink}
-              onPress={() => router.push('/(auth)/sign-up')}
-              disabled={isLoading}
-            >
-              <Text style={styles.signUpLinkText}>
-                Don't have an account? <Text style={styles.signUpLinkBold}>Sign Up</Text>
-              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -751,20 +505,6 @@ const styles = StyleSheet.create({
     fontWeight: Typography.semibold,
     color: Colors.textInverse,
   },
-  signUpLink: {
-    marginTop: Spacing.lg,
-    alignItems: 'center',
-  },
-  signUpLinkText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.base,
-    color: Colors.textSecondary,
-  },
-  signUpLinkBold: {
-    fontFamily: Fonts?.bodyMedium ?? 'System',
-    fontWeight: Typography.semibold,
-    color: Colors.primary,
-  },
   forgotPasswordLink: {
     alignSelf: 'flex-end',
     marginTop: -Spacing.sm,
@@ -773,24 +513,6 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.sm,
-    color: Colors.primary,
-  },
-  resendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-    gap: Spacing.xs,
-  },
-  resendText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.textSecondary,
-  },
-  resendLink: {
-    fontFamily: Fonts?.bodyMedium ?? 'System',
-    fontSize: Typography.sm,
-    fontWeight: Typography.semibold,
     color: Colors.primary,
   },
   backButton: {

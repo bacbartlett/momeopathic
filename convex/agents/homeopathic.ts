@@ -48,7 +48,7 @@ const getLearnMoreLink = createTool({
     const externalUrl = `https://www.materiamedica.info/en/materia-medica/william-boericke/${urlName}`;
     const encodedName = encodeURIComponent(normalizedName);
     const encodedFallback = encodeURIComponent(externalUrl);
-    return `mymateria://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
+    return `momeopaths-acute-care://materia-medica?name=${encodedName}&fallback=${encodedFallback}`;
   },
 });
 

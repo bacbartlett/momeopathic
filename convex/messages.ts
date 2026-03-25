@@ -1,8 +1,8 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { listMessages, toUIMessages } from "@convex-dev/agent";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
 import { action, ActionCtx, query, QueryCtx } from "./_generated/server";
 import { homeopathicAgent } from "./agents/homeopathic";
 import { buildSystemPromptWithNotes } from "./agents/systemprompt";
@@ -31,74 +31,16 @@ function stripToolContentForUI(messages: Array<Record<string, any>>) {
     .filter(Boolean);
 }
 
-/**
- * Resolve user from query context. Tries Clerk auth first, falls back to guestId.
- */
-async function resolveUserFromQuery(
-  ctx: QueryCtx,
-  guestId?: string
-): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-    if (user) return user;
-  }
-
-  if (guestId) {
-    const guest = await ctx.db
-      .query("users")
-      .withIndex("by_guestId", (q) => q.eq("guestId", guestId))
-      .unique();
-    if (guest) return guest;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
-}
-
-/**
- * Resolve user from action context. Tries Clerk auth first, falls back to guestId.
- */
-async function resolveUserFromAction(
-  ctx: ActionCtx,
-  guestId?: string
-): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.runQuery(internal.threads.getUserByToken, {
-      tokenIdentifier: identity.tokenIdentifier,
-    });
-    if (user) return user;
-  }
-
-  if (guestId) {
-    const user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
-      guestId,
-    });
-    if (user) return user;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
-}
-
 // List messages in a thread (UI-formatted)
 // Only allows access if the thread belongs to the user
 export const list = query({
   args: {
     threadId: v.string(),
     paginationOpts: v.optional(paginationOptsValidator),
-    guestId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Try to resolve user
-    let user: Doc<"users"> | null = null;
-    try {
-      user = await resolveUserFromQuery(ctx, args.guestId);
-    } catch {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       return { page: [], isDone: true, continueCursor: "" };
     }
 
@@ -111,7 +53,7 @@ export const list = query({
       return { page: [], isDone: true, continueCursor: "" };
     }
 
-    if (thread.userId !== user._id) {
+    if (thread.userId !== userId) {
       return { page: [], isDone: true, continueCursor: "" };
     }
 
@@ -133,7 +75,6 @@ export const send = action({
   args: {
     threadId: v.string(),
     content: v.string(),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     text: v.string(),
@@ -148,11 +89,14 @@ export const send = action({
       throw new Error("Message cannot be empty.");
     }
 
-    const user = await resolveUserFromAction(ctx, args.guestId);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Unauthenticated: Must be logged in");
+    }
 
     // Rate limit check
     const rateLimit = await ctx.runQuery(internal.rateLimit.checkRateLimit, {
-      userId: user._id,
+      userId: userId as any,
     });
     if (!rateLimit.allowed) {
       throw new Error("Slow down! You're sending messages too quickly. Please wait a moment.");
@@ -167,13 +111,13 @@ export const send = action({
       throw new Error("Thread not found");
     }
 
-    if (thread.userId !== user._id) {
+    if (thread.userId !== userId) {
       throw new Error("Access denied: Thread does not belong to current user");
     }
 
     // Record this message for rate limiting
     await ctx.runMutation(internal.rateLimit.recordMessage, {
-      userId: user._id,
+      userId: userId as any,
     });
 
     // Check if this is the first user message (thread title is still default)
@@ -181,7 +125,7 @@ export const send = action({
 
     // Pre-load user notes into the system prompt so the AI always knows who it's talking to
     const notes = await ctx.runQuery(internal.notes.getNotes, {
-      userId: user._id as string,
+      userId: userId as string,
     });
     const personalizedPrompt = buildSystemPromptWithNotes(notes);
 
@@ -224,7 +168,7 @@ export const send = action({
 
     // Update last activity for greeting system
     await ctx.runMutation(internal.greetings.updateLastActivity, {
-      userId: user._id,
+      userId: userId as any,
     });
 
     return {

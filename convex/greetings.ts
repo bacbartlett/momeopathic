@@ -1,38 +1,15 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { listMessages, saveMessage } from "@convex-dev/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
 import {
   action,
   ActionCtx,
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-
-const userDocValidator = v.object({
-  _id: v.id("users"),
-  _creationTime: v.number(),
-  tokenIdentifier: v.string(),
-  name: v.string(),
-  email: v.optional(v.string()),
-  imageUrl: v.optional(v.string()),
-  disclaimerAccepted: v.optional(v.boolean()),
-  noPaywall: v.optional(v.boolean()),
-  feedbackThreadCount: v.optional(v.number()),
-  feedbackDismissCount: v.optional(v.number()),
-  feedbackGiven: v.optional(v.boolean()),
-  isGuest: v.optional(v.boolean()),
-  guestId: v.optional(v.string()),
-  guestThreadCount: v.optional(v.number()),
-  lastActivityAt: v.optional(v.number()),
-  timezone: v.optional(v.string()),
-  firstAppOpen: v.optional(v.number()),
-  trialStarted: v.optional(v.number()),
-  trialEndDate: v.optional(v.number()),
-  deviceFingerprint: v.optional(v.string()),
-});
 
 const greetingTierValidator = v.union(
   v.literal("30min"),
@@ -104,7 +81,7 @@ export const getUserContext = internalQuery({
 
 export const getUserById = internalQuery({
   args: { userId: v.id("users") },
-  returns: v.union(v.null(), userDocValidator),
+  returns: v.any(),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.userId);
   },
@@ -151,44 +128,25 @@ export const updateLastActivity = internalMutation({
 // ============================================
 
 /**
- * Resolve user from action context. Tries Clerk auth first, falls back to guestId.
- */
-async function resolveUserFromAction(
-  ctx: ActionCtx,
-  guestId?: string,
-): Promise<Doc<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity) {
-    const user = await ctx.runQuery(internal.threads.getUserByToken, {
-      tokenIdentifier: identity.tokenIdentifier,
-    });
-    if (user) return user;
-  }
-
-  if (guestId) {
-    const user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
-      guestId,
-    });
-    if (user) return user;
-  }
-
-  throw new Error("Unauthenticated: Must be logged in or have a guest session");
-}
-
-/**
  * Live greeting generation on app open.
  * Checks if user has been inactive 30+ minutes, generates a greeting if so.
  */
 export const triggerGreeting = action({
   args: {
     threadId: v.string(),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     generated: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const user = await resolveUserFromAction(ctx, args.guestId);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return { generated: false };
+    }
+    const user = await ctx.runQuery(internal.greetings.getUserById, { userId: userId as any });
+    if (!user) {
+      return { generated: false };
+    }
 
     // Check inactivity tier
     const tier = await ctx.runQuery(internal.greetings.checkInactivityTier, {

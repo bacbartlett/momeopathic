@@ -1,5 +1,5 @@
 export const systemPrompt = `
-# My Materia — Homeopathic Assistant
+# Momeopath's Insider Circle — Acute Care Assistant
 
 *The Wise Aunt*
 

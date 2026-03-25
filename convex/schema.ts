@@ -1,44 +1,35 @@
 import { defineSchema, defineTable } from "convex/server";
+import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // Users table - stores authenticated users from Clerk
+  ...authTables,
+
+  // Users table - extends authTables' default users table with app-specific fields.
+  // Convex Auth creates user records here automatically on sign-in/account creation.
+  // Use getAuthUserId(ctx) to get the current user's _id.
   users: defineTable({
-    // The tokenIdentifier from Clerk (ctx.auth.getUserIdentity().tokenIdentifier)
-    // Format: "https://<issuer>|<subject>" - guaranteed unique per user
-    tokenIdentifier: v.string(),
-    // User's display name from Clerk
-    name: v.string(),
-    // User's email from Clerk (optional, may not always be available)
+    // Fields managed by Convex Auth (from authTables defaults)
+    name: v.optional(v.string()),
     email: v.optional(v.string()),
-    // User's profile image URL from Clerk
+    image: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    // Legacy fields (kept optional for backwards compatibility with existing records)
+    tokenIdentifier: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
-    // Whether the user has accepted the disclaimer
+    // App-specific fields
     disclaimerAccepted: v.optional(v.boolean()),
-    // If true, allows user to engage with the app without a subscription
-    noPaywall: v.optional(v.boolean()),
-    // Feedback prompt tracking
     feedbackThreadCount: v.optional(v.number()),
     feedbackDismissCount: v.optional(v.number()),
     feedbackGiven: v.optional(v.boolean()),
-    // Guest user support
-    isGuest: v.optional(v.boolean()),
-    guestId: v.optional(v.string()),
-    guestThreadCount: v.optional(v.number()),
-    // Activity tracking for greeting system
     lastActivityAt: v.optional(v.number()),
-    // User's timezone (for time-aware greetings) - e.g., "America/New_York"
     timezone: v.optional(v.string()),
-    // Trial tracking
-    firstAppOpen: v.optional(v.number()),
-    trialStarted: v.optional(v.number()),
-    trialEndDate: v.optional(v.number()),
-    deviceFingerprint: v.optional(v.string()),
   })
-    .index("by_token", ["tokenIdentifier"])
-    .index("by_guestId", ["guestId"])
-    .index("by_lastActivity", ["lastActivityAt"])
-    .index("by_deviceFingerprint", ["deviceFingerprint"]),
+    .index("by_email", ["email"])
+    .index("by_lastActivity", ["lastActivityAt"]),
 
   // ============================================
   // NOTES SYSTEM - 4 types of persistent memory
@@ -115,28 +106,4 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_timestamp", ["userId", "timestamp"]),
-
-  // ============================================
-  // OTHER TABLES
-  // ============================================
-
-  offerCodes: defineTable({
-    code: v.string(),
-    description: v.optional(v.string()),
-    maxUses: v.optional(v.number()),
-    usedCount: v.number(),
-    isActive: v.boolean(),
-    expiresAt: v.optional(v.number()),
-  })
-    .index("by_code", ["code"])
-    .index("by_active", ["isActive"]),
-
-  offerCodeRedemptions: defineTable({
-    codeId: v.id("offerCodes"),
-    userId: v.id("users"),
-    codeString: v.string(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_code", ["codeId"])
-    .index("by_user_and_code", ["userId", "codeId"]),
 });

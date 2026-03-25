@@ -137,7 +137,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   const renderInitialState = () => (
     <>
       <View style={styles.header}>
-        <Text style={styles.title}>How are you enjoying My Materia?</Text>
+        <Text style={styles.title}>How are you enjoying the Acute Care App?</Text>
         <Text style={styles.subtitle}>Your feedback helps us improve!</Text>
       </View>
 
@@ -181,7 +181,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         <Text style={styles.successEmoji}>🎉</Text>
         <Text style={styles.title}>Thanks for your support!</Text>
         <Text style={styles.subtitle}>
-          We're so glad you're enjoying My Materia
+          We're so glad you're enjoying the Acute Care App
         </Text>
       </View>
 
@@ -196,7 +196,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
       <View style={styles.header}>
         <Text style={styles.title}>We'd love to hear from you</Text>
         <Text style={styles.subtitle}>
-          Tell us how we can make My Materia better
+          Tell us how we can make the Acute Care App better
         </Text>
       </View>
 
@@ -258,7 +258,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         <Text style={styles.successEmoji}>💚</Text>
         <Text style={styles.title}>Thank you!</Text>
         <Text style={styles.subtitle}>
-          Your feedback helps us make My Materia better for everyone
+          Your feedback helps us make the Acute Care App better for everyone
         </Text>
       </View>
 
@@ -321,7 +321,7 @@ export function useFeedbackStatus() {
 
 /**
  * Component that manages the feedback modal visibility.
- * Should be rendered inside ConvexProviderWithClerk and ChatProvider.
+ * Should be rendered inside ConvexAuthProvider and ChatProvider.
  */
 export function FeedbackManager() {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();

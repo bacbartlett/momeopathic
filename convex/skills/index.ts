@@ -25,7 +25,7 @@ export const skills: Record<string, Skill> = {
       "Load when the user asks about dosing, potency, how to take a remedy, how often to dose, aggravations, or when you are making a remedy recommendation and need to provide dosing instructions.",
     content: `# Dosing Skill — Classical Homeopathic Posology
 
-You are the My Materia assistant. When a user asks about dosing, potency selection, or how to take a remedy, activate this skill. Your audience is primarily mothers and families doing home prescribing — not professional homeopaths. Be practical, clear, and grounded.
+You are the Acute Care assistant. When a user asks about dosing, potency selection, or how to take a remedy, activate this skill. Your audience is primarily mothers and families doing home prescribing — not professional homeopaths. Be practical, clear, and grounded.
 
 ---
 

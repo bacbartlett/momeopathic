@@ -1,6 +1,6 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { Doc } from "./_generated/dataModel";
 
 // Feedback prompt thresholds
 const INITIAL_THRESHOLD = 5; // First prompt after 5 threads
@@ -34,18 +34,12 @@ export const getFeedbackStatus = query({
     threshold: v.number(),
   }),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       return { shouldShowPrompt: false, threadCount: 0, threshold: INITIAL_THRESHOLD };
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-
+    const user = await ctx.db.get(userId);
     if (!user) {
       return { shouldShowPrompt: false, threadCount: 0, threshold: INITIAL_THRESHOLD };
     }
@@ -75,18 +69,12 @@ export const incrementThreadCount = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       return null;
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-
+    const user = await ctx.db.get(userId);
     if (!user) {
       return null;
     }
@@ -113,24 +101,18 @@ export const recordFeedbackPromptDismissed = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       throw new Error("Unauthenticated");
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-
+    const user = await ctx.db.get(userId);
     if (!user) {
       throw new Error("User not found");
     }
 
     const currentDismissCount = user.feedbackDismissCount ?? 0;
-    
+
     // Reset thread count and increment dismiss count
     await ctx.db.patch(user._id, {
       feedbackThreadCount: 0,
@@ -149,18 +131,12 @@ export const recordFeedbackGiven = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       throw new Error("Unauthenticated");
     }
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-
+    const user = await ctx.db.get(userId);
     if (!user) {
       throw new Error("User not found");
     }
@@ -178,7 +154,7 @@ export const recordFeedbackGiven = mutation({
  * Returns user info for the email.
  */
 export const getUserForFeedback = internalMutation({
-  args: { tokenIdentifier: v.string() },
+  args: { userId: v.id("users") },
   returns: v.union(
     v.object({
       id: v.string(),
@@ -188,12 +164,7 @@ export const getUserForFeedback = internalMutation({
     v.null()
   ),
   handler: async (ctx, args): Promise<{ id: string; name: string; email?: string } | null> => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", args.tokenIdentifier)
-      )
-      .unique();
+    const user = await ctx.db.get(args.userId);
 
     if (!user) {
       return null;
@@ -206,7 +177,7 @@ export const getUserForFeedback = internalMutation({
 
     return {
       id: user._id,
-      name: user.name,
+      name: user.name ?? "Anonymous",
       email: user.email,
     };
   },

@@ -1,10 +1,11 @@
 /**
  * DEBUG ENDPOINTS
- * 
+ *
  * These are for testing the greeting system and debugging message issues.
  * Gated behind DEV_MODE environment variable - set via `npx convex env set DEV_MODE true`
  */
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { listMessages, saveMessage } from "@convex-dev/agent";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
@@ -25,7 +26,7 @@ export const getRawMessages = internalQuery({
   returns: v.any(),
   handler: async (ctx, args) => {
     if (!isDevMode()) return [];
-    
+
     const result = await listMessages(ctx, components.agent, {
       threadId: args.threadId,
       paginationOpts: { cursor: null, numItems: 50 },
@@ -39,27 +40,27 @@ export const getRawMessages = internalQuery({
  * Sets lastActivityAt to a time in the past
  */
 export const simulateInactivity = internalMutation({
-  args: { 
+  args: {
     userId: v.id("users"),
     tier: v.union(v.literal("30min"), v.literal("4hour"), v.literal("1week")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     if (!isDevMode()) return null;
-    
+
     const now = Date.now();
     const offsets = {
       "30min": 35 * 60 * 1000,
       "4hour": 5 * 60 * 60 * 1000,
       "1week": 8 * 24 * 60 * 60 * 1000,
     };
-    
+
     const newLastActivity = now - offsets[args.tier];
-    
+
     await ctx.db.patch(args.userId, {
       lastActivityAt: newLastActivity,
     });
-    
+
     return null;
   },
 });
@@ -71,7 +72,6 @@ export const simulateInactivity = internalMutation({
 export const testGreetingTier = internalAction({
   args: {
     tier: v.union(v.literal("30min"), v.literal("4hour"), v.literal("1week")),
-    guestId: v.optional(v.string()),
   },
   returns: v.object({
     success: v.boolean(),
@@ -79,26 +79,14 @@ export const testGreetingTier = internalAction({
   }),
   handler: async (ctx, args) => {
     if (!isDevMode()) return PROD_DISABLED;
-    
-    const identity = await ctx.auth.getUserIdentity();
-    let user = null;
 
-    if (identity) {
-      user = await ctx.runQuery(internal.threads.getUserByToken, {
-        tokenIdentifier: identity.tokenIdentifier,
-      });
-    } else if (args.guestId) {
-      user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
-        guestId: args.guestId,
-      });
-    }
-
-    if (!user) {
-      return { success: false, message: "User not found" };
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return { success: false, message: "Not authenticated" };
     }
 
     await ctx.runMutation(internal.debug.simulateInactivity, {
-      userId: user._id,
+      userId: userId as any,
       tier: args.tier,
     });
 
@@ -116,7 +104,6 @@ export const testGreetingTier = internalAction({
 export const insertDebugMessage = internalAction({
   args: {
     threadId: v.string(),
-    guestId: v.optional(v.string()),
     content: v.optional(v.string()),
   },
   returns: v.object({
@@ -125,29 +112,17 @@ export const insertDebugMessage = internalAction({
   }),
   handler: async (ctx, args) => {
     if (!isDevMode()) return PROD_DISABLED;
-    
-    const identity = await ctx.auth.getUserIdentity();
-    let user = null;
 
-    if (identity) {
-      user = await ctx.runQuery(internal.threads.getUserByToken, {
-        tokenIdentifier: identity.tokenIdentifier,
-      });
-    } else if (args.guestId) {
-      user = await ctx.runQuery(internal.threads.getGuestUserByGuestId, {
-        guestId: args.guestId,
-      });
-    }
-
-    if (!user) {
-      return { success: false, message: "User not found" };
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return { success: false, message: "Not authenticated" };
     }
 
     const content = args.content ?? "Debug message";
 
     await saveMessage(ctx, components.agent, {
       threadId: args.threadId,
-      userId: user._id,
+      userId,
       message: {
         role: "assistant",
         content,
@@ -162,25 +137,24 @@ export const insertDebugMessage = internalAction({
  * Debug: List messages for a thread showing raw format
  */
 export const listRawMessagesForThread = internalQuery({
-  args: { 
+  args: {
     threadId: v.string(),
-    guestId: v.optional(v.string()) 
   },
   returns: v.any(),
   handler: async (ctx, args) => {
     if (!isDevMode()) return { count: 0, messages: [] };
-    
+
     const result = await listMessages(ctx, components.agent, {
       threadId: args.threadId,
       paginationOpts: { cursor: null, numItems: 50 },
     });
-    
+
     return {
       count: result.page.length,
       messages: result.page.map((msg: any) => ({
         role: msg.message?.role,
         contentType: typeof msg.message?.content,
-        contentPreview: typeof msg.message?.content === 'string' 
+        contentPreview: typeof msg.message?.content === 'string'
           ? msg.message.content.slice(0, 100)
           : JSON.stringify(msg.message?.content)?.slice(0, 100),
         text: msg.text?.slice(0, 100),
@@ -196,26 +170,15 @@ export const listRawMessagesForThread = internalQuery({
  * Debug: Check what greeting state exists for current user
  */
 export const checkGreetingState = internalQuery({
-  args: { guestId: v.optional(v.string()) },
+  args: {},
   returns: v.any(),
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
     if (!isDevMode()) return { disabled: true };
-    
-    const identity = await ctx.auth.getUserIdentity();
-    let user = null;
 
-    if (identity) {
-      user = await ctx.db
-        .query("users")
-        .withIndex("by_token", q => q.eq("tokenIdentifier", identity.tokenIdentifier))
-        .unique();
-    } else if (args.guestId) {
-      user = await ctx.db
-        .query("users")
-        .withIndex("by_guestId", q => q.eq("guestId", args.guestId))
-        .unique();
-    }
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { error: "Not authenticated" };
 
+    const user = await ctx.db.get(userId);
     if (!user) return { error: "User not found" };
 
     const now = Date.now();
@@ -231,7 +194,7 @@ export const checkGreetingState = internalQuery({
       userId: user._id,
       lastActivityAt: user.lastActivityAt ? new Date(user.lastActivityAt).toISOString() : null,
       gapMinutes: Math.round(gap / 60000),
-      tier: gap >= 7 * 24 * 60 * 60 * 1000 ? "1week" 
+      tier: gap >= 7 * 24 * 60 * 60 * 1000 ? "1week"
           : gap >= 4 * 60 * 60 * 1000 ? "4hour"
           : gap >= 30 * 60 * 1000 ? "30min"
           : "active",

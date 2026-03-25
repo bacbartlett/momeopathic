@@ -272,15 +272,15 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
 
   /**
    * Handle link presses - intercepts remedy URLs for internal navigation
-   * Handles both mymateria:// URLs and attempts to extract remedy names from other URLs
+   * Handles both momeopaths-acute-care:// URLs and attempts to extract remedy names from other URLs
    *
    * Returns false to prevent default Linking.openURL behavior, true to allow it
    */
   const handleLinkPress = useCallback(
     (url: string): boolean => {
 
-      // Check if this is our internal mymateria:// link
-      if (url.startsWith("mymateria://materia-medica")) {
+      // Check if this is our internal momeopaths-acute-care:// link
+      if (url.startsWith("momeopaths-acute-care://materia-medica")) {
         try {
           const urlObj = new URL(url);
           const remedyName = urlObj.searchParams.get("name");
@@ -290,7 +290,7 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
             const decoded = decodeURIComponent(remedyName);
             if (tryNavigateToLocalRemedy(decoded)) {
               // Prevent default link handling - we've handled it internally
-              // Return false so the library doesn't call Linking.openURL with mymateria://
+              // Return false so the library doesn't call Linking.openURL with momeopaths-acute-care://
               return false;
             }
           }
@@ -308,10 +308,10 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
           }
 
           // If we get here, we couldn't handle the link, but still prevent default
-          // to avoid Android trying to open the mymateria:// URL (which isn't registered)
+          // to avoid Android trying to open the momeopaths-acute-care:// URL (which isn't registered)
           return false;
         } catch (err) {
-          console.error("[MessageBubble] Error parsing mymateria:// URL:", err);
+          console.error("[MessageBubble] Error parsing momeopaths-acute-care:// URL:", err);
           // Prevent default even on error to avoid Android deep link error
           return false;
         }

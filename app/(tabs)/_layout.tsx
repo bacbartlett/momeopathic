@@ -1,33 +1,31 @@
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-expo';
-import { useGuest } from '@/context/guest-context';
+import { useConvexAuth } from 'convex/react';
 import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function ChatLayout() {
-  const { isSignedIn, isLoaded } = useAuth();
-  const { isGuest, isGuestLoading } = useGuest();
+  const { isAuthenticated, isLoading } = useConvexAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoaded || isGuestLoading) return;
+    if (isLoading) return;
 
-    // If user is not signed in and not a guest, redirect to sign-in
-    if (!isSignedIn && !isGuest) {
+    // If user is not signed in, redirect to sign-in
+    if (!isAuthenticated) {
       try {
         router.replace('/(auth)/sign-in');
       } catch (error) {
         console.error('[ChatLayout] Navigation error:', error);
       }
     }
-  }, [isSignedIn, isLoaded, isGuest, isGuestLoading, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  // Don't render protected content until auth/guest state is loaded
-  if (!isLoaded || isGuestLoading) {
+  // Don't render protected content until auth state is loaded
+  if (isLoading) {
     return null;
   }
 
-  if (!isSignedIn && !isGuest) {
+  if (!isAuthenticated) {
     return null;
   }
 

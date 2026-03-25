@@ -6,7 +6,6 @@ import {
   Spacing,
   Typography,
 } from "@/constants/theme";
-import { useGuest } from "@/context/guest-context";
 import { usePostHogAnalytics } from "@/context/posthog-context";
 import { api } from "@/convex/_generated/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -95,11 +94,7 @@ export function DisclaimerModal({
 }: DisclaimerModalProps) {
   const [isFullText, setIsFullText] = useState(false);
   const { isAuthenticated } = useConvexAuth();
-  const { guestId, isGuest } = useGuest();
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
-  const acceptDisclaimerAsGuest = useMutation(
-    api.users.acceptDisclaimerAsGuest,
-  );
   const router = useRouter();
   const { track } = usePostHogAnalytics();
 
@@ -112,15 +107,13 @@ export function DisclaimerModal({
 
   const handleAgree = async () => {
     try {
-      // Save to AsyncStorage (works for both guests and authenticated users)
+      // Save to AsyncStorage
       await AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, "true");
 
       // Save to database
       try {
         if (isAuthenticated) {
           await acceptDisclaimer();
-        } else if (isGuest && guestId) {
-          await acceptDisclaimerAsGuest({ guestId });
         }
       } catch (dbError) {
         console.error("Failed to save disclaimer to database:", dbError);
@@ -258,11 +251,9 @@ export async function hasAgreedToDisclaimer(): Promise<boolean> {
 /**
  * Hook to check if the user has accepted the disclaimer.
  * For authenticated users: checks database (source of truth) synced with AsyncStorage.
- * For guests: checks AsyncStorage only.
  */
 export function useHasAcceptedDisclaimer() {
   const { isAuthenticated } = useConvexAuth();
-  const { isGuest } = useGuest();
   const dbAccepted = useQuery(api.users.hasAcceptedDisclaimer);
   const [localAccepted, setLocalAccepted] = useState<boolean | null>(null);
 
@@ -287,16 +278,13 @@ export function useHasAcceptedDisclaimer() {
     }
   }, [dbAccepted, localAccepted]);
 
-  // For guest users, use AsyncStorage only
-  if (isGuest && !isAuthenticated) {
-    return localAccepted;
+  // If not authenticated, return false
+  if (!isAuthenticated) {
+    return false;
   }
 
   // For authenticated users, database is source of truth — but also trust
-  // local acceptance. During guest→auth transitions the DB may temporarily
-  // return false (user record doesn't exist yet or hasn't been upgraded).
-  // If the user already accepted as a guest (stored in AsyncStorage), honor
-  // that to prevent the onboarding from flashing during the transition.
+  // local acceptance to prevent flashing during transitions.
   if (dbAccepted === true || localAccepted === true) {
     return true;
   }
@@ -311,25 +299,24 @@ export function useHasAcceptedDisclaimer() {
 
 /**
  * Component that manages the disclaimer modal visibility.
- * Shows for both authenticated users and guests.
+ * Shows for authenticated users.
  * Does not show on terms or privacy policy pages.
  */
 export function DisclaimerManager() {
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
-  const { isGuest, isGuestLoading } = useGuest();
   const hasAccepted = useHasAcceptedDisclaimer();
   const pathname = usePathname();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Wait for auth and guest state to be ready
-    if (isAuthLoading || isGuestLoading) {
+    // Wait for auth state to be ready
+    if (isAuthLoading) {
       return;
     }
 
-    // If user is not authenticated and not a guest, don't show disclaimer
-    if (!isAuthenticated && !isGuest) {
+    // If user is not authenticated, don't show disclaimer
+    if (!isAuthenticated) {
       setShowDisclaimer(false);
       setInitialized(true);
       return;
@@ -342,7 +329,7 @@ export function DisclaimerManager() {
       return;
     }
 
-    // User is authenticated or guest - check if they've accepted
+    // User is authenticated - check if they've accepted
     if (hasAccepted === null) {
       // Still loading disclaimer status - keep modal hidden
       setShowDisclaimer(false);
@@ -354,8 +341,6 @@ export function DisclaimerManager() {
   }, [
     isAuthenticated,
     isAuthLoading,
-    isGuest,
-    isGuestLoading,
     hasAccepted,
     pathname,
   ]);

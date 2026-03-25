@@ -19,7 +19,7 @@ const pp = `# PRIVACY POLICY
 
 ## 1. INTRODUCTION
 
-BrandonBDev LLC ("Company," "we," "us," or "our") operates the My Materia application (the "App"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our App.
+BrandonBDev LLC ("Company," "we," "us," or "our") operates the Momeopath's Insider Circle - Acute Care application (the "App"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our App.
 
 **Please read this Privacy Policy carefully.** By using the App, you agree to the collection and use of information in accordance with this Privacy Policy. If you do not agree with this Privacy Policy, please do not use the App.
 

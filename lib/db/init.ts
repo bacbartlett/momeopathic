@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MATERIA_MEDICA } from '@/assets/materia-medica';
 import { createTables, isDatabaseSeeded, seedDatabase } from './seed';
 
-const DB_VERSION_KEY = '@mymateria:db_version';
+const DB_VERSION_KEY = '@acutecare:db_version';
 const CURRENT_DB_VERSION = '1.0.0';
 
 export interface InitializationResult {

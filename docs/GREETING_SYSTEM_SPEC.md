@@ -2,7 +2,7 @@
 
 ## Overview
 
-My Materia uses a tiered greeting system to welcome users based on how long they've been away. The system should feel warm and personal, like a friend remembering you.
+The Acute Care App uses a tiered greeting system to welcome users based on how long they've been away. The system should feel warm and personal, like a friend remembering you.
 
 ## User Scenarios
 

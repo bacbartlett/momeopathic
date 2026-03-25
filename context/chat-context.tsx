@@ -11,7 +11,6 @@ import React, {
   useState,
 } from 'react';
 import { api } from '../convex/_generated/api.js';
-import { useGuest } from './guest-context';
 import { usePostHogAnalytics } from './posthog-context';
 
 // Re-export types for consumers who import from context
@@ -50,8 +49,6 @@ interface ChatContextType {
   isSending: boolean;
   isCreatingThread: boolean;
   isAuthenticated: boolean;
-  isGuest: boolean;
-  guestLimitReached: boolean;
   isGreetingGenerating: boolean;
   sendError: string | null;
   createThreadError: string | null;
@@ -64,7 +61,6 @@ interface ChatContextType {
   clearSendError: () => void;
   clearCreateThreadError: () => void;
   clearDeleteThreadError: () => void;
-  clearGuestLimitReached: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -77,7 +73,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [createThreadError, setCreateThreadError] = useState<string | null>(null);
   const [deleteThreadError, setDeleteThreadError] = useState<string | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<FailedMessageRetry | null>(null);
-  const [guestLimitReached, setGuestLimitReached] = useState(false);
   const [isGreetingGenerating, setIsGreetingGenerating] = useState(false);
   const [threadInitialized, setThreadInitialized] = useState(false);
   const { track, incrementUserProperty, setUserPropertiesOnce } = usePostHogAnalytics();
@@ -94,24 +89,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Get auth state from Convex (not Clerk directly)
+  // Get auth state from Convex
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
-  // Get guest state
-  const { guestId, isGuest, isGuestLoading, isClaimInProgress } = useGuest();
-
   // Determine if we can make queries.
-  // During a guest→auth claim, skip queries to avoid stale results (the user record
-  // is being upgraded and queries by tokenIdentifier would return empty).
-  const canQuery = (isAuthenticated && !isClaimInProgress) || isGuest;
+  const canQuery = isAuthenticated;
 
   // Fetch threads from Convex
   const threadsResult = useQuery(
     api.threads.list,
     canQuery
-      ? isAuthenticated
-        ? {}
-        : { guestId: guestId! }
+      ? {}
       : "skip"
   );
 
@@ -119,9 +107,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const messagesResult = useQuery(
     api.messages.list,
     activeThreadId && canQuery
-      ? isAuthenticated
-        ? { threadId: activeThreadId }
-        : { threadId: activeThreadId, guestId: guestId! }
+      ? { threadId: activeThreadId }
       : "skip"
   );
 
@@ -184,8 +170,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     activeThreadId,
   }), [threads, activeThreadId, activeThreadMessages]);
 
-  // Loading state - include auth loading, guest loading, and guest→auth claim
-  const isLoading = isAuthLoading || isGuestLoading || isClaimInProgress || (canQuery && threadsResult === undefined);
+  // Loading state
+  const isLoading = isAuthLoading || (canQuery && threadsResult === undefined);
 
   // Messages loading state
   const isMessagesLoading = Boolean(activeThreadId && canQuery && messagesResult === undefined);
@@ -197,24 +183,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       setIsCreatingThread(true);
       try {
-        const actionArgs = isAuthenticated ? {} : { guestId: guestId! };
-        const result = await getOrCreateThreadAction(actionArgs);
+        const result = await getOrCreateThreadAction({});
 
         if (mountedRef.current) {
           setActiveThreadId(result.threadId);
           setThreadInitialized(true);
 
           if (result.isNew) {
-            track('Thread Created', { thread_id: result.threadId, is_guest: isGuest });
+            track('Thread Created', { thread_id: result.threadId });
             incrementUserProperty('threads_created');
           } else {
             // Existing thread: trigger live greeting generation
             setIsGreetingGenerating(true);
             try {
-              const greetingArgs = isAuthenticated
-                ? { threadId: result.threadId }
-                : { threadId: result.threadId, guestId: guestId! };
-              await triggerGreetingAction(greetingArgs);
+              await triggerGreetingAction({ threadId: result.threadId });
             } catch (err) {
               console.debug('Greeting generation failed:', err);
             } finally {
@@ -227,7 +209,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Failed to initialize thread:', error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to initialize';
-        track('Thread Create Failed', { error: errorMessage, is_guest: isGuest });
+        track('Thread Create Failed', { error: errorMessage });
         if (mountedRef.current) {
           setCreateThreadError(errorMessage);
         }
@@ -241,7 +223,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!isLoading && canQuery && !activeThreadId && !threadInitialized) {
       initializeThread();
     }
-  }, [isLoading, canQuery, activeThreadId, threadInitialized, isAuthenticated, isGuest, guestId, isCreatingThread, getOrCreateThreadAction, triggerGreetingAction, track, incrementUserProperty]);
+  }, [isLoading, canQuery, activeThreadId, threadInitialized, isAuthenticated, isCreatingThread, getOrCreateThreadAction, triggerGreetingAction, track, incrementUserProperty]);
 
   // Legacy: Auto-select first thread if none selected (fallback for existing threads)
   React.useEffect(() => {
@@ -250,12 +232,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [isLoading, threads, activeThreadId, threadInitialized]);
 
-  // Clear active thread when user signs out (and is not a guest)
+  // Reset chat state when user signs out
   React.useEffect(() => {
-    if (!isAuthenticated && !isGuest) {
+    if (!isAuthenticated) {
       setActiveThreadId(null);
+      setThreadInitialized(false);
     }
-  }, [isAuthenticated, isGuest]);
+  }, [isAuthenticated]);
 
   // Clear retry state when leaving the failed thread.
   React.useEffect(() => {
@@ -265,7 +248,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [activeThreadId, lastFailedMessage]);
 
-  // Recover from stale thread id after auth/guest transitions.
+  // Recover from stale thread id after auth transitions.
   React.useEffect(() => {
     if (isLoading || !activeThreadId || threadsResult === undefined) {
       return;
@@ -287,14 +270,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setDeleteThreadError(null);
   }, []);
 
-  const clearGuestLimitReached = useCallback(() => {
-    setGuestLimitReached(false);
-  }, []);
-
   // Create new thread
   const createThread = useCallback(async () => {
     if (!canQuery) {
-      console.error('Cannot create thread: User not authenticated or guest');
+      console.error('Cannot create thread: User not authenticated');
       return;
     }
     if (isCreatingThread) {
@@ -303,57 +282,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsCreatingThread(true);
     setCreateThreadError(null);
     try {
-      const actionArgs = isAuthenticated
-        ? { title: 'New Chat' }
-        : { title: 'New Chat', guestId: guestId! };
-      const result = await createThreadAction(actionArgs);
+      const result = await createThreadAction({ title: 'New Chat' });
       if (mountedRef.current) {
         setActiveThreadId(result.threadId);
-        track('Thread Created', { thread_id: result.threadId, is_guest: isGuest });
+        track('Thread Created', { thread_id: result.threadId });
         incrementUserProperty('threads_created');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create thread';
       console.error('Failed to create thread:', error);
-      track('Thread Create Failed', { error: errorMessage, is_guest: isGuest });
+      track('Thread Create Failed', { error: errorMessage });
       if (mountedRef.current) {
-        if (errorMessage === 'GUEST_LIMIT_REACHED') {
-          setGuestLimitReached(true);
-        } else {
-          setCreateThreadError(errorMessage);
-        }
+        setCreateThreadError(errorMessage);
       }
     } finally {
       if (mountedRef.current) {
         setIsCreatingThread(false);
       }
     }
-  }, [canQuery, isAuthenticated, isGuest, guestId, isCreatingThread, createThreadAction, track, incrementUserProperty]);
+  }, [canQuery, isAuthenticated, isCreatingThread, createThreadAction, track, incrementUserProperty]);
 
   // Select thread
   const activeThreadIdRef = useRef(activeThreadId);
   activeThreadIdRef.current = activeThreadId;
   const selectThread = useCallback((threadId: string) => {
     if (threadId !== activeThreadIdRef.current) {
-      track('Thread Switched', { thread_id: threadId, is_guest: isGuest });
+      track('Thread Switched', { thread_id: threadId });
     }
     setActiveThreadId(threadId);
-  }, [isGuest, track]);
+  }, [track]);
 
   // Delete thread
   const deleteThread = useCallback(async (threadId: string) => {
     if (!canQuery) {
-      console.error('Cannot delete thread: User not authenticated or guest');
+      console.error('Cannot delete thread: User not authenticated');
       return;
     }
     setDeleteThreadError(null);
     try {
-      const actionArgs = isAuthenticated
-        ? { threadId }
-        : { threadId, guestId: guestId! };
-      await deleteThreadAction(actionArgs);
+      await deleteThreadAction({ threadId });
       if (mountedRef.current) {
-        track('Thread Deleted', { thread_id: threadId, is_guest: isGuest });
+        track('Thread Deleted', { thread_id: threadId });
         if (activeThreadId === threadId) {
           const remainingThreads = threads.filter(t => t.id !== threadId);
           setActiveThreadId(remainingThreads[0]?.id ?? null);
@@ -366,7 +335,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setDeleteThreadError(errorMessage);
       }
     }
-  }, [canQuery, isAuthenticated, isGuest, guestId, deleteThreadAction, activeThreadId, threads, track]);
+  }, [canQuery, isAuthenticated, deleteThreadAction, activeThreadId, threads, track]);
 
   // Clear send error
   const clearSendError = useCallback(() => {
@@ -378,7 +347,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const sendMessage = useCallback(async (content: string) => {
     if (!activeThreadId || isSendingRef.current) return;
     if (!canQuery) {
-      console.error('Cannot send message: User not authenticated or guest');
+      console.error('Cannot send message: User not authenticated');
       return;
     }
 
@@ -386,20 +355,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsSending(true);
     setSendError(null);
     try {
-      const actionArgs = isAuthenticated
-        ? { threadId: activeThreadId, content }
-        : { threadId: activeThreadId, content, guestId: guestId! };
-      await sendMessageAction(actionArgs);
+      await sendMessageAction({ threadId: activeThreadId, content });
       if (mountedRef.current) {
         setLastFailedMessage(null);
         track('Message Sent', {
           thread_id: activeThreadId,
           message_length: content.length,
-          is_guest: isGuest,
         });
         incrementUserProperty('messages_sent');
         setUserPropertiesOnce({ first_message_date: new Date().toISOString() });
-        // Increment feedback thread count for review prompt tracking (only for authenticated users)
+        // Increment feedback thread count for review prompt tracking
         if (isAuthenticated) {
           incrementFeedbackThreadCount().catch((err) => {
             console.debug('Failed to increment feedback thread count:', err);
@@ -412,7 +377,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       track('Message Send Failed', {
         thread_id: activeThreadId,
         error: errorMessage,
-        is_guest: isGuest,
       });
       if (mountedRef.current) {
         setSendError(errorMessage);
@@ -427,7 +391,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsSending(false);
       }
     }
-  }, [activeThreadId, canQuery, isAuthenticated, isGuest, guestId, sendMessageAction, track, incrementUserProperty, setUserPropertiesOnce, incrementFeedbackThreadCount]);
+  }, [activeThreadId, canQuery, isAuthenticated, sendMessageAction, track, incrementUserProperty, setUserPropertiesOnce, incrementFeedbackThreadCount]);
 
   // Retry last failed message
   const retryLastMessage = useCallback(async () => {
@@ -449,8 +413,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isSending,
         isCreatingThread,
         isAuthenticated,
-        isGuest,
-        guestLimitReached,
         isGreetingGenerating,
         sendError,
         createThreadError,
@@ -463,7 +425,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearSendError,
         clearCreateThreadError,
         clearDeleteThreadError,
-        clearGuestLimitReached,
       }}
     >
       {children}

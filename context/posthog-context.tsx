@@ -1,5 +1,6 @@
 import { EXPO_PUBLIC_POSTHOG_API_KEY, EXPO_PUBLIC_POSTHOG_HOST } from '@/lib/env';
-import { useUser } from '@clerk/clerk-expo';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import { PostHogProvider, usePostHog } from 'posthog-react-native';
 import React, {
   Component,
@@ -163,10 +164,10 @@ interface PostHogProviderWrapperProps {
 function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
   startupLog('[STARTUP] PostHogProviderInner: Rendering');
   const [isReady, setIsReady] = useState(false);
-  const { user, isLoaded: isClerkLoaded } = useUser();
+  const convexUser = useQuery(api.users.current);
   const posthog = usePostHog();
   startupLog('[STARTUP] PostHogProviderInner: posthog instance exists:', !!posthog);
-  
+
   // Track current identified user to avoid unnecessary identify calls
   const currentIdentifiedUserRef = useRef<string | null>(null);
 
@@ -184,7 +185,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
       // Set default super properties
       posthog.register({
         platform: Platform.OS,
-        app_name: 'MyMateria',
+        app_name: 'AcuteCareApp',
       });
 
       startupLog('[STARTUP] PostHogProviderInner: Initialized successfully');
@@ -195,53 +196,47 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
     }
   }, [posthog]);
 
-  // Sync user identity with Clerk
+  // Sync user identity with Convex
   useEffect(() => {
-    if (!isReady || !isClerkLoaded || !posthog) {
+    if (!isReady || !posthog) {
       return;
     }
 
     const syncUserIdentity = async () => {
       try {
-        const clerkUserId = user?.id ?? null;
+        const userId = convexUser?._id ?? null;
         const currentIdentifiedUser = currentIdentifiedUserRef.current;
 
         // User signed in: identify to PostHog
-        if (clerkUserId && clerkUserId !== currentIdentifiedUser) {
+        if (userId && userId !== currentIdentifiedUser) {
           if (__DEV__) {
-            console.log('[PostHog] Identifying user:', clerkUserId);
+            console.log('[PostHog] Identifying user:', userId);
           }
-          
+
           // Set user profile properties
           const profileProps: UserProfileProperties = {
             platform: Platform.OS,
           };
-          
-          if (user?.emailAddresses?.[0]?.emailAddress) {
-            profileProps.email = user.emailAddresses[0].emailAddress;
-          }
-          
-          if (user?.fullName) {
-            profileProps.name = user.fullName;
-          } else if (user?.firstName) {
-            profileProps.name = user.firstName;
-          }
-          
-          if (user?.createdAt) {
-            profileProps.created = new Date(user.createdAt).toISOString();
+
+          if (convexUser?.email) {
+            profileProps.email = convexUser.email;
           }
 
-          posthog.identify(clerkUserId, {
+          if (convexUser?.name) {
+            profileProps.name = convexUser.name;
+          }
+
+          posthog.identify(userId, {
             $set: filterUndefined(profileProps),
           });
-          currentIdentifiedUserRef.current = clerkUserId;
+          currentIdentifiedUserRef.current = userId;
         }
         // User signed out: reset PostHog
-        else if (!clerkUserId && currentIdentifiedUser !== null) {
+        else if (!userId && currentIdentifiedUser !== null) {
           if (__DEV__) {
             console.log('[PostHog] Resetting user identity');
           }
-          
+
           posthog.reset();
           currentIdentifiedUserRef.current = null;
         }
@@ -251,7 +246,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
     };
 
     syncUserIdentity();
-  }, [isReady, isClerkLoaded, posthog, user?.id, user?.emailAddresses, user?.fullName, user?.firstName, user?.createdAt]);
+  }, [isReady, posthog, convexUser?._id, convexUser?.email, convexUser?.name]);
 
 
   // Track an event
@@ -264,7 +259,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
       } else {
         posthog.capture(event);
       }
-      
+
       if (__DEV__) {
         console.log('[PostHog] Tracked:', event, properties ?? '');
       }
@@ -287,7 +282,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
         // If no user is identified, just register as super properties
         posthog.register(filterUndefined(properties));
       }
-      
+
       if (__DEV__) {
         console.log('[PostHog] Set user properties:', properties);
       }
@@ -328,7 +323,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
           $increment: { [property]: by },
         });
       }
-      
+
       if (__DEV__) {
         console.log('[PostHog] Incremented:', property, 'by', by);
       }
@@ -343,7 +338,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
 
     try {
       posthog.register(filterUndefined(properties));
-      
+
       if (__DEV__) {
         console.log('[PostHog] Set super properties:', properties);
       }
@@ -359,7 +354,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
     try {
       // PostHog doesn't have timeEvent, but we can track a start event
       posthog.capture(`$start_${eventName}`);
-      
+
       if (__DEV__) {
         console.log('[PostHog] Started timing:', eventName);
       }
@@ -375,7 +370,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
     try {
       posthog.reset();
       currentIdentifiedUserRef.current = null;
-      
+
       if (__DEV__) {
         console.log('[PostHog] Reset');
       }
@@ -390,7 +385,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
 
     try {
       posthog.optOut();
-      
+
       if (__DEV__) {
         console.log('[PostHog] Opted out of tracking');
       }
@@ -405,7 +400,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
 
     try {
       posthog.optIn();
-      
+
       if (__DEV__) {
         console.log('[PostHog] Opted in to tracking');
       }
@@ -443,7 +438,7 @@ function PostHogProviderInner({ children }: PostHogProviderWrapperProps) {
       };
 
       posthog.capture('$exception', errorProperties);
-      
+
       if (__DEV__) {
         console.log('[PostHog] Captured exception:', error.name, error.message);
       }
@@ -675,7 +670,7 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
     startupLog('[STARTUP] PostHogCrashReporter: Setting up global error handler');
     // Handle unhandled JS errors
     const originalErrorHandler = ErrorUtils.getGlobalHandler();
-    
+
     ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
       startupLog('[STARTUP] PostHogCrashReporter: Global error caught:', error.message, 'isFatal:', isFatal);
       // Capture to PostHog
@@ -716,7 +711,7 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
       enable: (options: { allRejections: boolean; onUnhandled: (id: string, rejection: Error | unknown) => void; onHandled: () => void }) => void;
       disable: () => void;
     }
-    
+
     let trackingModule: RejectionTrackingModule | null = null;
     try {
       startupLog('[STARTUP] PostHogCrashReporter: Attempting to load promise rejection tracking');
@@ -738,7 +733,7 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
 
     // Capture trackingModule in closure for cleanup
     const capturedTrackingModule = trackingModule;
-    
+
     return () => {
       startupLog('[STARTUP] PostHogCrashReporter: Cleanup - restoring original error handler');
       // Restore original error handler on cleanup

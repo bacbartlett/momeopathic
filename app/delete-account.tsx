@@ -1,6 +1,7 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { useUser } from '@clerk/clerk-expo';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -18,9 +19,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
-  const { user } = useUser();
+  const user = useQuery(api.users.current);
+  const deleteAccount = useMutation(api.users.deleteAccount);
   const { track } = usePostHogAnalytics();
-  
+
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,7 +40,7 @@ export default function DeleteAccountScreen() {
     setError('');
 
     try {
-      await user.delete();
+      await deleteAccount();
       // Track event only after successful deletion
       track('Account Deleted');
       // Redirect to sign-in page with error handling
@@ -93,17 +95,6 @@ export default function DeleteAccountScreen() {
               <Text style={styles.warningTitle}>Permanent Deletion</Text>
               <Text style={styles.warningText}>
                 By deleting your account, you will lose access to all your data, including your chat history, preferences, and account information. This action cannot be reversed.
-              </Text>
-            </View>
-
-            <View style={styles.infoBox}>
-              <Ionicons name="card-outline" size={24} color={Colors.warning} />
-              <Text style={styles.infoTitle}>Important: Subscription</Text>
-              <Text style={styles.infoText}>
-                Deleting your account does not automatically cancel your subscription. You must cancel your subscription separately in the App Store or Google Play Store before deleting your account.
-              </Text>
-              <Text style={styles.infoText}>
-                If you have an active subscription, please cancel it first to avoid future charges.
               </Text>
             </View>
           </View>

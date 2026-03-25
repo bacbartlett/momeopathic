@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-My Materia is a React Native mobile app (iOS & Android) that provides a homeopathy reference guide powered by Boericke's Materia Medica. The app features an AI-powered chat interface for personalized homeopathic recommendations and a searchable database of remedies and symptoms.
+Momeopath's Insider Circle - Acute Care App is a React Native mobile app (iOS & Android) that provides a homeopathy reference guide powered by Boericke's Materia Medica. The app features an AI-powered chat interface for personalized homeopathic recommendations and a searchable database of remedies and symptoms.
 
 ## Common Development Commands
 
@@ -56,7 +56,7 @@ The backend uses **Convex** as a real-time database with edge functions. The cha
 - **Agent Architecture**: The `homeopathicAgent` (convex/agents/homeopathic.ts) is a conversational AI that conducts homeopathic case-taking interviews
 - **RAG System**: Vector search over Boericke's Materia Medica using @convex-dev/rag (see convex/rag/ directory)
 - **Thread Management**: Each chat conversation is a "thread" with messages stored in Convex
-- **Authentication Flow**: Clerk → Convex auth → automatic user creation in users table
+- **Authentication Flow**: Convex Auth (email+password) → automatic user creation in users table
 
 ### Frontend: React Native + Expo Router
 
@@ -71,15 +71,13 @@ The backend uses **Convex** as a real-time database with edge functions. The cha
 
 ### Provider Hierarchy
 
-The app uses a deeply nested provider structure (see app/_layout.tsx):
+The app uses a nested provider structure (see app/_layout.tsx):
 ```
-ClerkProvider (auth)
-  → ConvexProviderWithClerk (database + auth bridge)
-    → StoreUserInDatabase (auto-creates user record)
-      → MateriaMedicaInitializer (seeds local SQLite on first launch)
-        → PostHogProviderWrapper (analytics)
-          → RevenueCatProvider (subscriptions/paywall)
-            → ChatProvider (chat state management)
+ConvexAuthProvider (auth + database)
+  → StoreUserInDatabase (auto-creates user record)
+    → MateriaMedicaInitializer (seeds local SQLite on first launch)
+      → PostHogProviderWrapper (analytics)
+        → ChatProvider (chat state management)
 ```
 
 ## Key Convex Patterns (from .cursor/rules/convex_rules.mdc)
@@ -168,11 +166,10 @@ The materia medica remedy data is stored in SQLite for offline access:
 
 ## Third-Party Services
 
-- **Clerk**: Authentication (expo-secure-store for token caching)
-- **Convex**: Backend database + serverless functions
-- **RevenueCat**: Subscription management and paywall
+- **Convex**: Backend database + serverless functions + authentication (via @convex-dev/auth)
 - **PostHog**: Analytics and session replay
 - **OpenAI**: AI model for chat agent (via @ai-sdk/openai)
+- **Resend**: Transactional emails (password reset, feedback)
 
 ## Accessibility
 
@@ -236,33 +233,13 @@ const reversedMessages = [...messages].reverse();
 
 ## Important Notes
 
-### Authentication & Session Management
+### Authentication
 
-**Session Persistence**:
-- `SessionManager` component (`components/session-manager.tsx`) keeps users logged in indefinitely
-- Automatically refreshes tokens every 30 minutes to prevent expiration
-- Refreshes tokens when app comes to foreground from background
-- Token cache uses `expo-secure-store` with `AFTER_FIRST_UNLOCK` to persist across device restarts
-
-**Clerk Dashboard Configuration**:
-- See `CLERK_SESSION_CONFIG.md` for required Clerk Dashboard settings
-- Must set "Inactive Session Lifetime" and "Maximum Session Lifetime" to never expire (or very long duration)
-- Without proper Clerk settings, users will still be logged out periodically
-
-**Authentication Race Conditions**:
-- Queries return empty arrays if user not authenticated yet
+- Uses **Convex Auth** with Password provider (email + password only)
+- Token persistence via `expo-secure-store`
 - `StoreUserInDatabase` component ensures user exists in Convex before queries run
-- Client code retries queries once auth is fully initialized
-
-### Paywall System
-- `noPaywall` field on user table bypasses subscription checks
-- RevenueCat integration in `context/revenue-cat-context`
-- Paywall prompts after certain usage thresholds
-- **Offer Codes**: Users can redeem promotional codes to get free access
-  - Codes managed via Convex Dashboard (internal mutations only)
-  - See `OFFER_CODES.md` for full documentation
-  - Redemption validates code, sets `noPaywall: true` on user
-  - Tracks usage and prevents duplicate redemptions
+- Accounts are pre-created by admin (no in-app sign-up) — all users have full access
+- Password reset via email (Resend)
 
 ### Feedback System
 - `FeedbackManager` component shows feedback prompts after N thread interactions

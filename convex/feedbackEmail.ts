@@ -1,5 +1,6 @@
 "use node";
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { Resend } from "resend";
 import { internal } from "./_generated/api";
@@ -20,8 +21,8 @@ export const submitFeedback = action({
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       return { success: false, error: "Unauthenticated" };
     }
 
@@ -35,7 +36,7 @@ export const submitFeedback = action({
 
     // Get user info and mark feedback as given
     const user = await ctx.runMutation(internal.feedback.getUserForFeedback, {
-      tokenIdentifier: identity.tokenIdentifier,
+      userId: userId as any,
     });
 
     if (!user) {
@@ -56,7 +57,7 @@ export const submitFeedback = action({
       const resend = new Resend(resendApiKey);
 
       const { error } = await resend.emails.send({
-        from: "My Materia App <noreplybrandonb.dev>",
+        from: "Acute Care App <noreply@brandonb.dev>",
         to: feedbackEmail,
         subject: "App Feedback from User",
         text: `
@@ -72,7 +73,7 @@ Feedback:
 ${args.feedback}
 
 ---
-Sent from My Materia App
+Sent from Momeopath's Insider Circle - Acute Care App
         `.trim(),
       });
 

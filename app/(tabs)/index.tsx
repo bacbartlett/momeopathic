@@ -1,21 +1,14 @@
 import { Composer, ComposerHandle } from '@/components/chat/composer';
 import { MessageList } from '@/components/chat/message-list';
 import { useHasAcceptedDisclaimer } from '@/components/disclaimer-modal';
-import { GuestSignUpModal } from '@/components/guest-signup-modal';
 import { OnboardingChat } from '@/components/onboarding-chat';
-import { PaywallModal } from '@/components/paywall-modal';
-import { TrialIndicator } from '@/components/trial-indicator';
-import { TrialLockoutModal } from '@/components/trial-lockout-modal';
-import { TrialStartModal } from '@/components/trial-start-modal';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
 import { usePostHogAnalytics } from '@/context/posthog-context';
-import { useSubscription } from '@/context/revenue-cat-context';
-import { useTrialContext } from '@/context/trial-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Keyboard,
@@ -36,34 +29,14 @@ export default function ChatScreen() {
     isLoading,
     isMessagesLoading,
     isAuthenticated,
-    isGuest,
-    guestLimitReached,
-    clearGuestLimitReached,
     sendMessage,
     isGreetingGenerating,
   } = useChat();
-  const { isSubscribed, isLoading: isSubscriptionLoading } = useSubscription();
-  const {
-    isLoading: isTrialLoading,
-    shouldShowTrialModal,
-    isInTrial,
-    trialDaysRemaining,
-    trialExpired,
-    canUseApp,
-    startTrial,
-  } = useTrialContext();
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [keyboardKey, setKeyboardKey] = useState(0);
   const composerRef = useRef<ComposerHandle>(null);
-  const [showGuestSignUpModal, setShowGuestSignUpModal] = useState(false);
-  const [showPaywallModal, setShowPaywallModal] = useState(false);
-  const [showLockoutModal, setShowLockoutModal] = useState(true);
   const { track } = usePostHogAnalytics();
 
-  const openPaywall = useCallback((trigger: string) => {
-    track('Paywall Trigger', { trigger_reason: trigger });
-    setShowPaywallModal(true);
-  }, [track]);
   const hasAcceptedDisclaimer = useHasAcceptedDisclaimer();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
@@ -84,15 +57,8 @@ export default function ChatScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (trialExpired && !isSubscribed) {
-      setShowLockoutModal(true);
-    }
-  }, [trialExpired, isSubscribed]);
-
-  // Show loading while checking auth or subscription status
-  // For guests, skip the currentUser and subscription checks
-  if (isLoading || (!isGuest && (isSubscriptionLoading || isTrialLoading || (isAuthenticated && currentUser === undefined)))) {
+  // Show loading while checking auth
+  if (isLoading || (isAuthenticated && currentUser === undefined)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -100,9 +66,6 @@ export default function ChatScreen() {
       </View>
     );
   }
-
-  // Check if user has noPaywall flag set to true
-  const hasNoPaywall = currentUser?.noPaywall === true;
 
   // Build display messages: append a synthetic pending message when greeting is generating
   const displayMessages = useMemo(() => {
@@ -120,9 +83,7 @@ export default function ChatScreen() {
     ];
   }, [activeThread?.messages, isGreetingGenerating]);
 
-  const shouldUseTrialUI = isAuthenticated && !isGuest && !hasNoPaywall;
-  const canUseChat = shouldUseTrialUI ? canUseApp : true;
-  const showTrialIndicator = shouldUseTrialUI && isInTrial && !isSubscribed && trialDaysRemaining !== null;
+  const canUseChat = !!activeThread;
 
   const content = (
     <>
@@ -133,14 +94,10 @@ export default function ChatScreen() {
           <TouchableOpacity
             style={styles.headerActionButton}
             onPress={() => {
-              if (isGuest) {
-                setShowGuestSignUpModal(true);
-                return;
-              }
               router.push('/account');
             }}
             activeOpacity={0.7}
-            accessibilityLabel={isGuest ? 'Create account' : 'Account settings'}
+            accessibilityLabel="Account settings"
             accessibilityRole="button"
           >
             <Ionicons name="person-circle-outline" size={26} color={Colors.textSecondary} />
@@ -151,7 +108,7 @@ export default function ChatScreen() {
             <View style={styles.logoContainer}>
               <Ionicons name="leaf" size={20} color={Colors.primary} />
             </View>
-            <Text style={styles.headerTitle}>My Materia</Text>
+            <Text style={styles.headerTitle}>Acute Care</Text>
           </View>
 
           <View style={styles.headerRightSection}>
@@ -165,29 +122,8 @@ export default function ChatScreen() {
             >
               <Ionicons name="book-outline" size={24} color={Colors.primary} />
             </TouchableOpacity>
-            {showTrialIndicator && trialDaysRemaining !== null && (
-              <TrialIndicator
-                trialDaysRemaining={trialDaysRemaining}
-                onPress={() => openPaywall('trial_indicator')}
-              />
-            )}
           </View>
         </View>
-
-        {/* Guest banner */}
-        {isGuest && (
-          <TouchableOpacity
-            style={styles.guestBanner}
-            onPress={() => router.push('/(auth)/sign-up')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="person-add-outline" size={14} color={Colors.primary} />
-            <Text style={styles.guestBannerText}>
-              Sign up to save your conversations
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Show onboarding chat if disclaimer not yet accepted */}
@@ -206,8 +142,7 @@ export default function ChatScreen() {
           <Composer
             ref={composerRef}
             onSend={sendMessage}
-            disabled={!activeThread || !canUseChat}
-            containerStyle={!canUseChat ? styles.disabledComposer : undefined}
+            disabled={!canUseChat}
           />
         </>
       )}
@@ -234,31 +169,6 @@ export default function ChatScreen() {
       ) : (
         <View style={styles.keyboardAvoidingView}>{content}</View>
       )}
-
-      {/* Guest sign-up modal when thread limit reached */}
-      <GuestSignUpModal
-        visible={guestLimitReached || showGuestSignUpModal}
-        onDismiss={() => {
-          clearGuestLimitReached();
-          setShowGuestSignUpModal(false);
-        }}
-      />
-
-      <TrialStartModal
-        visible={shouldUseTrialUI && shouldShowTrialModal}
-        onStartTrial={startTrial}
-      />
-
-      <TrialLockoutModal
-        visible={shouldUseTrialUI && trialExpired && !isSubscribed && showLockoutModal}
-        onViewPlans={() => openPaywall('trial_lockout')}
-        onMaybeLater={() => setShowLockoutModal(false)}
-      />
-
-      <PaywallModal
-        visible={showPaywallModal}
-        onClose={() => setShowPaywallModal(false)}
-      />
     </SafeAreaView>
   );
 }

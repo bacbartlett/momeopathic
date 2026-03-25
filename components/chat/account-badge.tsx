@@ -1,5 +1,7 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
-import { useClerk, useUser } from '@clerk/clerk-expo';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -19,8 +21,8 @@ interface AccountBadgeProps {
 }
 
 export function AccountBadge({ onClose, isDrawerOpen }: AccountBadgeProps) {
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const user = useQuery(api.users.current);
+  const { signOut } = useAuthActions();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -84,7 +86,7 @@ export function AccountBadge({ onClose, isDrawerOpen }: AccountBadgeProps) {
     }, 100);
   }, [onClose, router]);
 
-  if (!isLoaded) {
+  if (user === undefined) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color={Colors.primary} />
@@ -92,26 +94,29 @@ export function AccountBadge({ onClose, isDrawerOpen }: AccountBadgeProps) {
     );
   }
 
-  if (!user) {
+  if (user === null) {
     return null;
   }
 
+  // Parse name parts from user.name
+  const nameParts = (user.name || '').split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+
   // Get user initials for fallback avatar
   const getInitials = () => {
-    const firstName = user.firstName || '';
-    const lastName = user.lastName || '';
     if (firstName && lastName) {
       return `${firstName[0]}${lastName[0]}`.toUpperCase();
     }
     if (firstName) {
       return firstName.slice(0, 2).toUpperCase();
     }
-    const email = user.primaryEmailAddress?.emailAddress || '';
+    const email = user.email || '';
     return email.slice(0, 2).toUpperCase();
   };
 
-  const displayName = user.fullName || user.firstName || 'User';
-  const email = user.primaryEmailAddress?.emailAddress || '';
+  const displayName = user.name || 'User';
+  const email = user.email || '';
 
   const chevronRotation = rotateAnim.interpolate({
     inputRange: [0, 1],

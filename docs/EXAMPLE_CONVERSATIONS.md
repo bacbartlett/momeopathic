@@ -1,4 +1,4 @@
-# Example Conversations for My Materia
+# Example Conversations for Acute Care App
 
 These examples show the exact format, length, and tone we want from the AI. They demonstrate:
 - Brief, natural acknowledgment (not robotic rephrasing)

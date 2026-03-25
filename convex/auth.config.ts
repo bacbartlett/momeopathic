@@ -1,12 +1,8 @@
-import type { AuthConfig } from "convex/server";
-
 export default {
   providers: [
     {
-      // The domain from your Clerk "convex" JWT template
-      // This is your Clerk issuer URL (e.g., https://verb-noun-00.clerk.accounts.dev)
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
+      domain: process.env.CONVEX_SITE_URL,
       applicationID: "convex",
     },
   ],
-} satisfies AuthConfig;
+};
