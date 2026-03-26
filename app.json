@@ -22,14 +22,12 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FEFAF3",
-        "foregroundImage": "./assets/androidicon.png",
-        "backgroundImage": "./assets/androidicon.png"
+        "foregroundImage": "./assets/androidicon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "com.momeopath.acutecare",
-      "versionCode": 1
+      "package": "com.momeopath.acutecare"
     },
     "web": {
       "output": "static",
@@ -43,10 +41,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FEFAF3",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#FEFAF3"
         }
       ],
       "expo-font",

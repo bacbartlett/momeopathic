@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -323,7 +324,11 @@ export default function SignInScreen() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              <Ionicons name="leaf" size={32} color={Colors.primary} />
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue</Text>
@@ -417,13 +422,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['2xl'],
   },
   logoContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.primaryAlpha20,
+    width: 80,
+    height: 92,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.md,
+  },
+  logoImage: {
+    width: 80,
+    height: 92,
   },
   title: {
     fontFamily: Fonts?.heading ?? 'System',
