@@ -49,9 +49,9 @@ export default function SignInScreen() {
     setError('');
 
     try {
-      console.log('[SignIn] Calling signIn...');
+      if (__DEV__) console.log('[SignIn] Calling signIn...');
       const result = await signIn("password", { email: emailAddress, password, flow: "signIn" });
-      console.log('[SignIn] signIn returned:', JSON.stringify(result));
+      if (__DEV__) console.log('[SignIn] signIn returned:', JSON.stringify(result));
       track('Sign In', { method: 'email' });
       setError('');
       // Don't navigate manually — the AuthLayout's useEffect will redirect

@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.sm,
     color: Colors.textPrimary,
-    lineHeight: Typography.base * Typography.normal,
+    lineHeight: Typography.base * Typography.leading,
   },
   passwordContent: {
     padding: Spacing.lg,

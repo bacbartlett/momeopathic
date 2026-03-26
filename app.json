@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/appicon.png",
     "scheme": "momeopaths-acute-care",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "icon": "./assets/images/appicon.png",
@@ -68,7 +68,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/38af4f01-9905-411e-bcc0-a4a4c0b53c1e"
+      "url": "https://u.expo.dev/a2e717d2-0cd4-4719-88a4-aee76cff095e"
     }
   }
 }

@@ -8,7 +8,7 @@ export default function AuthLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('[AuthLayout] Auth state:', { isLoading, isAuthenticated });
+    if (__DEV__) console.log('[AuthLayout] Auth state:', { isLoading, isAuthenticated });
     if (isLoading) return;
 
     // If user is signed in and trying to access auth routes, redirect to tabs

@@ -36,14 +36,10 @@ export type PostHogEvent =
   // Auth
   | 'Sign In'
   | 'Sign In Failed'
-  | 'Sign Up'
-  | 'Sign Up Failed'
   | 'Sign Out'
   | 'Password Reset'
   | 'Password Reset Failed'
   | 'Account Deleted'
-  | 'Guest Session Started'
-  | 'Guest Account Claimed'
   // Chat
   | 'Thread Created'
   | 'Thread Create Failed'
@@ -56,16 +52,6 @@ export type PostHogEvent =
   | 'Remedy Searched'
   | 'Remedy Viewed'
   | 'Remedy Shared'
-  // Subscription
-  | 'Subscription Started'
-  | 'Subscription Updated'
-  | 'Subscription Cancelled'
-  | 'Paywall Viewed'
-  | 'Paywall Dismissed'
-  | 'Paywall Trigger'
-  | 'Restore Purchases Tapped'
-  | 'Offer Code Redeemed'
-  | 'Offer Code Failed'
   // Navigation
   | 'Screen Viewed'
   | 'Account Page Viewed'
@@ -95,7 +81,6 @@ export interface UserProfileProperties {
   email?: string;
   name?: string;
   created?: string;
-  subscription_status?: 'free' | 'premium';
   platform?: string;
   app_version?: string;
   [key: string]: string | number | boolean | null | undefined;
@@ -531,8 +516,6 @@ export function useTrackEvent() {
   return track;
 }
 
-// Export alias for easier migration (can be removed later)
-export const useMixpanel = usePostHogAnalytics;
 
 // ============================================
 // PostHog Error Boundary for Crash Tracking

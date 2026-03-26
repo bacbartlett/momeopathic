@@ -1,3 +1,4 @@
+import { CURRENT_AI_CONSENT_VERSION } from "@/constants/ai-consent";
 import {
   Colors,
   Fonts,
@@ -34,7 +35,9 @@ const SUMMARY_TEXT_PARTS = {
 
 A few things worth knowing:
 
-• I'm an AI, so I can get things wrong sometimes — always double-check what matters
+• I use Anthropic's AI (Claude) via OpenRouter to process your messages and match symptoms to remedies
+• Only your chat messages are sent to these services — not your email, device info, or anything else
+• I can get things wrong sometimes — always double-check what matters
 • I'm for learning and exploring, not for medical advice
 • For anything serious, please talk to a real healthcare provider
 • You'll need to be 18+ (or have a parent's okay)
@@ -50,6 +53,10 @@ const FULL_TEXT_PARTS = {
   intro: `What I am:
 
 I'm an educational tool that makes William Boericke's Materia Medica easier to explore through conversation. I use AI to help you learn about homeopathic remedies described in classical texts — like having a knowledgeable study partner available whenever you need one.
+
+How I process your data:
+
+Your chat messages are sent to Anthropic's Claude (an AI language model) through OpenRouter (an API routing service) to generate responses. Only what you type in the chat is sent — your email, device info, and account details are never shared with these services. These providers do not permanently store your conversations in a way tied to your identity. You can review their privacy policies at anthropic.com/privacy and openrouter.ai/privacy.
 
 What I'm not:
 
@@ -249,12 +256,14 @@ export async function hasAgreedToDisclaimer(): Promise<boolean> {
 }
 
 /**
- * Hook to check if the user has accepted the disclaimer.
+ * Hook to check if the user has accepted the disclaimer AND given current AI consent.
  * For authenticated users: checks database (source of truth) synced with AsyncStorage.
+ * Returns false if AI consent version is outdated (triggers re-onboarding).
  */
 export function useHasAcceptedDisclaimer() {
   const { isAuthenticated } = useConvexAuth();
   const dbAccepted = useQuery(api.users.hasAcceptedDisclaimer);
+  const aiConsent = useQuery(api.users.getAiConsentStatus);
   const [localAccepted, setLocalAccepted] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -268,6 +277,10 @@ export function useHasAcceptedDisclaimer() {
       });
   }, []);
 
+  // Compute derived values before hooks (React rules of hooks — no hooks after early returns)
+  const disclaimerOk = dbAccepted === true || localAccepted === true;
+  const aiConsentOk = aiConsent !== null && aiConsent !== undefined && aiConsent.version >= CURRENT_AI_CONSENT_VERSION;
+
   // Sync database status to AsyncStorage if database says accepted but local doesn't
   useEffect(() => {
     if (dbAccepted === true && localAccepted === false) {
@@ -278,23 +291,34 @@ export function useHasAcceptedDisclaimer() {
     }
   }, [dbAccepted, localAccepted]);
 
+  // Clear local cache when AI consent is outdated (so onboarding shows again)
+  useEffect(() => {
+    if (disclaimerOk && !aiConsentOk) {
+      AsyncStorage.removeItem(DISCLAIMER_AGREED_KEY).catch(() => {});
+    }
+  }, [disclaimerOk, aiConsentOk]);
+
   // If not authenticated, return false
   if (!isAuthenticated) {
     return false;
   }
 
-  // For authenticated users, database is source of truth — but also trust
-  // local acceptance to prevent flashing during transitions.
-  if (dbAccepted === true || localAccepted === true) {
-    return true;
+  // Still loading
+  if (dbAccepted === undefined || aiConsent === undefined) {
+    return null;
   }
 
-  if (dbAccepted !== undefined) {
+  // Disclaimer must be accepted
+  if (!disclaimerOk) {
     return false;
   }
 
-  // Database query is still loading
-  return null;
+  // AI consent must be current version
+  if (!aiConsentOk) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

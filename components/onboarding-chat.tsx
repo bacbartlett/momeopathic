@@ -1,3 +1,4 @@
+import { CURRENT_AI_CONSENT_VERSION } from '@/constants/ai-consent';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
@@ -67,7 +68,8 @@ function TypingIndicator() {
 const ONBOARDING_MESSAGES = [
   "Hi, I'm Rosemary! 🌿 Welcome to the Momeopath's Insider Circle Acute Care App. I'm here to help you explore homeopathic remedies from Boericke's Materia Medica.",
   "Think of me as a study partner — I can help you learn about remedies, but I'm not a doctor.",
-  "I'm an AI, so I can get things wrong sometimes. For anything serious, always talk to a real healthcare provider.",
+  "Quick note on how I work — when you ask me about remedies, I search through the Boericke Materia Medica and use Anthropic's AI (Claude) to help match your symptoms to the right remedies. Your messages are processed by Anthropic through OpenRouter to generate my responses. No personal health data is stored by these services beyond what's needed to reply to you.",
+  "I can get things wrong sometimes. For anything serious, always talk to a real healthcare provider.",
   "You'll need to be 18+ to use this app (or have a parent's okay).",
 ];
 
@@ -96,6 +98,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
 
   const { isAuthenticated } = useConvexAuth();
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
+  const acceptAiConsent = useMutation(api.users.acceptAiConsent);
   const router = useRouter();
   const { track } = usePostHogAnalytics();
 
@@ -179,18 +182,20 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       ]);
       setShowAgreeButton(false);
 
-      // Save agreement
+      // Save agreement (disclaimer + AI consent)
       await AsyncStorage.setItem(DISCLAIMER_AGREED_KEY, 'true');
 
       try {
         if (isAuthenticated) {
           await acceptDisclaimer();
+          await acceptAiConsent({ version: CURRENT_AI_CONSENT_VERSION });
         }
       } catch (dbError) {
-        console.error('Failed to save disclaimer to database:', dbError);
+        console.error('Failed to save consent to database:', dbError);
       }
 
       track('Disclaimer Accepted', { method: 'onboarding_chat' });
+      track('AI Consent Given', { version: CURRENT_AI_CONSENT_VERSION });
       track('Onboarding Completed');
 
       // Brief pause to show the agree message, then transition
@@ -201,7 +206,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       console.error('Failed to save disclaimer agreement:', error);
       onComplete();
     }
-  }, [isAuthenticated, acceptDisclaimer, track, onComplete]);
+  }, [isAuthenticated, acceptDisclaimer, acceptAiConsent, track, onComplete]);
 
   const renderMessage = useCallback(({ item }: { item: OnboardingMessage }) => {
     if (item.role === 'user') {

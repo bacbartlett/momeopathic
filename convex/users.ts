@@ -18,6 +18,8 @@ const userReturnValidator = v.object({
   imageUrl: v.optional(v.string()),
   // App-specific fields
   disclaimerAccepted: v.optional(v.boolean()),
+  aiConsentVersion: v.optional(v.number()),
+  aiConsentTimestamp: v.optional(v.number()),
   feedbackGiven: v.optional(v.boolean()),
   feedbackThreadCount: v.optional(v.number()),
   feedbackDismissCount: v.optional(v.number()),
@@ -151,6 +153,65 @@ export const updateProfile = mutation({
     const name = [args.firstName.trim(), args.lastName.trim()].filter(Boolean).join(" ") || "Anonymous";
     await ctx.db.patch(user._id, { name });
     return null;
+  },
+});
+
+/**
+ * Record the user's AI consent (Apple Guideline 5.1.2(i)).
+ * Stores the version they agreed to and a timestamp.
+ */
+export const acceptAiConsent = mutation({
+  args: {
+    version: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Called acceptAiConsent without authentication present");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("User not found in database.");
+    }
+
+    await ctx.db.patch(user._id, {
+      aiConsentVersion: args.version,
+      aiConsentTimestamp: Date.now(),
+    });
+    return null;
+  },
+});
+
+/**
+ * Get the user's AI consent status.
+ * Returns the version they consented to and when, or null if no consent recorded.
+ */
+export const getAiConsentStatus = query({
+  args: {},
+  returns: v.union(
+    v.object({
+      version: v.number(),
+      timestamp: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return null;
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user || !user.aiConsentVersion) {
+      return null;
+    }
+
+    return {
+      version: user.aiConsentVersion,
+      timestamp: user.aiConsentTimestamp ?? 0,
+    };
   },
 });
 

@@ -337,6 +337,18 @@ export default function AccountScreen() {
             <View style={styles.infoList}>
               <TouchableOpacity
                 style={styles.infoRow}
+                onPress={() => router.push('/ai-privacy' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name="hardware-chip-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>AI & Privacy</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.infoRow}
                 onPress={() => setShowDisclaimer(true)}
                 activeOpacity={0.7}
               >

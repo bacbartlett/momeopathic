@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const pp = `# PRIVACY POLICY
 
-**Last Updated:** January 5, 2026
+**Last Updated:** March 25, 2026
 
 ## 1. INTRODUCTION
 
@@ -47,13 +47,6 @@ The App is not intended for children under 13 years of age. We do not knowingly 
 - Email address
 - Password (stored in encrypted form)
 - Any other information you voluntarily provide during registration
-
-**Payment Information:** When you subscribe to the App, our third-party payment processors collect:
-- Credit card or other payment method details
-- Billing address
-- Payment transaction history
-
-**Note:** We do not directly store your complete payment card information. Payment processing is handled by secure third-party payment processors who comply with PCI-DSS standards.
 
 **Chat Content:** We collect and store:
 - All messages you send through the chat interface
@@ -88,7 +81,6 @@ We use the information we collect for the following purposes:
 
 ### 4.1 To Provide and Maintain the App
 - Create and manage your account
-- Process your subscription and payments
 - Provide the chat interface and search functionality
 - Store your conversation history for your reference
 - Deliver customer support
@@ -123,11 +115,12 @@ We use the information we collect for the following purposes:
 
 ### 5.1 AI Processing
 
-Your chat messages are processed by artificial intelligence systems to provide responses based on Boericke's Materia Medica. When we send your messages to our AI service providers:
+Your chat messages are processed by **Anthropic's Claude** (an AI language model), accessed through **OpenRouter** (an API routing service), to provide responses based on Boericke's Materia Medica. When we send your messages to these AI service providers:
 
-- **Data is anonymized:** We remove all personally identifiable information (name, email, account identifiers) before sending chat content to AI providers
-- **Purpose:** AI processing is used solely to generate responses to your queries and improve the chatbot's performance
+- **What is sent:** Your chat messages and relevant excerpts from Boericke's Materia Medica for context. Your email address, device information, and other account data are NOT sent to AI providers.
+- **Purpose:** AI processing is used solely to generate responses to your queries based on the Materia Medica reference material
 - **No permanent storage by AI providers:** Chat content sent to AI providers is not permanently stored in a way that could identify you
+- **Third-party privacy policies:** You can review how these services handle data at [Anthropic Privacy Policy](https://www.anthropic.com/privacy) and [OpenRouter Privacy Policy](https://openrouter.ai/privacy)
 
 ### 5.2 Internal Analysis
 
@@ -182,8 +175,7 @@ When you delete your account, we will delete or anonymize your personal informat
 We may share your information with trusted third-party service providers who assist us in operating the App, including:
 
 - **Cloud hosting services** (Convex) - to store your data securely
-- **Payment processors** - to process subscription payments
-- **AI service providers** - to provide chatbot functionality (anonymized data only)
+- **AI service providers** (Anthropic via OpenRouter) - to provide chatbot functionality (chat messages only; no email, device info, or account identifiers are shared)
 - **Analytics services** - to help us understand App usage
 - **Customer support tools** - to provide technical assistance
 
@@ -331,7 +323,6 @@ Given the nature and scope of our operations, we do not currently have a Data Pr
 In the past 12 months, we have collected the following categories of personal information:
 
 - **Identifiers:** Email address, account username, IP address
-- **Commercial Information:** Subscription and payment history, purchase records
 - **Internet Activity:** Browsing history within the App, interaction with the App
 - **Health Information:** Symptom descriptions and remedy searches (for educational purposes only, not medical treatment)
 
@@ -346,7 +337,7 @@ We collect personal information for the business purposes described in Section 4
 ### Categories of Third Parties with Whom We Share Personal Information
 
 We share personal information with:
-- Service providers (cloud hosting, payment processing, analytics)
+- Service providers (cloud hosting, analytics)
 - AI service providers (anonymized data only)
 - Legal authorities (when required by law)
 

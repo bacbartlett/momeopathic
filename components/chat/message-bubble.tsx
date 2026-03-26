@@ -652,11 +652,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderBottomRightRadius: Radius.sm,
     // Subtle gradient effect via shadow
-    ...Platform.select({
-      ios: Shadows.glow,
-      android: Shadows.md,
-      default: {},
-    }),
+    ...(Platform.OS === 'ios' ? Shadows.glow : Platform.OS === 'android' ? Shadows.md : {}),
   },
   assistantBubble: {
     backgroundColor: ChatColors.assistantBubble,

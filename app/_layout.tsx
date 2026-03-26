@@ -48,29 +48,25 @@ const convex = new ConvexReactClient(
   EXPO_PUBLIC_CONVEX_URL,
   {
     unsavedChangesWarning: false,
-    verbose: true,
+    verbose: __DEV__,
   }
 );
 
-// One-time clear of stale auth tokens from previous config
-// TODO: Remove this after first successful launch
-SecureStore.deleteItemAsync('__convexAuthJWT').catch(() => {});
-SecureStore.deleteItemAsync('__convexAuthRefreshToken').catch(() => {});
-SecureStore.deleteItemAsync('__convexAuthServerStateFetchTime').catch(() => {});
+// Stale token cleanup removed — auth migration is complete.
 
 // SecureStore-based storage adapter for Convex Auth
 const secureStorage = {
   getItem: async (key: string) => {
     const val = await SecureStore.getItemAsync(key);
-    console.log(`[SecureStore] getItem(${key}): ${val ? 'has value (' + val.length + ' chars)' : 'null'}`);
+    if (__DEV__) console.log(`[SecureStore] getItem(${key}): ${val ? 'has value (' + val.length + ' chars)' : 'null'}`);
     return val;
   },
   setItem: async (key: string, value: string) => {
-    console.log(`[SecureStore] setItem(${key}): ${value.length} chars`);
+    if (__DEV__) console.log(`[SecureStore] setItem(${key}): ${value.length} chars`);
     await SecureStore.setItemAsync(key, value);
   },
   removeItem: async (key: string) => {
-    console.log(`[SecureStore] removeItem(${key})`);
+    if (__DEV__) console.log(`[SecureStore] removeItem(${key})`);
     await SecureStore.deleteItemAsync(key);
   },
 };
@@ -211,6 +207,14 @@ export default function RootLayout() {
                       />
                       <Stack.Screen
                         name="privacy"
+                        options={{
+                          headerShown: false,
+                          presentation: 'modal',
+                          animation: 'slide_from_bottom',
+                        }}
+                      />
+                      <Stack.Screen
+                        name="ai-privacy"
                         options={{
                           headerShown: false,
                           presentation: 'modal',

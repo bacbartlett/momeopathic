@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const tandc = `# TERMS AND CONDITIONS
 
-**Last Updated:** January 5, 2026
+**Last Updated:** March 25, 2026
 
 ## 1. AGREEMENT TO TERMS
 
@@ -74,35 +74,9 @@ You may not:
 
 We reserve the right to suspend or terminate accounts that violate these Terms or that we determine, in our sole discretion, present a security risk.
 
-## 6. SUBSCRIPTION AND PAYMENT TERMS
+## 6. ACCESS AND USE
 
-### 6.1 Subscription Service
-
-The App operates on a subscription basis. By subscribing, you authorize us to charge your payment method on a recurring basis according to your selected subscription plan until you cancel.
-
-### 6.2 Billing
-
-- Subscription fees are billed in advance on a recurring basis (monthly, annually, or as otherwise specified)
-- You will be charged on the day you subscribe and on each renewal date thereafter
-- Subscription fees are non-refundable except as required by law
-- We reserve the right to change subscription fees with at least 30 days' notice
-- Price changes will not affect your current billing cycle but will apply to subsequent renewals
-
-### 6.3 Free Trials
-
-If we offer a free trial, you will not be charged until the trial period ends. You may cancel at any time during the trial period without charge. If you do not cancel before the trial period ends, you will be automatically charged the subscription fee.
-
-### 6.4 Cancellation
-
-You may cancel your subscription at any time through your account settings or by contacting us. Cancellation will be effective at the end of your current billing period. You will continue to have access to the App until the end of the paid period.
-
-### 6.5 Payment Processing
-
-Payment processing is handled by third-party payment processors. You agree to comply with their terms and conditions. We are not responsible for errors made by payment processors.
-
-### 6.6 Taxes
-
-You are responsible for any applicable taxes, duties, or levies associated with your subscription, except for taxes based on our net income.
+Access to the App is provided on an invitation-only basis. We reserve the right to modify, limit, or revoke access at any time and for any reason. Continued use of the App is subject to compliance with these Terms.
 
 ## 7. INTELLECTUAL PROPERTY RIGHTS
 

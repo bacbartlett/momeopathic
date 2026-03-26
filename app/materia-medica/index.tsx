@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.sm,
     color: Colors.textSecondary,
-    lineHeight: Typography.sm * Typography.normal,
+    lineHeight: Typography.sm * Typography.leading,
   },
   emptyContainer: {
     flex: 1,

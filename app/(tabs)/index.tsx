@@ -57,17 +57,8 @@ export default function ChatScreen() {
     };
   }, []);
 
-  // Show loading while checking auth
-  if (isLoading || (isAuthenticated && currentUser === undefined)) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Getting things ready...</Text>
-      </View>
-    );
-  }
-
   // Build display messages: append a synthetic pending message when greeting is generating
+  // NOTE: useMemo must be called before any early returns (React rules of hooks)
   const displayMessages = useMemo(() => {
     const msgs = activeThread?.messages ?? [];
     if (!isGreetingGenerating) return msgs;
@@ -82,6 +73,16 @@ export default function ChatScreen() {
       },
     ];
   }, [activeThread?.messages, isGreetingGenerating]);
+
+  // Show loading while checking auth
+  if (isLoading || (isAuthenticated && currentUser === undefined)) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Getting things ready...</Text>
+      </View>
+    );
+  }
 
   const canUseChat = !!activeThread;
 
@@ -244,37 +245,7 @@ const styles = StyleSheet.create({
   headerRightSection: {
     alignItems: 'flex-end',
   },
-  guestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
-    backgroundColor: Colors.primaryAlpha10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.primaryAlpha20,
-  },
-  guestBannerText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.primary,
-  },
-  trustBanner: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-  },
-  trustBannerText: {
-    fontFamily: Fonts?.body ?? 'System',
-    fontSize: Typography.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
   messagesContainer: {
     flex: 1,
-  },
-  disabledComposer: {
-    opacity: 0.5,
-    backgroundColor: '#f0f0f0',
   },
 });

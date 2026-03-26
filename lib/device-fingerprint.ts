@@ -12,7 +12,7 @@ export async function getDeviceFingerprint(): Promise<string> {
   }
 
   const appId = Application.applicationId ?? "unknown-app";
-  const androidId = Platform.OS === "android" ? (Application.androidId ?? "") : "";
+  const androidId = Platform.OS === "android" ? (Application.getAndroidId() ?? "") : "";
   const iosId =
     Platform.OS === "ios" ? ((await Application.getIosIdForVendorAsync()) ?? "") : "";
 

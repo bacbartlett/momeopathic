@@ -22,6 +22,9 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     // App-specific fields
     disclaimerAccepted: v.optional(v.boolean()),
+    // Versioned AI consent (Apple Guideline 5.1.2(i))
+    aiConsentVersion: v.optional(v.number()),
+    aiConsentTimestamp: v.optional(v.number()),
     feedbackThreadCount: v.optional(v.number()),
     feedbackDismissCount: v.optional(v.number()),
     feedbackGiven: v.optional(v.boolean()),

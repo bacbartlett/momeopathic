@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     maxHeight: 120,
     paddingVertical: Spacing.sm,
-    lineHeight: Typography.base * Typography.normal,
+    lineHeight: Typography.base * Typography.leading,
   },
   sendButton: {
     width: 40,

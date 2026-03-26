@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.bgBase,
+    backgroundColor: Colors.bgPrimary,
     padding: Spacing.lg,
   },
   title: {
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontFamily: Fonts?.body ?? 'System',
-    color: Colors.white,
+    color: Colors.textInverse,
     fontWeight: '600',
     fontSize: Typography.base,
   },
