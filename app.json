@@ -14,7 +14,6 @@
       "icon": "./assets/images/appicon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.momeopath.acutecare",
-      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -58,7 +57,7 @@
         "projectId": "a2e717d2-0cd4-4719-88a4-aee76cff095e"
       }
     },
-    "owner": "momeopaths-acute-care",
+    "owner": "homeopathicnative",
     "runtimeVersion": {
       "policy": "appVersion"
     },
