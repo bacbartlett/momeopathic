@@ -25,6 +25,7 @@ export default function AuthLayout() {
     <ErrorBoundary context="AuthLayout">
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="join" />
       </Stack>
     </ErrorBoundary>
   );

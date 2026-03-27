@@ -2,6 +2,7 @@ import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants
 import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,9 +28,62 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email.trim());
 }
 
+/**
+ * Convert raw Convex/auth error messages into user-friendly text.
+ */
+function getFriendlyErrorMessage(err: unknown, context: 'signIn' | 'reset' | 'resetVerification'): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
+
+  // Invalid credentials
+  if (lower.includes('invalid') || lower.includes('credentials') || lower.includes('incorrect') || lower.includes('wrong password')) {
+    return 'Incorrect email or password. Please try again.';
+  }
+
+  // Account not found
+  if (lower.includes('not found') || lower.includes('no account') || lower.includes('does not exist') || lower.includes('no user')) {
+    return 'No account found with that email address.';
+  }
+
+  // Rate limiting
+  if (lower.includes('rate') || lower.includes('too many')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+
+  // Network / connectivity errors (but NOT generic "server error" from Convex actions)
+  if (lower.includes('network') || lower.includes('fetch') || lower.includes('connection')) {
+    return 'Unable to connect. Please check your internet connection and try again.';
+  }
+
+  // Convex actions surface unhandled errors (like InvalidSecret) as opaque "Server Error".
+  // In the sign-in context this almost always means bad credentials.
+  if (lower.includes('server error') || lower.includes('internal')) {
+    if (context === 'signIn') {
+      return 'Incorrect email or password. Please try again.';
+    }
+    return 'Something went wrong on our end. Please try again in a moment.';
+  }
+
+  // Invalid verification code
+  if (lower.includes('code') && (lower.includes('invalid') || lower.includes('expired') || lower.includes('incorrect'))) {
+    return 'Invalid or expired verification code. Please try again.';
+  }
+
+  // Fallbacks by context
+  switch (context) {
+    case 'signIn':
+      return 'Could not sign in to your account. Please check your email and password and try again.';
+    case 'reset':
+      return 'Could not send reset code. Please check your email and try again.';
+    case 'resetVerification':
+      return 'Could not reset your password. Please check your code and try again.';
+  }
+}
+
 export default function SignInScreen() {
   const { signIn } = useAuthActions();
   const { track } = usePostHogAnalytics();
+  const router = useRouter();
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +112,8 @@ export default function SignInScreen() {
       // Don't navigate manually — the AuthLayout's useEffect will redirect
       // to /(tabs) once useConvexAuth() reflects isAuthenticated: true
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred during sign in. Please try again.';
+      const errorMessage = getFriendlyErrorMessage(err, 'signIn');
+      if (__DEV__) console.log('[SignIn] Error:', err instanceof Error ? err.message : err);
       setError(errorMessage);
       track('Sign In Failed', { method: 'email', error: errorMessage });
     } finally {
@@ -81,11 +136,9 @@ export default function SignInScreen() {
       await signIn("password", { email: forgotPasswordEmail.trim(), flow: "reset" });
       setResetStep('code');
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to send reset code. Please try again.');
-      }
+      const errorMessage = getFriendlyErrorMessage(err, 'reset');
+      if (__DEV__) console.log('[SignIn] Reset error:', err instanceof Error ? err.message : err);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +169,8 @@ export default function SignInScreen() {
       setError('');
       // AuthLayout handles redirect once authenticated
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to reset password. Please try again.';
+      const errorMessage = getFriendlyErrorMessage(err, 'resetVerification');
+      if (__DEV__) console.log('[SignIn] Reset verification error:', err instanceof Error ? err.message : err);
       setError(errorMessage);
       track('Password Reset Failed', { method: 'email_code', error: errorMessage });
     } finally {
@@ -397,6 +451,14 @@ export default function SignInScreen() {
                 <Text style={styles.signInButtonText}>Sign In</Text>
               )}
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.noAccountButton}
+              onPress={() => router.push('/(auth)/join')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.noAccountText}>Don't have an account?</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -533,5 +595,14 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.body ?? 'System',
     fontSize: Typography.base,
     color: Colors.textSecondary,
+  },
+  noAccountButton: {
+    alignItems: 'center',
+    marginTop: Spacing.xl,
+  },
+  noAccountText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.sm,
+    color: Colors.primary,
   },
 });
