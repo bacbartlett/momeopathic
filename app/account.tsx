@@ -10,7 +10,6 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -20,6 +19,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { alert as showAlert, confirm as showConfirm } from '@/lib/alert';
+import { webMaxWidth, WEB_CONTENT_MAX_WIDTH } from '@/lib/web-styles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AccountScreen() {
@@ -62,10 +63,9 @@ export default function AccountScreen() {
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert(
+      showAlert(
         'Update Failed',
         'There was a problem updating your profile. Please try again.',
-        [{ text: 'OK' }]
       );
     } finally {
       setIsSaving(false);
@@ -82,27 +82,21 @@ export default function AccountScreen() {
   }, [user]);
 
   const handleSignOut = useCallback(async () => {
-    Alert.alert(
+    showConfirm(
       'Sign Out',
       'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            setIsSigningOut(true);
-            try {
-              track('Sign Out');
-              await signOut();
-              router.replace('/(auth)/sign-in');
-            } catch (error) {
-              console.error('Error signing out:', error);
-              setIsSigningOut(false);
-            }
-          },
-        },
-      ]
+      async () => {
+        setIsSigningOut(true);
+        try {
+          track('Sign Out');
+          await signOut();
+          router.replace('/(auth)/sign-in');
+        } catch (error) {
+          console.error('Error signing out:', error);
+          setIsSigningOut(false);
+        }
+      },
+      { confirmText: 'Sign Out', destructive: true },
     );
   }, [signOut, router, track]);
 
@@ -480,6 +474,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: Spacing['2xl'],
+    ...webMaxWidth(WEB_CONTENT_MAX_WIDTH),
   },
   profileSection: {
     alignItems: 'center',

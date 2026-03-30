@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { webMaxWidth, WEB_CONTENT_MAX_WIDTH } from '@/lib/web-styles';
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
@@ -144,6 +145,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingBottom: Spacing.xl,
+    ...webMaxWidth(WEB_CONTENT_MAX_WIDTH),
   },
   header: {
     alignItems: 'center',

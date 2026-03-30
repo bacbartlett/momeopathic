@@ -20,6 +20,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { webMaxWidth, WEB_CHAT_MAX_WIDTH } from '@/lib/web-styles';
 import { api } from '../../convex/_generated/api';
 
 export default function ChatScreen() {
@@ -247,5 +248,6 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
+    ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
   },
 });

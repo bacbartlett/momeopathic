@@ -2,7 +2,8 @@
  * Hooks for accessing Materia Medica data from SQLite
  */
 
-import { getDb } from "@/lib/db/client";
+import { getDb, isDbAvailable } from "@/lib/db/client";
+import * as webFallback from "@/lib/db/web-fallback";
 import type {
     ParsedRemedy,
     RemedyRecord,
@@ -79,6 +80,11 @@ export function useMateriaMedica() {
    * Get all remedies sorted alphabetically by name
    */
   const getAllRemedies = useCallback((): RemedyRecord[] => {
+    // Use JSON fallback when SQLite is unavailable (e.g. web without OPFS)
+    if (!isDbAvailable()) {
+      return webFallback.getAllRemedies();
+    }
+
     try {
       const db = getDb();
       const results = db.getAllSync<RemedyRecord>(
@@ -103,6 +109,11 @@ export function useMateriaMedica() {
         return [];
       }
 
+      // Use JSON fallback when SQLite is unavailable (e.g. web without OPFS)
+      if (!isDbAvailable()) {
+        return webFallback.searchRemedies(query, limit);
+      }
+
       try {
         const db = getDb();
 
@@ -122,9 +133,9 @@ export function useMateriaMedica() {
 
         // Use FTS5 search with ranking
         const results = db.getAllSync<RemedySearchResult>(
-          `SELECT 
-          m.id, 
-          m.remedy_name, 
+          `SELECT
+          m.id,
+          m.remedy_name,
           m.body_text,
           bm25(materia_medica_fts) as rank
         FROM materia_medica_fts fts
@@ -154,6 +165,10 @@ export function useMateriaMedica() {
       return null;
     }
 
+    if (!isDbAvailable()) {
+      return webFallback.getRemedyByName(name);
+    }
+
     try {
       const db = getDb();
       const result = db.getFirstSync<RemedyRecord>(
@@ -173,6 +188,10 @@ export function useMateriaMedica() {
    * @param id Remedy ID to look up
    */
   const getRemedyById = useCallback((id: number): RemedyRecord | null => {
+    if (!isDbAvailable()) {
+      return webFallback.getRemedyById(id);
+    }
+
     try {
       const db = getDb();
       const result = db.getFirstSync<RemedyRecord>(
@@ -191,6 +210,10 @@ export function useMateriaMedica() {
    * Get total count of remedies
    */
   const getRemedyCount = useCallback((): number => {
+    if (!isDbAvailable()) {
+      return webFallback.getRemedyCount();
+    }
+
     try {
       const db = getDb();
       const result = db.getFirstSync<{ count: number }>(

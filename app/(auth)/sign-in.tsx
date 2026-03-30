@@ -3,7 +3,7 @@ import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { webMaxWidth, WEB_FORM_MAX_WIDTH } from '@/lib/web-styles';
 
 type ResetStep = 'email' | 'code';
 
@@ -96,6 +97,12 @@ export default function SignInScreen() {
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Refs for focus management (Enter key → next field)
+  const passwordRef = useRef<TextInput>(null);
+  const resetCodeRef = useRef<TextInput>(null);
+  const newPasswordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
 
   const handleSignIn = async () => {
     if (!emailAddress || !password) return;
@@ -229,6 +236,8 @@ export default function SignInScreen() {
                     keyboardType="email-address"
                     autoComplete="email"
                     editable={!isLoading}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSendResetCode}
                   />
                 </View>
 
@@ -291,6 +300,7 @@ export default function SignInScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>Verification Code</Text>
                   <TextInput
+                    ref={resetCodeRef}
                     style={[styles.input, styles.codeInput]}
                     value={resetCode}
                     onChangeText={setResetCode}
@@ -300,12 +310,16 @@ export default function SignInScreen() {
                     autoComplete="one-time-code"
                     maxLength={6}
                     editable={!isLoading}
+                    returnKeyType="next"
+                    onSubmitEditing={() => newPasswordRef.current?.focus()}
+                    blurOnSubmit={false}
                   />
                 </View>
 
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>New Password</Text>
                   <TextInput
+                    ref={newPasswordRef}
                     style={styles.input}
                     value={newPassword}
                     onChangeText={setNewPassword}
@@ -315,12 +329,16 @@ export default function SignInScreen() {
                     autoCapitalize="none"
                     autoComplete="new-password"
                     editable={!isLoading}
+                    returnKeyType="next"
+                    onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                    blurOnSubmit={false}
                   />
                 </View>
 
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>Confirm Password</Text>
                   <TextInput
+                    ref={confirmPasswordRef}
                     style={styles.input}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
@@ -330,6 +348,8 @@ export default function SignInScreen() {
                     autoCapitalize="none"
                     autoComplete="new-password"
                     editable={!isLoading}
+                    returnKeyType="go"
+                    onSubmitEditing={handleVerifyResetCode}
                   />
                 </View>
 
@@ -409,12 +429,16 @@ export default function SignInScreen() {
                 keyboardType="email-address"
                 autoComplete="email"
                 editable={!isLoading}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                blurOnSubmit={false}
               />
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
               <TextInput
+                ref={passwordRef}
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
@@ -424,6 +448,8 @@ export default function SignInScreen() {
                 autoCapitalize="none"
                 autoComplete="password"
                 editable={!isLoading}
+                returnKeyType="go"
+                onSubmitEditing={handleSignIn}
               />
             </View>
 
@@ -478,6 +504,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.lg,
     justifyContent: 'center',
+    ...webMaxWidth(WEB_FORM_MAX_WIDTH),
   },
   header: {
     alignItems: 'center',

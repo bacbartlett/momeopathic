@@ -1,34 +1,53 @@
-import * as Application from "expo-application";
-import * as Crypto from "expo-crypto";
-import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { getStorage } from "@/lib/storage";
 
 const FINGERPRINT_KEY = "device_fingerprint";
 
 export async function getDeviceFingerprint(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(FINGERPRINT_KEY);
+  const storage = getStorage();
+  const existing = await storage.getItem(FINGERPRINT_KEY);
   if (existing) {
     return existing;
   }
 
-  const appId = Application.applicationId ?? "unknown-app";
-  const androidId = Platform.OS === "android" ? (Application.getAndroidId() ?? "") : "";
-  const iosId =
-    Platform.OS === "ios" ? ((await Application.getIosIdForVendorAsync()) ?? "") : "";
+  let fingerprint: string;
 
-  const rawFingerprint = `${appId}:${androidId}:${iosId}:${Date.now()}:${Math.random()}`;
-  const fingerprint = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    rawFingerprint,
-  );
+  if (Platform.OS === "web") {
+    // Web fallback: use Web Crypto API
+    const rawFingerprint = `web:${navigator.userAgent}:${Date.now()}:${Math.random()}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(rawFingerprint);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    fingerprint = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  } else {
+    // Native: use expo-application and expo-crypto
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Application = require("expo-application");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Crypto = require("expo-crypto");
 
-  await SecureStore.setItemAsync(FINGERPRINT_KEY, fingerprint, {
-    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
-  });
+    const appId = Application.applicationId ?? "unknown-app";
+    const androidId =
+      Platform.OS === "android" ? (Application.getAndroidId() ?? "") : "";
+    const iosId =
+      Platform.OS === "ios"
+        ? ((await Application.getIosIdForVendorAsync()) ?? "")
+        : "";
+
+    const rawFingerprint = `${appId}:${androidId}:${iosId}:${Date.now()}:${Math.random()}`;
+    fingerprint = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      rawFingerprint,
+    );
+  }
+
+  await storage.setItem(FINGERPRINT_KEY, fingerprint);
 
   return fingerprint;
 }
 
 export async function clearDeviceFingerprint(): Promise<void> {
-  await SecureStore.deleteItemAsync(FINGERPRINT_KEY);
+  const storage = getStorage();
+  await storage.removeItem(FINGERPRINT_KEY);
 }

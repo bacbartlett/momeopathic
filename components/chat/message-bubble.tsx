@@ -13,10 +13,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActionSheetIOS,
-  Alert,
   Animated,
   Platform,
   Share,
@@ -25,6 +24,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { confirm as showConfirm } from "@/lib/alert";
 import Markdown from "react-native-markdown-display";
 
 interface MessageBubbleProps {
@@ -227,6 +227,7 @@ const filterBrokenLinks = (text: string): string => {
 export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   const router = useRouter();
   const { getRemedyByName } = useMateriaMedica();
+  const [copied, setCopied] = useState(false);
 
   const isUser = message.role === "user";
   const isLoading =
@@ -363,8 +364,9 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   const handleCopy = useCallback(async () => {
     if (filteredContent) {
       await Clipboard.setStringAsync(filteredContent);
-      if (Platform.OS === "android") {
-        Alert.alert("Copied", "Message copied to clipboard");
+      if (Platform.OS === "web") {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       }
     }
   }, [filteredContent]);
@@ -399,17 +401,16 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
           }
         },
       );
+    } else if (Platform.OS === "web") {
+      // On web, just copy directly (long-press is awkward on desktop)
+      handleCopy();
     } else {
-      // Android - use Alert as a simple menu
-      Alert.alert(
+      // Android - use confirm dialog as a simple menu
+      showConfirm(
         "Message Options",
-        undefined,
-        [
-          { text: "Copy", onPress: handleCopy },
-          { text: "Share", onPress: handleShare },
-          { text: "Cancel", style: "cancel" },
-        ],
-        { cancelable: true },
+        "What would you like to do?",
+        handleCopy,
+        { confirmText: "Copy" },
       );
     }
   }, [hasContent, handleCopy, handleShare]);
@@ -489,14 +490,31 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
         )}
 
         {!isLoading && !isFailed && (
-          <Text
-            style={[
-              styles.timestamp,
-              isUser ? styles.userTimestamp : styles.assistantTimestamp,
-            ]}
-          >
-            {formatTime(message.timestamp)}
-          </Text>
+          <View style={styles.timestampRow}>
+            <Text
+              style={[
+                styles.timestamp,
+                isUser ? styles.userTimestamp : styles.assistantTimestamp,
+              ]}
+            >
+              {formatTime(message.timestamp)}
+            </Text>
+            {/* Web: visible copy button instead of long-press */}
+            {Platform.OS === "web" && hasContent && !isUser && (
+              <TouchableOpacity
+                onPress={handleCopy}
+                style={styles.webCopyButton}
+                accessibilityLabel={copied ? "Copied" : "Copy message"}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name={copied ? "checkmark" : "copy-outline"}
+                  size={14}
+                  color={copied ? Colors.success : Colors.textMuted}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
     </TouchableOpacity>
@@ -691,11 +709,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: Colors.primary,
   },
+  timestampRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: Spacing.xs,
+  },
   timestamp: {
     fontFamily: Fonts?.body ?? "System",
     fontSize: Typography.xs,
-    marginTop: Spacing.xs,
     opacity: 0.7,
+  },
+  webCopyButton: {
+    padding: 4,
+    borderRadius: Radius.sm,
+    opacity: 0.6,
   },
   userTimestamp: {
     textAlign: "right",

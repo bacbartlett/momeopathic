@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { webMaxWidth, WEB_LIST_MAX_WIDTH } from '@/lib/web-styles';
 
 // Debounce delay in ms
 const SEARCH_DEBOUNCE_MS = 300;
@@ -234,6 +235,7 @@ export default function MateriaMedicaListScreen() {
             autoCorrect={false}
             returnKeyType="search"
             clearButtonMode="never"
+            onSubmitEditing={() => handleSearch(inputValue)}
             accessibilityLabel="Search remedies"
             accessibilityHint="Type to search for remedies by name or symptoms"
           />
@@ -356,6 +358,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: Spacing['2xl'],
+    ...webMaxWidth(WEB_LIST_MAX_WIDTH),
   },
   headerStats: {
     paddingHorizontal: Spacing.md,

@@ -18,7 +18,7 @@ import {
 } from '@expo-google-fonts/quicksand';
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { ConvexReactClient } from 'convex/react';
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 import { FeedbackManager } from '@/components/feedback-modal';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
@@ -26,6 +26,8 @@ import { ChatProvider } from '@/context/chat-context';
 import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
 import { initializeDatabase } from '@/lib/db/init';
 import { EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
+import { registerServiceWorker } from '@/lib/register-sw';
+import { getStorage } from '@/lib/storage';
 
 const startupLog = (...args: Parameters<typeof console.log>) => {
   if (__DEV__) {
@@ -54,22 +56,9 @@ const convex = new ConvexReactClient(
 
 // Stale token cleanup removed — auth migration is complete.
 
-// SecureStore-based storage adapter for Convex Auth
-const secureStorage = {
-  getItem: async (key: string) => {
-    const val = await SecureStore.getItemAsync(key);
-    if (__DEV__) console.log(`[SecureStore] getItem(${key}): ${val ? 'has value (' + val.length + ' chars)' : 'null'}`);
-    return val;
-  },
-  setItem: async (key: string, value: string) => {
-    if (__DEV__) console.log(`[SecureStore] setItem(${key}): ${value.length} chars`);
-    await SecureStore.setItemAsync(key, value);
-  },
-  removeItem: async (key: string) => {
-    if (__DEV__) console.log(`[SecureStore] removeItem(${key})`);
-    await SecureStore.deleteItemAsync(key);
-  },
-};
+// Platform-abstracted storage adapter for Convex Auth
+// Web: localStorage, Native: expo-secure-store
+const secureStorage = getStorage();
 
 /**
  * Component that tracks when the app is opened.
@@ -125,10 +114,18 @@ function MateriaMedicaInitializer({ children }: { children: React.ReactNode }) {
             isNewInstall: result.isNewInstall,
           });
         } else {
-          console.error('[STARTUP] MateriaMedicaInitializer: Database initialization failed:', result.error);
+          if (Platform.OS === 'web') {
+            console.log('[STARTUP] MateriaMedicaInitializer: SQLite init failed on web, JSON fallback will be used');
+          } else {
+            console.error('[STARTUP] MateriaMedicaInitializer: Database initialization failed:', result.error);
+          }
         }
       } catch (error) {
-        console.error('[STARTUP] MateriaMedicaInitializer: Unexpected error during initialization:', error);
+        if (Platform.OS === 'web') {
+          console.log('[STARTUP] MateriaMedicaInitializer: SQLite not available on web, using JSON fallback');
+        } else {
+          console.error('[STARTUP] MateriaMedicaInitializer: Unexpected error during initialization:', error);
+        }
       }
     };
 
@@ -162,6 +159,13 @@ export default function RootLayout() {
       });
     }
   }, [fontsLoaded]);
+
+  // Register service worker on web for PWA support
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      registerServiceWorker();
+    }
+  }, []);
 
   if (!fontsLoaded) {
     startupLog('[STARTUP] RootLayout: Fonts not loaded, returning null');

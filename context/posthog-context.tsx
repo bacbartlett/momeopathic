@@ -479,8 +479,8 @@ export function PostHogProviderWrapper({ children }: PostHogProviderWrapperProps
         host: host,
         // Capture app lifecycle events (app opened, app backgrounded, etc.)
         captureAppLifecycleEvents: true,
-        // Enable session replay recording
-        enableSessionReplay: true,
+        // Enable session replay recording (native only — not supported on web)
+        enableSessionReplay: Platform.OS !== 'web',
         sessionReplayConfig: {
           // Mask all text input for privacy
           maskAllTextInputs: true,
@@ -650,19 +650,51 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
       return;
     }
 
-    startupLog('[STARTUP] PostHogCrashReporter: Setting up global error handler');
-    // Handle unhandled JS errors
+    // Web: use standard browser error/rejection listeners
+    if (Platform.OS === 'web') {
+      startupLog('[STARTUP] PostHogCrashReporter: Setting up web error handlers');
+
+      const errorHandler = (event: ErrorEvent) => {
+        if (event.error instanceof Error) {
+          captureException(event.error, {
+            $exception_is_fatal: false,
+            $exception_source: 'window_error',
+          });
+        }
+      };
+
+      const rejectionHandler = (event: PromiseRejectionEvent) => {
+        const error = event.reason instanceof Error
+          ? event.reason
+          : new Error(String(event.reason));
+        error.name = error.name || 'UnhandledPromiseRejection';
+        captureException(error, {
+          $exception_source: 'unhandled_promise_rejection',
+        });
+      };
+
+      window.addEventListener('error', errorHandler);
+      window.addEventListener('unhandledrejection', rejectionHandler);
+
+      startupLog('[STARTUP] PostHogCrashReporter: Web error handlers registered');
+
+      return () => {
+        window.removeEventListener('error', errorHandler);
+        window.removeEventListener('unhandledrejection', rejectionHandler);
+      };
+    }
+
+    // Native: use React Native's ErrorUtils and promise rejection tracking
+    startupLog('[STARTUP] PostHogCrashReporter: Setting up native global error handler');
     const originalErrorHandler = ErrorUtils.getGlobalHandler();
 
     ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
       startupLog('[STARTUP] PostHogCrashReporter: Global error caught:', error.message, 'isFatal:', isFatal);
-      // Capture to PostHog
       captureException(error, {
         $exception_is_fatal: isFatal ?? false,
         $exception_source: 'global_error_handler',
       });
 
-      // Call original handler
       if (originalErrorHandler) {
         originalErrorHandler(error, isFatal);
       }
@@ -677,7 +709,6 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
           promise_id: id,
         });
       } else {
-        // Handle non-Error rejections
         const error = new Error(String(rejection));
         error.name = 'UnhandledPromiseRejection';
         captureException(error, {
@@ -698,13 +729,12 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
     let trackingModule: RejectionTrackingModule | null = null;
     try {
       startupLog('[STARTUP] PostHogCrashReporter: Attempting to load promise rejection tracking');
-      // React Native's tracking for unhandled promise rejections
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const loadedModule = require('promise/setimmediate/rejection-tracking') as RejectionTrackingModule;
       loadedModule.enable({
         allRejections: true,
         onUnhandled: rejectionTracker,
-        onHandled: () => {}, // Optional: called when a rejection is handled after being reported
+        onHandled: () => {},
       });
       trackingModule = loadedModule;
       startupLog('[STARTUP] PostHogCrashReporter: Promise rejection tracking enabled');
@@ -714,16 +744,13 @@ export function PostHogCrashReporter({ children }: { children: ReactNode }) {
 
     startupLog('[STARTUP] PostHogCrashReporter: Crash reporter initialized successfully');
 
-    // Capture trackingModule in closure for cleanup
     const capturedTrackingModule = trackingModule;
 
     return () => {
       startupLog('[STARTUP] PostHogCrashReporter: Cleanup - restoring original error handler');
-      // Restore original error handler on cleanup
       if (originalErrorHandler) {
         ErrorUtils.setGlobalHandler(originalErrorHandler);
       }
-      // Only disable if tracking module was loaded
       if (capturedTrackingModule !== null) {
         try {
           capturedTrackingModule.disable();

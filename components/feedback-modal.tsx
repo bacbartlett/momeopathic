@@ -3,7 +3,6 @@ import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useConvexAuth, useAction, useMutation, useQuery } from 'convex/react';
-import * as StoreReview from 'expo-store-review';
 import { usePathname } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -67,11 +66,14 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
       // Mark feedback as given
       await recordFeedbackGiven();
       
-      // Check if in-app review is available
-      const isAvailable = await StoreReview.isAvailableAsync();
-      if (isAvailable) {
-        track('In-App Review Requested');
-        await StoreReview.requestReview();
+      // Check if in-app review is available (native only)
+      if (Platform.OS !== 'web') {
+        const StoreReview = await import('expo-store-review');
+        const isAvailable = await StoreReview.isAvailableAsync();
+        if (isAvailable) {
+          track('In-App Review Requested');
+          await StoreReview.requestReview();
+        }
       }
       
       // Close the modal after a brief delay

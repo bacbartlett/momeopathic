@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { webMaxWidth, WEB_FORM_MAX_WIDTH } from '@/lib/web-styles';
 
 const CIRCLE_URL = 'https://paolabrown.com/circle/';
 
@@ -71,6 +72,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.lg,
     justifyContent: 'center',
+    ...webMaxWidth(WEB_FORM_MAX_WIDTH),
   },
   header: {
     alignItems: 'center',

@@ -3,7 +3,6 @@ import { useChat, Thread } from '@/context/chat-context';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback } from 'react';
 import {
-  Alert,
   Dimensions,
   FlatList,
   ListRenderItem,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { confirm as showConfirm } from '@/lib/alert';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -78,21 +78,11 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
   }, [selectThread, onClose]);
 
   const handleDeleteThread = useCallback((threadId: string, threadTitle: string) => {
-    Alert.alert(
+    showConfirm(
       'Delete Conversation',
       `Are you sure you want to delete "${threadTitle}"? This action cannot be undone.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteThread(threadId),
-        },
-      ],
-      { cancelable: true }
+      () => deleteThread(threadId),
+      { confirmText: 'Delete', destructive: true },
     );
   }, [deleteThread]);
 
