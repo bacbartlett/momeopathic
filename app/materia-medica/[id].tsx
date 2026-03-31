@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { webMaxWidth, WEB_LIST_MAX_WIDTH } from '@/lib/web-styles';
 
 interface SectionCardProps {
   section: RemedySection;
@@ -374,6 +375,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: Spacing['2xl'],
+    ...webMaxWidth(WEB_LIST_MAX_WIDTH),
   },
   heroSection: {
     backgroundColor: Colors.bgSurface,

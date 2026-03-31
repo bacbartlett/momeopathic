@@ -110,7 +110,7 @@ export default function ChatScreen() {
             <View style={styles.logoContainer}>
               <Ionicons name="leaf" size={20} color={Colors.primary} />
             </View>
-            <Text style={styles.headerTitle}>Acute Care</Text>
+            <Text style={styles.headerTitle}>Momeopathy</Text>
           </View>
 
           <View style={styles.headerRightSection}>
@@ -145,6 +145,7 @@ export default function ChatScreen() {
             ref={composerRef}
             onSend={sendMessage}
             disabled={!canUseChat}
+            containerStyle={styles.composerWeb}
           />
         </>
       )}
@@ -248,6 +249,9 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
+    ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
+  },
+  composerWeb: {
     ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
   },
 });

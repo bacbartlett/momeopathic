@@ -139,8 +139,8 @@ export function ThreadDrawer({ isOpen, onClose }: ThreadDrawerProps) {
                 <Ionicons name="leaf" size={24} color={Colors.primary} />
               </View>
               <View>
-                <Text style={styles.brandTitle}>Acute Care</Text>
-                <Text style={styles.brandSubtitle}>Momeopath's Insider Circle</Text>
+                <Text style={styles.brandTitle}>Momeopathy</Text>
+                <Text style={styles.brandSubtitle}>Insider Circle</Text>
               </View>
             </View>
             <TouchableOpacity
