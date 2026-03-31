@@ -1,5 +1,6 @@
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Platform,
@@ -90,48 +91,60 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
   const canSend = text.trim().length > 0 && !disabled;
 
   return (
-    <View style={[styles.container, containerStyle]}>
-      <View style={styles.inputContainer}>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          placeholder="Ask about homeopathic remedies..."
-          placeholderTextColor={Colors.textMuted}
-          value={text}
-          onChangeText={handleChangeText}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onKeyPress={handleKeyPress}
-          multiline
-          maxLength={4000}
-          editable={!disabled}
-          blurOnSubmit={false}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, canSend && styles.sendButtonActive]}
-          onPress={handleSend}
-          disabled={!canSend}
-          activeOpacity={0.7}
-          accessibilityLabel="Send message"
-          accessibilityRole="button"
-        >
-          <Ionicons
-            name="arrow-up"
-            size={20}
-            color={canSend ? Colors.textInverse : Colors.textMuted}
-          />
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.outerContainer, containerStyle]}>
+      {/* Fade mask above the composer */}
+      <LinearGradient
+        colors={['transparent', ChatColors.background]}
+        style={styles.fadeMask}
+        pointerEvents="none"
+      />
 
-      {/* Disclaimer text - Fixed size to prevent layout issues */}
-      <View style={[
-        styles.disclaimerContainer,
-        { paddingBottom: isFocused ? Spacing.xs : Spacing.md }
-      ]}>
-        <Ionicons name="information-circle-outline" size={12} color={Colors.textMuted} />
-        <Text style={styles.disclaimerText}>
-          For educational purposes only. Always consult a healthcare provider.
-        </Text>
+      {/* Solid backdrop so messages are fully hidden behind the input + disclaimer */}
+      <View style={styles.backdrop}>
+        <View style={styles.container}>
+          <View style={styles.inputContainer}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder="Type your symptom or question..."
+              placeholderTextColor={Colors.textMuted}
+              value={text}
+              onChangeText={handleChangeText}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onKeyPress={handleKeyPress}
+              multiline
+              maxLength={4000}
+              editable={!disabled}
+              blurOnSubmit={false}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, canSend && styles.sendButtonActive]}
+              onPress={handleSend}
+              disabled={!canSend}
+              activeOpacity={0.7}
+              accessibilityLabel="Send message"
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name="arrow-up"
+                size={20}
+                color={canSend ? Colors.textInverse : Colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Disclaimer text - Fixed size to prevent layout issues */}
+        <View style={[
+          styles.disclaimerContainer,
+          { paddingBottom: isFocused ? Spacing.xs : Spacing.sm }
+        ]}>
+          <Ionicons name="information-circle-outline" size={12} color={Colors.textMuted} />
+          <Text style={styles.disclaimerText}>
+            AI advice should complement professional medical guidance.
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -140,26 +153,31 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
 Composer.displayName = 'Composer';
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    // Transparent outer wrapper — the gradient + floating pill sit on top of chat background
+    backgroundColor: 'transparent',
+  },
+  fadeMask: {
+    height: 80,
+  },
+  backdrop: {
+    backgroundColor: ChatColors.background,
+  },
   container: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: ChatColors.composerBackground,
-    ...Shadows.sm,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: ChatColors.inputBackground,
+    backgroundColor: Colors.bgSurface,
     borderRadius: Radius['2xl'],
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
     paddingLeft: Spacing.md,
     paddingRight: Spacing.sm,
     paddingVertical: Spacing.sm,
     minHeight: 52,
+    ...Shadows.md,
   },
   input: {
     flex: 1,
@@ -190,7 +208,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,
-    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
   },
   disclaimerText: {
     fontFamily: Fonts?.body ?? 'System',

@@ -132,7 +132,7 @@ export default function ChatScreen() {
       {hasAcceptedDisclaimer === false && !onboardingComplete ? (
         <OnboardingChat onComplete={() => setOnboardingComplete(true)} />
       ) : (
-        <>
+        <View style={styles.chatArea}>
           <View style={styles.messagesContainer}>
             <MessageList
               messages={displayMessages}
@@ -141,13 +141,15 @@ export default function ChatScreen() {
             />
           </View>
 
-          <Composer
-            ref={composerRef}
-            onSend={sendMessage}
-            disabled={!canUseChat}
-            containerStyle={styles.composerWeb}
-          />
-        </>
+          <View style={styles.composerFloating}>
+            <Composer
+              ref={composerRef}
+              onSend={sendMessage}
+              disabled={!canUseChat}
+              containerStyle={styles.composerWeb}
+            />
+          </View>
+        </View>
       )}
     </>
   );
@@ -247,9 +249,19 @@ const styles = StyleSheet.create({
   headerRightSection: {
     alignItems: 'flex-end',
   },
+  chatArea: {
+    flex: 1,
+    position: 'relative',
+  },
   messagesContainer: {
     flex: 1,
     ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
+  },
+  composerFloating: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   composerWeb: {
     ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
