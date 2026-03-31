@@ -15,6 +15,7 @@ import type * as agents_systemprompt_old from "../agents/systemprompt_old.js";
 import type * as agents_titleGenerator from "../agents/titleGenerator.js";
 import type * as appOpen from "../appOpen.js";
 import type * as auth from "../auth.js";
+import type * as changePassword from "../changePassword.js";
 import type * as debug from "../debug.js";
 import type * as feedback from "../feedback.js";
 import type * as feedbackEmail from "../feedbackEmail.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   "agents/titleGenerator": typeof agents_titleGenerator;
   appOpen: typeof appOpen;
   auth: typeof auth;
+  changePassword: typeof changePassword;
   debug: typeof debug;
   feedback: typeof feedback;
   feedbackEmail: typeof feedbackEmail;

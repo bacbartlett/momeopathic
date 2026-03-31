@@ -247,7 +247,7 @@ export default function RootLayout() {
                       </Stack>
                       </ScreenTracker>
                       <StatusBar style="dark" />
-                      <FeedbackManager />
+                      {/* <FeedbackManager /> */}
                     </ChatProvider>
                   </ThemeProvider>
                 </AppOpenedTracker>
