@@ -31,6 +31,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
   const inputRef = useRef<TextInput>(null);
   const textRef = useRef(text);
 
+  // Flag: when true, the next onChangeText call is from an Enter keypress
+  // and should be swallowed (prevents the newline from being inserted).
+  const enterPressedRef = useRef(false);
+
   // Keep textRef in sync with text state
   useEffect(() => {
     textRef.current = text;
@@ -59,27 +63,29 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
     }
   }, [disabled, onSend]);
 
-  // Handle Enter key on web
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !inputRef.current) return;
-
-    const input = inputRef.current as unknown as { _inputRef?: HTMLTextAreaElement };
-    const htmlInput = input._inputRef;
-    
-    if (!htmlInput) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
+  // Intercept Enter key on web via onKeyPress (works with multiline TextInput).
+  // We set a flag so the subsequent onChangeText can swallow the inserted newline.
+  const handleKeyPress = useCallback(
+    (e: { nativeEvent: { key: string; shiftKey?: boolean } }) => {
+      if (Platform.OS !== 'web') return;
+      // shiftKey may not be in the RN type, but react-native-web forwards it
+      const shiftKey = (e.nativeEvent as { shiftKey?: boolean }).shiftKey;
+      if (e.nativeEvent.key === 'Enter' && !shiftKey) {
+        enterPressedRef.current = true;
         handleSend();
       }
-    };
+    },
+    [handleSend],
+  );
 
-    htmlInput.addEventListener('keydown', handleKeyDown);
-    return () => {
-      htmlInput.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleSend]);
+  const handleChangeText = useCallback((newText: string) => {
+    if (enterPressedRef.current) {
+      // Swallow the newline that Enter inserted
+      enterPressedRef.current = false;
+      return;
+    }
+    setText(newText);
+  }, []);
 
   const canSend = text.trim().length > 0 && !disabled;
 
@@ -92,9 +98,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
           placeholder="Ask about homeopathic remedies..."
           placeholderTextColor={Colors.textMuted}
           value={text}
-          onChangeText={setText}
+          onChangeText={handleChangeText}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          onKeyPress={handleKeyPress}
           multiline
           maxLength={4000}
           editable={!disabled}
@@ -115,7 +122,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(({
           />
         </TouchableOpacity>
       </View>
-      
+
       {/* Disclaimer text - Fixed size to prevent layout issues */}
       <View style={[
         styles.disclaimerContainer,
@@ -162,7 +169,9 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     paddingVertical: Spacing.sm,
     lineHeight: Typography.base * Typography.leading,
-  },
+    // Remove the default browser focus outline (the "black box" on web)
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+  } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- outlineStyle is web-only
   sendButton: {
     width: 40,
     height: 40,

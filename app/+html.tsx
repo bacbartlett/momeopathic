@@ -57,4 +57,10 @@ body {
 a[href] {
   cursor: pointer !important;
 }
+/* Remove default browser focus outline on text inputs (react-native-web renders
+   TextInput as <textarea> or <input>). The app uses its own border styling. */
+textarea:focus,
+input:focus {
+  outline: none;
+}
 `;

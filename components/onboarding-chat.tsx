@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { webMaxWidth, WEB_CHAT_MAX_WIDTH } from '@/lib/web-styles';
 
 const DISCLAIMER_AGREED_KEY = 'disclaimer_agreed';
 
@@ -258,22 +259,18 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
         ListFooterComponent={isTyping ? <TypingIndicator /> : null}
       />
 
-      {/* Agree button area — replaces the composer */}
-      <View style={styles.footer}>
-        {showAgreeButton ? (
-          <Animated.View style={{ opacity: fadeAnim }}>
-            <TouchableOpacity
-              style={styles.agreeButton}
-              onPress={handleAgree}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.agreeButtonText}>I agree — let's go!</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        ) : (
-          <View style={styles.placeholderFooter} />
-        )}
-      </View>
+      {/* Agree button area — only rendered once ready, fades in with the footer */}
+      {showAgreeButton && (
+        <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+          <TouchableOpacity
+            style={styles.agreeButton}
+            onPress={handleAgree}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.agreeButtonText}>I agree — let's go!</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -287,6 +284,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.md,
     flexGrow: 1,
+    ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
   },
   // Assistant messages (left-aligned)
   assistantRow: {
@@ -376,6 +374,7 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     backgroundColor: ChatColors.composerBackground,
     ...Shadows.sm,
+    ...webMaxWidth(WEB_CHAT_MAX_WIDTH),
   },
   agreeButton: {
     backgroundColor: Colors.primary,
@@ -390,8 +389,5 @@ const styles = StyleSheet.create({
     fontSize: Typography.base,
     fontWeight: '600',
     color: Colors.textInverse,
-  },
-  placeholderFooter: {
-    height: 52,
   },
 });
