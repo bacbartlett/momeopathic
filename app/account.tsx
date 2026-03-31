@@ -316,6 +316,18 @@ export default function AccountScreen() {
                 <Text style={styles.infoLabel}>Member Since</Text>
                 <Text style={styles.infoValue}>{formatDate(user._creationTime)}</Text>
               </View>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={() => router.push('/change-password' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.infoRowContent}>
+                  <Ionicons name="key-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.infoLabel}>Change Password</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
             </View>
           </View>
 
