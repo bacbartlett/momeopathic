@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     // Note: FlatList is inverted, so paddingTop → visual bottom, paddingBottom → visual top
-    paddingTop: 120, // Space for the floating composer overlay
+    paddingTop: 140, // Space for the floating composer overlay + fade mask
     paddingBottom: Spacing.md,
     flexGrow: 1,
   },
