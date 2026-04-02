@@ -4,7 +4,7 @@
  */
 
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { parseRemedyBody, useMateriaMedica } from '@/hooks/useMateriaMedica';
 import type { ParsedRemedy, RemedySection } from '@/types/materia-medica';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,7 +73,7 @@ const SectionCard = React.memo(function SectionCard({ section, isLast }: Section
 
 export default function RemedyDetailScreen() {
   const router = useRouter();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
   const params = useLocalSearchParams<{ id: string; name?: string }>();
   const { getRemedyById } = useMateriaMedica();
   
@@ -135,10 +135,10 @@ export default function RemedyDetailScreen() {
         message: shareText,
         title: displayName,
       });
-      track('Remedy Shared', {
-        remedy_id: Number(params.id),
-        remedy_name: displayName,
-      });
+      // track('Remedy Shared', {
+      //   remedy_id: Number(params.id),
+      //   remedy_name: displayName,
+      // });
     } catch (err) {
     }
   };

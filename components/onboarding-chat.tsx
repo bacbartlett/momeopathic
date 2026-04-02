@@ -1,6 +1,6 @@
 import { CURRENT_AI_CONSENT_VERSION } from '@/constants/ai-consent';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -101,15 +101,15 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
   const acceptAiConsent = useMutation(api.users.acceptAiConsent);
   const router = useRouter();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   // Total messages: regular messages + terms message
   const totalMessages = ONBOARDING_MESSAGES.length + 1;
 
   // Track onboarding start
   useEffect(() => {
-    track('Onboarding Started');
-  }, [track]);
+    // track('Onboarding Started');
+  }, []);
 
   // Stream messages in one at a time
   useEffect(() => {
@@ -195,9 +195,9 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
         console.error('Failed to save consent to database:', dbError);
       }
 
-      track('Disclaimer Accepted', { method: 'onboarding_chat' });
-      track('AI Consent Given', { version: CURRENT_AI_CONSENT_VERSION });
-      track('Onboarding Completed');
+      // track('Disclaimer Accepted', { method: 'onboarding_chat' });
+      // track('AI Consent Given', { version: CURRENT_AI_CONSENT_VERSION });
+      // track('Onboarding Completed');
 
       // Brief pause to show the agree message, then transition
       setTimeout(() => {
@@ -207,7 +207,7 @@ export function OnboardingChat({ onComplete }: OnboardingChatProps) {
       console.error('Failed to save disclaimer agreement:', error);
       onComplete();
     }
-  }, [isAuthenticated, acceptDisclaimer, acceptAiConsent, track, onComplete]);
+  }, [isAuthenticated, acceptDisclaimer, acceptAiConsent, onComplete]);
 
   const renderMessage = useCallback(({ item }: { item: OnboardingMessage }) => {
     if (item.role === 'user') {

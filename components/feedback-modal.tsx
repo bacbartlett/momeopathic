@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useConvexAuth, useAction, useMutation, useQuery } from 'convex/react';
@@ -33,7 +33,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   // Track timeouts for cleanup
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
   const recordFeedbackGiven = useMutation(api.feedback.recordFeedbackGiven);
   const recordDismissed = useMutation(api.feedback.recordFeedbackPromptDismissed);
   const submitFeedback = useAction(api.feedbackEmail.submitFeedback);
@@ -50,16 +50,16 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   // Track when modal becomes visible
   useEffect(() => {
     if (visible) {
-      track('Feedback Prompt Shown');
+      // track('Feedback Prompt Shown');
       // Reset state when modal opens
       setFeedbackState('initial');
       setFeedbackText('');
       setError(null);
     }
-  }, [visible, track]);
+  }, [visible]);
 
   const handleHappyPress = useCallback(async () => {
-    track('Feedback Happy Selected');
+    // track('Feedback Happy Selected');
     setFeedbackState('happy');
     
     try {
@@ -71,7 +71,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         const StoreReview = await import('expo-store-review');
         const isAvailable = await StoreReview.isAvailableAsync();
         if (isAvailable) {
-          track('In-App Review Requested');
+          // track('In-App Review Requested');
           await StoreReview.requestReview();
         }
       }
@@ -87,12 +87,12 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         onClose();
       }, 1500);
     }
-  }, [track, recordFeedbackGiven, onClose]);
+  }, [recordFeedbackGiven, onClose]);
 
   const handleUnhappyPress = useCallback(() => {
-    track('Feedback Unhappy Selected');
+    // track('Feedback Unhappy Selected');
     setFeedbackState('unhappy');
-  }, [track]);
+  }, []);
 
   const handleSubmitFeedback = useCallback(async () => {
     if (!feedbackText.trim()) {
@@ -108,7 +108,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
       const result = await submitFeedback({ feedback: feedbackText.trim() });
       
       if (result.success) {
-        track('Feedback Submitted');
+        // track('Feedback Submitted');
         setFeedbackState('success');
         
         // Close modal after showing success
@@ -124,17 +124,17 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
       setError('Failed to submit feedback. Please try again.');
       setFeedbackState('unhappy');
     }
-  }, [feedbackText, submitFeedback, track, onClose]);
+  }, [feedbackText, submitFeedback, onClose]);
 
   const handleDismiss = useCallback(async () => {
-    track('Feedback Prompt Dismissed');
+    // track('Feedback Prompt Dismissed');
     try {
       await recordDismissed();
     } catch (err) {
       console.error('Error recording dismissal:', err);
     }
     onClose();
-  }, [track, recordDismissed, onClose]);
+  }, [recordDismissed, onClose]);
 
   const renderInitialState = () => (
     <>

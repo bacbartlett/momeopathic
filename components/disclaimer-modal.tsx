@@ -7,7 +7,7 @@ import {
   Spacing,
   Typography,
 } from "@/constants/theme";
-import { usePostHogAnalytics } from "@/context/posthog-context";
+// import { usePostHogAnalytics } from "@/context/posthog-context";
 import { api } from "@/convex/_generated/api";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -103,14 +103,14 @@ export function DisclaimerModal({
   const { isAuthenticated } = useConvexAuth();
   const acceptDisclaimer = useMutation(api.users.acceptDisclaimer);
   const router = useRouter();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   // Track disclaimer viewed when modal becomes visible
   useEffect(() => {
     if (visible) {
-      track("Disclaimer Viewed", { allow_dismiss: allowDismiss });
+      // track("Disclaimer Viewed", { allow_dismiss: allowDismiss });
     }
-  }, [visible, allowDismiss, track]);
+  }, [visible, allowDismiss]);
 
   const handleAgree = async () => {
     try {
@@ -128,7 +128,7 @@ export function DisclaimerModal({
 
       // Track disclaimer accepted (only when user clicks agree, not dismiss)
       if (!allowDismiss) {
-        track("Disclaimer Accepted");
+        // track("Disclaimer Accepted");
       }
 
       onAgree();

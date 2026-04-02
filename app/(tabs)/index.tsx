@@ -4,7 +4,7 @@ import { useHasAcceptedDisclaimer } from '@/components/disclaimer-modal';
 import { OnboardingChat } from '@/components/onboarding-chat';
 import { ChatColors, Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useChat } from '@/context/chat-context';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
@@ -36,7 +36,7 @@ export default function ChatScreen() {
   const currentUser = useQuery(api.users.current, isAuthenticated ? {} : "skip");
   const [keyboardKey, setKeyboardKey] = useState(0);
   const composerRef = useRef<ComposerHandle>(null);
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   const hasAcceptedDisclaimer = useHasAcceptedDisclaimer();
   const [onboardingComplete, setOnboardingComplete] = useState(false);

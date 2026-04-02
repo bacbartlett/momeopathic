@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -83,7 +83,7 @@ function getFriendlyErrorMessage(err: unknown, context: 'signIn' | 'reset' | 're
 
 export default function SignInScreen() {
   const { signIn } = useAuthActions();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
   const router = useRouter();
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
@@ -114,7 +114,7 @@ export default function SignInScreen() {
       if (__DEV__) console.log('[SignIn] Calling signIn...');
       const result = await signIn("password", { email: emailAddress, password, flow: "signIn" });
       if (__DEV__) console.log('[SignIn] signIn returned:', JSON.stringify(result));
-      track('Sign In', { method: 'email' });
+      // track('Sign In', { method: 'email' });
       setError('');
       // Don't navigate manually — the AuthLayout's useEffect will redirect
       // to /(tabs) once useConvexAuth() reflects isAuthenticated: true
@@ -122,7 +122,7 @@ export default function SignInScreen() {
       const errorMessage = getFriendlyErrorMessage(err, 'signIn');
       if (__DEV__) console.log('[SignIn] Error:', err instanceof Error ? err.message : err);
       setError(errorMessage);
-      track('Sign In Failed', { method: 'email', error: errorMessage });
+      // track('Sign In Failed', { method: 'email', error: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -172,14 +172,14 @@ export default function SignInScreen() {
         newPassword,
         flow: "reset-verification",
       });
-      track('Password Reset', { method: 'email_code' });
+      // track('Password Reset', { method: 'email_code' });
       setError('');
       // AuthLayout handles redirect once authenticated
     } catch (err) {
       const errorMessage = getFriendlyErrorMessage(err, 'resetVerification');
       if (__DEV__) console.log('[SignIn] Reset verification error:', err instanceof Error ? err.message : err);
       setError(errorMessage);
-      track('Password Reset Failed', { method: 'email_code', error: errorMessage });
+      // track('Password Reset Failed', { method: 'email_code', error: errorMessage });
     } finally {
       setIsLoading(false);
     }

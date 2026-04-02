@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -49,7 +49,7 @@ export default function ChangePasswordScreen() {
   const router = useRouter();
   const user = useQuery(api.users.current);
   const changePassword = useAction(api.changePassword.changePassword);
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -76,13 +76,13 @@ export default function ChangePasswordScreen() {
 
     try {
       await changePassword({ newPassword });
-      track('Password Changed');
+      // track('Password Changed');
       setSuccess(true);
     } catch (err) {
       const errorMessage = getFriendlyErrorMessage(err);
       if (__DEV__) console.log('[ChangePassword] Error:', err instanceof Error ? err.message : err);
       setError(errorMessage);
-      track('Password Change Failed', { error: errorMessage });
+      // track('Password Change Failed', { error: errorMessage });
     } finally {
       setIsLoading(false);
     }

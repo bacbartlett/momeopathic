@@ -1,6 +1,6 @@
 import { DisclaimerModal } from '@/components/disclaimer-modal';
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     ScrollView,
     StyleSheet,
@@ -28,7 +29,7 @@ export default function AccountScreen() {
   const user = useQuery(api.users.current);
   const updateProfile = useMutation(api.users.updateProfile);
   const { signOut } = useAuthActions();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState('');
@@ -39,8 +40,8 @@ export default function AccountScreen() {
 
   // Track page view
   useEffect(() => {
-    track('Account Page Viewed');
-  }, [track]);
+    // track('Account Page Viewed');
+  }, []);
 
   // Reset form when user data changes
   useEffect(() => {
@@ -88,7 +89,7 @@ export default function AccountScreen() {
       async () => {
         setIsSigningOut(true);
         try {
-          track('Sign Out');
+          // track('Sign Out');
           await signOut();
           router.replace('/(auth)/sign-in');
         } catch (error) {
@@ -98,7 +99,7 @@ export default function AccountScreen() {
       },
       { confirmText: 'Sign Out', destructive: true },
     );
-  }, [signOut, router, track]);
+  }, [signOut, router]);
 
   const getInitials = useCallback(() => {
     const nameParts = (user?.name || '').split(' ');
@@ -390,6 +391,16 @@ export default function AccountScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Give Feedback Button */}
+          <TouchableOpacity
+            style={styles.feedbackButton}
+            onPress={() => Linking.openURL('https://feedback.mymateria.app')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color={Colors.primary} />
+            <Text style={styles.feedbackButtonText}>Give Feedback</Text>
+          </TouchableOpacity>
 
           {/* Sign Out Button */}
           <TouchableOpacity
@@ -688,13 +699,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  signOutButton: {
+  feedbackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
     marginHorizontal: Spacing.md,
     marginTop: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryAlpha10,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
+  feedbackButtonText: {
+    fontFamily: Fonts?.body ?? 'System',
+    fontSize: Typography.base,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
     backgroundColor: Colors.error + '10',

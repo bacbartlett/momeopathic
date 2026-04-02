@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
@@ -48,12 +48,12 @@ function ExternalLink({ url, label }: { url: string; label: string }) {
 
 export default function AiPrivacyScreen() {
   const router = useRouter();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
   const aiConsent = useQuery(api.users.getAiConsentStatus);
 
   useEffect(() => {
-    track('AI Privacy Page Viewed');
-  }, [track]);
+    // track('AI Privacy Page Viewed');
+  }, []);
 
   const consentDate = aiConsent?.timestamp
     ? new Date(aiConsent.timestamp).toLocaleDateString('en-US', {

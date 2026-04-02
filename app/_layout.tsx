@@ -1,8 +1,8 @@
 import { ThemeProvider } from '@react-navigation/native';
-import { Stack, usePathname } from 'expo-router';
+import { Stack } from 'expo-router'; // usePathname removed (was for PostHog ScreenTracker)
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react'; // useRef removed (was for PostHog ScreenTracker)
 import 'react-native-reanimated';
 
 import {
@@ -23,7 +23,8 @@ import { Platform } from 'react-native';
 import { FeedbackManager } from '@/components/feedback-modal';
 import { Colors, Fonts, NavigationTheme, Typography } from '@/constants/theme';
 import { ChatProvider } from '@/context/chat-context';
-import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
+// PostHog disabled
+// import { PostHogCrashReporter, PostHogErrorBoundary, PostHogProviderWrapper, usePostHogAnalytics } from '@/context/posthog-context';
 import { initializeDatabase } from '@/lib/db/init';
 import { EXPO_PUBLIC_CONVEX_URL } from '@/lib/env';
 import { registerServiceWorker } from '@/lib/register-sw';
@@ -60,44 +61,26 @@ const convex = new ConvexReactClient(
 // Web: localStorage, Native: expo-secure-store
 const secureStorage = getStorage();
 
-/**
- * Component that tracks when the app is opened.
- * Must be rendered inside PostHogProviderWrapper.
- */
-function AppOpenedTracker({ children }: { children: React.ReactNode }) {
-  startupLog('[STARTUP] AppOpenedTracker: Rendering');
-  const { track, isReady } = usePostHogAnalytics();
-  startupLog('[STARTUP] AppOpenedTracker: PostHog isReady:', isReady);
+// PostHog tracking components - DISABLED
+// function AppOpenedTracker({ children }: { children: React.ReactNode }) {
+//   const { track, isReady } = usePostHogAnalytics();
+//   useEffect(() => {
+//     if (isReady) { track('App Opened'); }
+//   }, [isReady, track]);
+//   return <>{children}</>;
+// }
 
-  useEffect(() => {
-    startupLog('[STARTUP] AppOpenedTracker: useEffect - isReady:', isReady);
-    if (isReady) {
-      startupLog('[STARTUP] AppOpenedTracker: Tracking App Opened event');
-      track('App Opened');
-    }
-  }, [isReady, track]);
-
-  startupLog('[STARTUP] AppOpenedTracker: Returning children');
-  return <>{children}</>;
-}
-
-/**
- * Component that tracks screen views when the user navigates.
- * Must be rendered inside PostHogProviderWrapper and a NavigationContainer.
- */
-function ScreenTracker({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const { track, isReady } = usePostHogAnalytics();
-  const previousPathRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isReady || !pathname || pathname === previousPathRef.current) return;
-    previousPathRef.current = pathname;
-    track('Screen Viewed', { screen_name: pathname });
-  }, [isReady, pathname, track]);
-
-  return <>{children}</>;
-}
+// function ScreenTracker({ children }: { children: React.ReactNode }) {
+//   const pathname = usePathname();
+//   const { track, isReady } = usePostHogAnalytics();
+//   const previousPathRef = useRef<string | null>(null);
+//   useEffect(() => {
+//     if (!isReady || !pathname || pathname === previousPathRef.current) return;
+//     previousPathRef.current = pathname;
+//     track('Screen Viewed', { screen_name: pathname });
+//   }, [isReady, pathname, track]);
+//   return <>{children}</>;
+// }
 
 /**
  * Component that initializes the Materia Medica SQLite database.
@@ -172,17 +155,18 @@ export default function RootLayout() {
     return null;
   }
 
-  startupLog('[STARTUP] RootLayout: Rendering provider tree - ConvexAuthProvider -> MateriaMedicaInitializer -> PostHogProviderWrapper -> PostHogCrashReporter -> PostHogErrorBoundary -> AppOpenedTracker -> ThemeProvider -> ChatProvider -> Stack');
+  startupLog('[STARTUP] RootLayout: Rendering provider tree - ConvexAuthProvider -> MateriaMedicaInitializer -> ThemeProvider -> ChatProvider -> Stack');
   return (
     <ConvexAuthProvider client={convex} storage={secureStorage}>
         <MateriaMedicaInitializer>
-          <PostHogProviderWrapper>
-            <PostHogCrashReporter>
-              <PostHogErrorBoundary>
-                <AppOpenedTracker>
+          {/* PostHog disabled - wrappers removed from tree */}
+          {/* <PostHogProviderWrapper> */}
+          {/* <PostHogCrashReporter> */}
+          {/* <PostHogErrorBoundary> */}
+          {/* <AppOpenedTracker> */}
                   <ThemeProvider value={NavigationTheme}>
                     <ChatProvider>
-                      <ScreenTracker>
+                      {/* <ScreenTracker> */}
                       <Stack>
                       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -245,15 +229,15 @@ export default function RootLayout() {
                         }}
                       />
                       </Stack>
-                      </ScreenTracker>
+                      {/* </ScreenTracker> */}
                       <StatusBar style="dark" />
                       {/* <FeedbackManager /> */}
                     </ChatProvider>
                   </ThemeProvider>
-                </AppOpenedTracker>
-              </PostHogErrorBoundary>
-            </PostHogCrashReporter>
-          </PostHogProviderWrapper>
+          {/* </AppOpenedTracker> */}
+          {/* </PostHogErrorBoundary> */}
+          {/* </PostHogCrashReporter> */}
+          {/* </PostHogProviderWrapper> */}
         </MateriaMedicaInitializer>
     </ConvexAuthProvider>
   );

@@ -7,7 +7,7 @@ import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants
 import { useRemediesList, type RemedyListItem } from '@/hooks/useMateriaMedica';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -71,7 +71,7 @@ const RemedyItem = React.memo(function RemedyItem({ item, onPress }: RemedyItemP
 
 export default function MateriaMedicaListScreen() {
   const router = useRouter();
-  const { track, incrementUserProperty } = usePostHogAnalytics();
+  // const { track, incrementUserProperty } = usePostHogAnalytics();
   const {
     remedies,
     searchQuery,
@@ -89,8 +89,8 @@ export default function MateriaMedicaListScreen() {
 
   // Track page open
   useEffect(() => {
-    track('Materia Medica Opened');
-  }, [track]);
+    // track('Materia Medica Opened');
+  }, []);
 
   // Debounced search
   useEffect(() => {
@@ -116,17 +116,17 @@ export default function MateriaMedicaListScreen() {
       clearTimeout(searchTrackRef.current);
     }
     searchTrackRef.current = setTimeout(() => {
-      track('Remedy Searched', {
-        query: inputValue.trim(),
-        result_count: remedies.length,
-      });
+      // track('Remedy Searched', {
+      //   query: inputValue.trim(),
+      //   result_count: remedies.length,
+      // });
     }, 1000);
     return () => {
       if (searchTrackRef.current) {
         clearTimeout(searchTrackRef.current);
       }
     };
-  }, [inputValue, remedies.length, track]);
+  }, [inputValue, remedies.length]);
 
   const handleClearSearch = useCallback(() => {
     setInputValue('');
@@ -136,18 +136,18 @@ export default function MateriaMedicaListScreen() {
 
   const handleRemedyPress = useCallback((remedy: RemedyListItem) => {
     Keyboard.dismiss();
-    track('Remedy Viewed', {
-      remedy_id: remedy.id,
-      remedy_name: remedy.remedy_name,
-      source: isFiltered ? 'search' : 'browse',
-    });
-    incrementUserProperty('total_remedies_viewed');
+    // track('Remedy Viewed', {
+    //   remedy_id: remedy.id,
+    //   remedy_name: remedy.remedy_name,
+    //   source: isFiltered ? 'search' : 'browse',
+    // });
+    // incrementUserProperty('total_remedies_viewed');
     // Using type assertion for route as expo-router types are generated dynamically
     router.push({
       pathname: '/materia-medica/[id]' as '/account',
       params: { id: remedy.id, name: remedy.remedy_name },
     });
-  }, [router, track, incrementUserProperty, isFiltered]);
+  }, [router, isFiltered]);
 
   const renderItem = useCallback(({ item }: { item: RemedyListItem }) => (
     <RemedyItem

@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { api } from '@/convex/_generated/api';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useMutation, useQuery } from 'convex/react';
@@ -30,7 +30,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
   const user = useQuery(api.users.current);
   const deleteAccount = useMutation(api.users.deleteAccount);
   const { signIn, signOut } = useAuthActions();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
   
   const [step, setStep] = useState<'warning' | 'password'>('warning');
   const [password, setPassword] = useState('');
@@ -75,7 +75,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
 
       // Password verified, proceed with deletion
       await deleteAccount();
-      track('Account Deleted');
+      // track('Account Deleted');
       // Sign out to invalidate the session, then redirect
       await signOut();
       try {

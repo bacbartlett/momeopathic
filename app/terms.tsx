@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from "@/constants/theme";
-import { usePostHogAnalytics } from "@/context/posthog-context";
+// import { usePostHogAnalytics } from "@/context/posthog-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect } from "react";
@@ -293,12 +293,12 @@ If you are a California resident, in accordance with Cal. Civ. Code § 1789.3, y
 
 export default function TermsScreen() {
   const router = useRouter();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   // Track page view
   useEffect(() => {
-    track("Terms Viewed");
-  }, [track]);
+    // track("Terms Viewed");
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>

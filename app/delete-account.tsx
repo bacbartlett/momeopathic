@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +22,7 @@ export default function DeleteAccountScreen() {
   const router = useRouter();
   const user = useQuery(api.users.current);
   const deleteAccount = useMutation(api.users.deleteAccount);
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -43,7 +43,7 @@ export default function DeleteAccountScreen() {
     try {
       await deleteAccount();
       // Track event only after successful deletion
-      track('Account Deleted');
+      // track('Account Deleted');
       // Redirect to sign-in page with error handling
       try {
         router.replace('/(auth)/sign-in');

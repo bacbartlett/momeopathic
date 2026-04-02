@@ -1,5 +1,5 @@
 import { Colors, Fonts, Radius, Spacing, Typography } from '@/constants/theme';
-import { usePostHogAnalytics } from '@/context/posthog-context';
+// import { usePostHogAnalytics } from '@/context/posthog-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
@@ -361,12 +361,12 @@ Thank you for trusting us with your information.
 
 export default function PrivacyScreen() {
   const router = useRouter();
-  const { track } = usePostHogAnalytics();
+  // const { track } = usePostHogAnalytics();
 
   // Track page view
   useEffect(() => {
-    track('Privacy Policy Viewed');
-  }, [track]);
+    // track('Privacy Policy Viewed');
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
